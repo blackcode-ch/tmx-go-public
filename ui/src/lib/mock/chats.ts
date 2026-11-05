@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Mock chats for ?mock=1: a DM with Alex (online; people and agents writing) and a 3-person
 // group run by us, with one message still queued for an offline member. ?mock=empty has no
 // chats; ?mock=nop2p answers 503 (peer-to-peer off). In the group, "Make admin" hands it to
@@ -29,6 +26,7 @@ export class MockChats {
   private offers = new Map<string, ChatAdminOffer>(); // open admin offers, by chat
   private oldTmx = new Set<string>([PRIYA]); // members whose tmx does not understand handovers yet
   private myName = "Sam";
+  private p2pSavedEnabled = true;
   private seq = 0;
   private emit: Emit;
   private headId: () => string;
@@ -182,8 +180,17 @@ export class MockChats {
       throw new ApiError(404, `no ${what} "${id}"`);
     };
     if (res === "p2p") {
-      if (method === "PUT") this.myName = (b.name ?? "").trim() || this.myName;
-      return { enabled: true, peer_id: ME, name: this.myName, addrs: [], reachability: "direct", peers: 6 };
+      if (id === "net" && sub === "peers") {
+        return [...Array(6)].map((_, i) => ({ peer_id: `12D3KooWMock${i}PeerIdPadding`, reachability: i % 3 === 0 ? "relayed" : "direct" }));
+      }
+      if (id === "config" && method === "PUT") this.p2pSavedEnabled = Boolean(b.enabled ?? true);
+      if (id === "restart" && method === "POST") return { restarting: true, back_in: "about 15 seconds" };
+      if (method === "PUT" && !id) this.myName = (b.name ?? "").trim() || this.myName;
+      return {
+        enabled: this.p2pSavedEnabled, peer_id: ME, name: this.myName, addrs: this.p2pSavedEnabled ? ["/ip4/127.0.0.1/udp/4001/quic-v1"] : [],
+        reachability: this.p2pSavedEnabled ? "direct" : "offline", peers: this.p2pSavedEnabled ? 6 : 0,
+        saved_enabled: this.p2pSavedEnabled, restart_to_apply: false, production: true,
+      };
     }
     if (res === "contacts") {
       if (!id) return [...this.contacts.values()].sort((a, c) => a.name.localeCompare(c.name));

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect } from "react";
 import { navigate, paths } from "@/lib/router";
 import { useStore } from "@/lib/store";
@@ -33,7 +30,8 @@ export function useGlobalHotkeys() {
         const go: Record<string, string | undefined> = {
           o: paths.overview(),
           i: paths.inbox(),
-          b: paths.board(),
+          b: paths.matrix(), // the Board's old shortcut
+          m: paths.matrix(),
           s: paths.settings(),
           h: head ? paths.agent(head) : undefined,
         };

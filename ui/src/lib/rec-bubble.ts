@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The camera bubble (ARCHITECTURE.md "Recorder"): the screen with the owner's camera as a circle in
+// The camera bubble (DESIGN.md "Recorder"): the screen with the owner's camera as a circle in
 // the lower left corner, drawn into one picture that is recorded instead of the screen.
 // Chromium only (Chrome, Edge, the Windows app's WebView2): MediaStreamTrackProcessor hands over
 // the tracks' frames, and the camera's frames drive the drawing. So it neither stops while this

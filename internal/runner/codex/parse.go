@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package codex
 
 import (
@@ -48,8 +45,9 @@ type parser struct {
 	configReqID         string
 	guardExecutable     string
 	guardContext        *guard.Context
-	resumeID            string         // conversation to resume ("" = new)
-	threadParams        map[string]any // thread/start (and resume) settings
+	guardStates         func() map[string]string // nil = the strict built-in outcomes
+	resumeID            string                   // conversation to resume ("" = new)
+	threadParams        map[string]any           // thread/start (and resume) settings
 	threadID            string
 	ready               bool
 
@@ -455,6 +453,12 @@ func (p *parser) serverRequest(o *out, m wireMsg) {
 		ctx := *p.guardContext
 		if input.Cwd != "" {
 			ctx.Cwd = input.Cwd
+		}
+		if p.guardStates != nil {
+			ctx.States = map[string]guard.Outcome{}
+			for id, o := range p.guardStates() {
+				ctx.States[id] = guard.Outcome(o)
+			}
 		}
 		v := guard.Check(ctx, guard.Call{Tool: tool, Input: ap.Input, Cwd: input.Cwd})
 		if len(literalExec) > 0 {

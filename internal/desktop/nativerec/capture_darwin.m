@@ -1,6 +1,6 @@
 //go:build desktop && cgo
 
-// Native screen recording for the macOS app (ARCHITECTURE.md "Recorder", native capture), with
+// Native screen recording for the macOS app (DESIGN.md "Recorder", native capture), with
 // ScreenCaptureKit:
 //   - the system picker (SCContentSharingPicker) for a display, a window or an app;
 //   - one SCStream on what the owner picked, with device audio and the microphone;

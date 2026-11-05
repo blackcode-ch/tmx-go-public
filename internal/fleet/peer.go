@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -9,7 +6,7 @@ import (
 )
 
 // Peer mail: messages to and from agents on the fleet's other machines that still run the
-// Python tmx daemon (ARCHITECTURE.md "Production profile", "Python fleet interop"). A remote agent is a
+// Python tmx daemon (DESIGN.md "Production profile", "Python fleet interop"). A remote agent is a
 // mail party "fleet:<name>@<host>". Mail from one arrives through the daemon's peer route
 // (POST /api/messages/incoming, authenticated by that machine's pair token) as DeliverPeer;
 // mail to one (SendMessage to "name@host", or a reply to peer mail) is stored here and handed

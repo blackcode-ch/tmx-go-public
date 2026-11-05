@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -15,10 +12,10 @@ import (
 // releaseGitHub is the GitHub the signer talks to (tests replace it; it is gh otherwise).
 var releaseGitHub release.GitHub = release.Gh{}
 
-// cmdRelease is the fleet release signer (ARCHITECTURE.md "Signing a release"); it runs on the release
+// cmdRelease is the fleet release signer (DESIGN.md "Signing a release"); it runs on the release
 // machine only and needs no daemon.
 func cmdRelease(e *env, args []string) error {
-	const use = "usage: tmx release keygen [--id ID] | tmx release sign TAG [--repo OWNER/NAME] [--id ID] [--reviewer LOGIN] [--dry-run] | tmx release keys --serial N --set NEW-SET.json [--id ID] [--repo OWNER/NAME] [--dir DIR]"
+	const use = "usage: tmx release keygen [--id ID] | tmx release pubkey [--id ID] | tmx release sign TAG [--repo OWNER/NAME] [--id ID] [--reviewer LOGIN] [--dry-run] | tmx release sign-extra whisper-engine-vX.Y.Z [--id ID] [--dry-run] | tmx release keys --serial N --set NEW-SET.json [--id ID] [--repo OWNER/NAME] [--dir DIR]"
 	if len(args) == 0 {
 		return usageErr("%s", use)
 	}
@@ -45,6 +42,22 @@ func cmdRelease(e *env, args []string) error {
 		fmt.Fprintf(e.out, "Release key %s created in %s.\n", pub.ID, release.KeyFile(home, pub.ID))
 		fmt.Fprintf(e.out, "public key:  %s\nfingerprint: %s\n\nPin it in config.json on every daemon:\n%s\n", pub.Key, pub.Fingerprint, pub.Snippet())
 		return nil
+	case "pubkey":
+		fs := newFlags("release pubkey")
+		id := fs.String("id", config.LegacyFleetKeyID, "key id")
+		rest, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(rest) != 0 {
+			return usageErr("%s", use)
+		}
+		pub, err := release.PublicOf(home, *id)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(e.out, "Release key %s in %s.\npublic key:  %s\nfingerprint: %s\n", pub.ID, release.KeyFile(home, pub.ID), pub.Key, pub.Fingerprint)
+		return nil
 	case "sign":
 		fs := newFlags("release sign")
 		repo := fs.String("repo", release.DefaultRepo, "repository")
@@ -60,6 +73,22 @@ func cmdRelease(e *env, args []string) error {
 		}
 		_, err = release.Sign(context.Background(), release.Options{GitHub: releaseGitHub, Home: home, Repo: *repo,
 			Tag: rest[0], KeyID: *id, DryRun: *dry, Reviewer: *reviewer, Out: e.out})
+		return err
+	case "sign-extra":
+		// An on-demand extra (the voice engine) built and published unsigned by the public
+		// mirror's CI; the repository is fixed to release.PublicRepo (internal/release/extra.go).
+		fs := newFlags("release sign-extra")
+		id := fs.String("id", config.LegacyFleetKeyID, "key id")
+		dry := fs.Bool("dry-run", false, "check every gate and print the signature; upload nothing")
+		rest, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(rest) != 1 {
+			return usageErr("%s", use)
+		}
+		_, err = release.SignExtra(context.Background(), release.ExtraOptions{GitHub: releaseGitHub, Home: home,
+			Tag: rest[0], KeyID: *id, DryRun: *dry, Out: e.out})
 		return err
 	case "keys":
 		fs := newFlags("release keys")

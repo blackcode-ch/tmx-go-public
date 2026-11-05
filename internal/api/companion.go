@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -19,7 +16,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Companion (ARCHITECTURE.md "Companion"): the owner's settings and task routes, agents' hand-offs,
+// Companion (DESIGN.md "Companion"): the owner's settings and task routes, agents' hand-offs,
 // and the link routes Companion itself reads through `tmx mcp --companion`.
 
 // LinkNotice starts every answer of the link routes.
@@ -120,6 +117,9 @@ func (s *Server) companionRoutes(mux *http.ServeMux) {
 	l := func(h http.HandlerFunc) http.HandlerFunc { return on(s.companionOnly(h)) }
 	mux.HandleFunc("GET "+linkPrefix+"fleet", l(s.linkFleet))
 	mux.HandleFunc("GET "+linkPrefix+"needs", l(s.linkNeeds))
+	mux.HandleFunc("GET "+linkPrefix+"health", l(s.linkHealth))
+	mux.HandleFunc("GET "+linkPrefix+"projects", l(s.linkProjects))
+	mux.HandleFunc("GET "+linkPrefix+"turns", l(s.linkTurns))
 	mux.HandleFunc("GET "+linkPrefix+"chats", l(s.linkChats))
 	mux.HandleFunc("GET "+linkPrefix+"chats/{id}/messages", l(s.linkChatMessages))
 	mux.HandleFunc("POST "+linkPrefix+"message", l(s.linkMessage))

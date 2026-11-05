@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -20,7 +17,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/whatsapp"
 )
 
-// WhatsApp (ARCHITECTURE.md "WhatsApp"): the owner's linked account. Everything is owner-only,
+// WhatsApp (DESIGN.md "WhatsApp"): the owner's linked account. Everything is owner-only,
 // except that agents the owner allows (default: the head) may list chats, read messages and
 // ask to send text, which waits for the owner's Allow unless the owner allowed that chat.
 // Agents never get the bus events, the media or the settings, and WhatsApp content in one

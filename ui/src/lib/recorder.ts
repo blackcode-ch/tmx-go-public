@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Capturing a recording in this window (ARCHITECTURE.md "Recorder"). Only the owner's click starts
+// Capturing a recording in this window (DESIGN.md "Recorder"). Only the owner's click starts
 // it: the OS picker for the screen or a window (getDisplayMedia, with the device's own sound
 // where the engine gives it), the camera and the microphone (getUserMedia). A MediaRecorder
 // makes segments of at most about 20 MB / 10 minutes, each a playable file of its own; chunks
@@ -15,9 +12,10 @@ import { toast } from "sonner";
 import { useStore } from "./store";
 import { ApiError, type Transport } from "./transport";
 import { mixAudio, pcmBytes, prepareAudioContext, prepareMixContext, startPcmTap, PCM_RATE, type AudioMix, type PcmTap } from "./rec-pcm";
-import { FrameGrabber, frameEvery, MAX_FRAMES } from "./rec-frames";
+import { CHANGE_EVERY_MS, CHANGE_MIN, FrameGrabber, frameEvery, KEY_GAP_MS, MAX_FRAMES, MAX_KEY_FRAMES } from "./rec-frames";
 import { startBubble, type Bubble } from "./rec-bubble";
 import { nativeDeviceAudio, pauseNativeDeviceAudio, stopNativeDeviceAudio } from "./native-audio";
+import { clinicDefault, sensitivityOf } from "./clinic";
 import { loadActive, onRecordingUpdated, recApi, upsertRecording } from "./recordings";
 import type { Recording, RecorderSettings, RecordingKind } from "./recording-types";
 import { isLive } from "./recording-types";
@@ -170,8 +168,14 @@ class Session {
   private frameEvery = frameEvery();
   private nextFrameAt = 0; // the recorded ms of the next periodic frame
   private frameCount = 0;
-  private lastFrameMs = -1;
-  private frameQ: { ms: number; blob: Blob; tries: number }[] = [];
+  private framesAt = new Set<number>(); // the recorded ms of the frames taken
+  // key moments: the screen's own picture (not the camera bubble) is looked at every 2 s for a change
+  private looker: FrameGrabber | null;
+  private lookAt = 0;
+  private looking = false;
+  private keyAt = 0;
+  private keyCount = 0;
+  private frameQ: { ms: number; blob: Blob; tries: number; key: boolean }[] = [];
   private frameSending = false;
   private frameWarned = false;
   ended = false;
@@ -184,6 +188,7 @@ class Session {
     this.stream = o.cap.stream;
     this.mime = o.mime;
     this.grabber = o.cap.picture ? new FrameGrabber(o.cap.picture) : null;
+    this.looker = (o.rec.kind === "screen" || o.rec.kind === "window") && o.cap.video ? new FrameGrabber(o.cap.video) : null;
     this.stateAt = o.rec.updated_at;
     this.offUpdates = onRecordingUpdated((r) => r.id === this.rec.id && this.follow(r));
   }
@@ -321,9 +326,10 @@ class Session {
   // ---- still frames: at the start, every 30 s of recorded time, at stop
 
   /** Takes the frame at ms of recorded time and queues it for the daemon. */
-  private async frame(ms: number) {
-    if (!this.grabber || this.frameCount >= MAX_FRAMES || ms <= this.lastFrameMs) return;
-    this.lastFrameMs = ms;
+  private async frame(ms: number, key = false) {
+    ms = Math.round(ms);
+    if (!this.grabber || this.frameCount >= MAX_FRAMES || this.framesAt.has(ms)) return;
+    this.framesAt.add(ms);
     let blob: Blob | null = null;
     try {
       blob = await this.grabber.grab();
@@ -332,8 +338,27 @@ class Session {
     }
     if (!blob || this.ended) return;
     this.frameCount++;
-    this.frameQ.push({ ms: Math.round(ms), blob, tries: 0 });
+    this.frameQ.push({ ms, blob, tries: 0, key });
     void this.pumpFrames();
+  }
+
+  /** Every 2 s: when the screen changed (a new page, a highlight, a drawing), a key-moment still now. */
+  private look() {
+    const now = Date.now();
+    if (!this.looker || this.looking || now - this.lookAt < CHANGE_EVERY_MS) return;
+    this.lookAt = now;
+    this.looking = true;
+    void this.looker
+      .change()
+      .then((d) => {
+        if (d < CHANGE_MIN || this.ended || useCapture.getState().phase !== "recording") return;
+        if (Date.now() - this.keyAt < KEY_GAP_MS || this.keyCount >= MAX_KEY_FRAMES || this.frameCount >= MAX_FRAMES - 1) return;
+        this.keyAt = Date.now();
+        this.keyCount++;
+        void this.frame(localElapsed(useCapture.getState()), true);
+      })
+      .catch(() => {})
+      .finally(() => (this.looking = false));
   }
 
   /** Sends the frames one at a time, beside the chunks; a lost frame never ends the recording. */
@@ -367,10 +392,10 @@ class Session {
     }
   }
 
-  private async sendFrame(f: { ms: number; blob: Blob }) {
+  private async sendFrame(f: { ms: number; blob: Blob; key: boolean }) {
     const path = `/api/recordings/${encodeURIComponent(this.rec.id)}/frames/${f.ms}`;
-    if (this.t.kind === "http") await putRaw(this.t, path, f.blob, "image/jpeg");
-    else await this.t.request("PUT", path, { data: await toBase64(f.blob) });
+    if (this.t.kind === "http") await putRaw(this.t, f.key ? path + "?key=1" : path, f.blob, "image/jpeg");
+    else await this.t.request("PUT", path, { data: await toBase64(f.blob), key: f.key });
   }
 
   /** Waits for the queued frames (at most until deadline). */
@@ -404,6 +429,7 @@ class Session {
         this.nextFrameAt = ms + this.frameEvery;
         if (this.frameCount < MAX_FRAMES - 1) void this.frame(ms); // one is kept for the stop
       }
+      this.look();
     }
     if (Date.now() - this.lastMediaAt > 3000 && this.mr?.state === "recording") {
       try {
@@ -591,6 +617,7 @@ class Session {
     this.pcm?.stop();
     this.pcm = null;
     this.grabber?.stop();
+    this.looker?.stop();
     this.cap.release();
     this.stream.getTracks().forEach((tr) => tr.stop());
   }
@@ -781,7 +808,8 @@ export async function startRecording(o: StartOptions): Promise<void> {
     const picture = bubble?.track ?? video; // what is recorded, and what the frames show
     const stream = new MediaStream([picture, sound].filter((x): x is MediaStreamTrack => !!x));
     const mime = pickMime(!!video, !!sound);
-    const rec = await recApi.begin({ kind, mic: !!mic, system_audio: !!device, mime: mime || (video ? "video/webm" : "audio/webm"), title: o.title });
+    const rec = await recApi.begin({ kind, mic: !!mic, system_audio: !!device, mime: mime || (video ? "video/webm" : "audio/webm"), title: o.title,
+      sensitivity: sensitivityOf(clinicDefault()) }); // the Options checkbox (lib/clinic.ts)
     upsertRecording(rec);
     const cap: Capture = { stream, picture, sound, video, mic, release: stopAll };
     const s = new Session({ rec, t, settings: o.settings, cap, mime });

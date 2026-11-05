@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -14,9 +11,14 @@ type Caller struct {
 	Owner   bool
 	AgentID string
 	// Companion is the owner's desktop agent app through `tmx mcp --companion`: it may read the
-	// fleet, Needs you and chats, and message the head (ARCHITECTURE.md "Companion"); the API lets it
+	// fleet, Needs you and chats, and message the head (DESIGN.md "Companion"); the API lets it
 	// reach nothing else. Never combined with Owner or AgentID.
 	Companion bool
+	// Peer is another fleet machine, authenticated by its pair token (Python's "peer" role):
+	// a trusted architect/lead box operating this machine's agents (launch/screen/type/keys/
+	// restart), same standing as the owner for those routes. Never combined with Owner,
+	// AgentID or Companion. Empty for everyone else.
+	Peer string
 }
 
 // CompanionCaller is Companion (the link token).
@@ -28,6 +30,10 @@ var OwnerCaller = Caller{Owner: true}
 // AgentCaller is an agent acting through its token.
 func AgentCaller(id string) Caller { return Caller{AgentID: id} }
 
+// PeerCaller is another fleet machine, authenticated by its pair token (a "full" role peer,
+// never "cloud" or "guest": those stay boxed to their existing narrow routes).
+func PeerCaller(name string) Caller { return Caller{Peer: name} }
+
 // ID is the caller as a message party: "owner" or the agent ID.
 func (c Caller) ID() string {
 	if c.Owner {
@@ -35,6 +41,9 @@ func (c Caller) ID() string {
 	}
 	if c.Companion {
 		return model.CompanionParty
+	}
+	if c.Peer != "" {
+		return model.Owner // a trusted peer acts with the owner's standing on this machine
 	}
 	return c.AgentID
 }
@@ -53,9 +62,10 @@ func (f *Fleet) CallerForToken(token string) (Caller, bool) {
 	return AgentCaller(id), true
 }
 
-// callerRecLocked returns the calling agent's record (nil for the owner).
+// callerRecLocked returns the calling agent's record (nil for the owner, and nil for a
+// trusted peer machine: it has no agent record on this machine, standing like the owner here).
 func (f *Fleet) callerRecLocked(c Caller) (*agentRec, error) {
-	if c.Owner {
+	if c.Owner || c.Peer != "" {
 		return nil, nil
 	}
 	if c.Companion {
@@ -157,7 +167,7 @@ func (f *Fleet) isDescendantLocked(target *agentRec, ancestorID string) bool {
 // authorizeActLocked: start/stop/restart/interrupt. The owner may act on anyone; a head or
 // lead on its own subtree; nobody on itself.
 func (f *Fleet) authorizeActLocked(c Caller, target *agentRec) error {
-	if c.Owner {
+	if c.Owner || c.Peer != "" {
 		return nil
 	}
 	if c.AgentID == target.a.ID {

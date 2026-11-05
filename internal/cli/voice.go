@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -25,7 +22,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/update"
 )
 
-// Local voice transcription (ARCHITECTURE.md "Voice"): the daemon's service, and the CLI side of
+// Local voice transcription (DESIGN.md "Voice"): the daemon's service, and the CLI side of
 // /api/voice and /api/transcribe.
 
 // newVoice makes the daemon's voice service: the engine comes from the update repository's

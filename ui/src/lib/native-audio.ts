@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Device sound from the Windows desktop app (ARCHITECTURE.md "Recorder", "Recording on each platform").
+// Device sound from the Windows desktop app (DESIGN.md "Recorder", "Recording on each platform").
 // WebView2's getDisplayMedia may give a screen recording no sound of the PC; then the window
 // process captures it natively (WASAPI loopback of the default output, internal/devaudio) and
 // streams it here as "tmx:devaudio" Wails events of ~100 ms Int16 PCM. An AudioWorklet

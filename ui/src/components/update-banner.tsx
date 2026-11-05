@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // After an update the daemon runs the new release while the desktop window still shows the UI it
 // started with: this bar offers to restart the window. Browsers just reload.
 import { useEffect, useState } from "react";
@@ -26,7 +23,7 @@ export function WindowUpdateBanner() {
 
   if (!desktop || !win || !daemonVersion || win === daemonVersion) return null;
   return (
-    <div role="status" className="flex shrink-0 items-center gap-3 border-b bg-brand-soft px-4 py-2 text-[13px] text-foreground md:px-6">
+    <div role="status" className="flex shrink-0 items-center gap-3 border-b bg-brand-soft px-4 py-2 text-[0.8125rem] text-foreground md:px-6">
       <ArrowUpCircle className="size-4 shrink-0 text-brand" />
       <span className="min-w-0 flex-1">
         tmx was updated to <span className="font-mono">{daemonVersion}</span>.{" "}

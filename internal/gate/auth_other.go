@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build !gatesim && !windows && (!darwin || !cgo)
 
 package gate
@@ -12,7 +9,7 @@ import (
 )
 
 // OS returns this machine's authenticator. Only macOS (Touch ID / password, with cgo) and
-// Windows (Windows Hello) have one in this build (passkeys are planned; ARCHITECTURE.md "Safety"),
+// Windows (Windows Hello) have one in this build (passkeys are planned; DESIGN.md "Safety"),
 // so the gate cannot be turned on elsewhere.
 func OS() Authenticator { return unavailable{} }
 

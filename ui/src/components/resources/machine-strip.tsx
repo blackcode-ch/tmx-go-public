@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useMemo } from "react";
 import { Pause } from "lucide-react";
 import { BrakeActions } from "@/components/resources/agent-resources";
@@ -22,7 +19,7 @@ function Cell({ label, value, sub, children, className, tone }: {
   return (
     <div className={cn("flex min-w-0 flex-col bg-card px-4 pt-3 pb-2.5", className)}>
       <dt className="text-2xs font-medium text-subtle-foreground uppercase">{label}</dt>
-      <dd className={cn("tabular mt-1 truncate text-[15px] font-medium", tone === "attention" && "text-[color-mix(in_oklch,var(--state-waiting)_75%,var(--foreground))]")}>{value}</dd>
+      <dd className={cn("tabular mt-1 truncate text-[0.9375rem] font-medium", tone === "attention" && "text-[color-mix(in_oklch,var(--state-waiting)_75%,var(--foreground))]")}>{value}</dd>
       {sub && <dd className={cn("tabular truncate text-2xs text-muted-foreground", tone && "text-[color-mix(in_oklch,var(--state-waiting)_75%,var(--foreground))]")}>{sub}</dd>}
       {children && <dd className="mt-auto pt-2">{children}</dd>}
     </div>
@@ -39,7 +36,7 @@ export function MachineStrip() {
   const mem = useMemo(() => hist.map((p) => p.m), [hist]);
   if (unavailable) return null;
   if (!sample) {
-    return <div className="h-[104px] rounded-xl border bg-card" aria-busy="true" />;
+    return <div className="h-[6.5rem] rounded-xl border bg-card" aria-busy="true" />;
   }
   const m = sample.machine;
   const used = m.disk_total > 0 ? m.disk_total - m.disk_free : 0;
@@ -99,7 +96,7 @@ export function HeadPausedBanner() {
           <Pause className="size-3.5 fill-current text-[color-mix(in_oklch,var(--state-waiting)_80%,var(--foreground))]" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold">The head is paused by tmx</p>
+          <p className="text-[0.8125rem] font-semibold">The head is paused by tmx</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {head.paused_detail || "A resource brake stopped it."} It cannot answer you or run projects until it is resumed.{" "}
             <a className="text-brand hover:underline" href={href(paths.agent(head.id))}>

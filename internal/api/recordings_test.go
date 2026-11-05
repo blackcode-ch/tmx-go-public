@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -321,5 +318,39 @@ func TestRecordingsOffWithoutRecorder(t *testing.T) {
 	owner := client{t: t, base: srv.URL, token: d.OwnerToken}
 	if s := owner.do("GET", "/api/recordings", nil, nil); s != 501 {
 		t.Fatalf("no recorder: %d", s)
+	}
+}
+
+// A recording is tagged "clinic" (patient data: its report is written by local models only) when it begins or
+// later; the tag is stored, and anything else is refused.
+func TestRecordingSensitivity(t *testing.T) {
+	d := apitest.New(t)
+	owner := client{t: t, base: d.URL, token: d.OwnerToken}
+	var rec model.Recording
+	if s := owner.do("POST", "/api/recordings", map[string]any{"kind": "audio", "mic": true, "mime": "audio/webm", "sensitivity": "secret"}, nil); s != 400 {
+		t.Fatalf("an unknown sensitivity: %d", s)
+	}
+	if s := owner.do("POST", "/api/recordings", map[string]any{"kind": "audio", "mic": true, "mime": "audio/webm", "sensitivity": "clinic"}, &rec); s != 201 || !rec.Clinic() {
+		t.Fatalf("begin clinic: %d %+v", s, rec)
+	}
+	if s := owner.do("POST", "/api/recordings/"+rec.ID+"/state", map[string]string{"state": "stopped"}, nil); s != 200 {
+		t.Fatalf("stop: %d", s)
+	}
+	var got model.Recording
+	if s := owner.do("GET", "/api/recordings/"+rec.ID, nil, &got); s != 200 || got.Sensitivity != model.SensitivityClinic {
+		t.Fatalf("stored: %d %q", s, got.Sensitivity)
+	}
+	got = model.Recording{} // omitempty: a fresh value, or the old tag would stay
+	if s := owner.do("PATCH", "/api/recordings/"+rec.ID, map[string]string{"sensitivity": ""}, &got); s != 200 || got.Clinic() || got.ID != rec.ID {
+		t.Fatalf("untag: %d %+v", s, got)
+	}
+	if s := owner.do("PATCH", "/api/recordings/"+rec.ID, map[string]string{"sensitivity": "clinic", "title": "Consultation"}, &got); s != 200 || !got.Clinic() || got.Title != "Consultation" {
+		t.Fatalf("tag and rename: %d %+v", s, got)
+	}
+	if s := owner.do("PATCH", "/api/recordings/"+rec.ID, map[string]string{"sensitivity": "public"}, nil); s != 400 {
+		t.Fatalf("an unknown sensitivity: %d", s)
+	}
+	if s := (client{t: t, base: d.URL, token: d.AgentToken(t, "head")}).do("PATCH", "/api/recordings/"+rec.ID, map[string]string{"sensitivity": ""}, nil); s != 403 {
+		t.Fatalf("an agent may not untag: %d", s)
 	}
 }

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -122,7 +119,7 @@ const screenCols, screenRows = 120, 32
 // keystrokes (agentTypeText): it is delivered like mail, through Process.Send, so it can't
 // answer a menu, run a slash command or a shell escape, or change the TUI's permissions.
 func (f *Fleet) TypeText(c Caller, idOrName, text string, submit bool) error {
-	if !c.Owner {
+	if !c.Owner && c.Peer == "" {
 		return f.agentTypeText(c, idOrName, text, submit)
 	}
 	proc, err := f.procForWriteAct(c, idOrName)
@@ -132,6 +129,10 @@ func (f *Fleet) TypeText(c Caller, idOrName, text string, submit bool) error {
 	if submit {
 		text += "\r"
 	}
+	// A peer writes raw text (unlike agentTypeText's mail-relay), but never with the owner's
+	// unguarded strength: Write(owner=true) skips the pending-approval/menu gate and a shell's
+	// owner-only refusal, which only the literal owner at the real keyboard may bypass
+	// (go-reviewer-o, #161 review - machine protection, rule 1).
 	if err := proc.Write([]byte(text), c.Owner); err != nil {
 		return writeActErr(err, idOrName)
 	}
@@ -225,7 +226,7 @@ func (f *Fleet) SendKeys(c Caller, idOrName, keys string) error {
 		return errf(KindInvalid, "%s", err)
 	}
 	var proc runner.Process
-	if c.Owner {
+	if c.Owner || c.Peer != "" {
 		if proc, err = f.procForWriteAct(c, idOrName); err != nil {
 			return err
 		}
@@ -247,6 +248,9 @@ func (f *Fleet) SendKeys(c Caller, idOrName, keys string) error {
 		}
 		proc = p
 	}
+	// Write(owner=true) is the literal owner's unguarded strength (skips the pending-approval/
+	// menu gate and a shell's owner-only refusal): never a peer, even though it may press any
+	// key, unlike a head or lead agent (go-reviewer-o, #161 review).
 	for _, seq := range seqs {
 		if err := proc.Write(seq, c.Owner); err != nil {
 			return writeActErr(err, idOrName)
@@ -296,6 +300,16 @@ func (f *Fleet) Screen(c Caller, idOrName string, history int) (string, error) {
 	return scr.Text(), nil
 }
 
+// peerShellRefused is KindForbidden when c is a peer and r is a shell: a shell is the owner's
+// alone (its input runs with no guard and no approval, same as agentInputTargetLocked's rule
+// for a head or lead agent), never a remote machine's (go-reviewer-o, #161 review).
+func peerShellRefused(c Caller, r *agentRec) error {
+	if c.Peer != "" && r.a.Harness == model.HarnessShell {
+		return errf(KindForbidden, "only the owner can reach a shell")
+	}
+	return nil
+}
+
 // procForAct resolves idOrName under the same tier rule as start/stop/restart and returns its
 // running process (KindConflict if it is not running). Read-only (Screen): does not count as
 // human input.
@@ -307,6 +321,10 @@ func (f *Fleet) procForAct(c Caller, idOrName string) (runner.Process, error) {
 		return nil, err
 	}
 	if err := f.authorizeActLocked(c, r); err != nil {
+		f.mu.Unlock()
+		return nil, err
+	}
+	if err := peerShellRefused(c, r); err != nil {
 		f.mu.Unlock()
 		return nil, err
 	}
@@ -322,12 +340,16 @@ func (f *Fleet) procForAct(c Caller, idOrName string) (runner.Process, error) {
 // human input, so mail waits TypingQuiet before it is typed into the same input box. Agents
 // go through agentInputTargetLocked instead.
 func (f *Fleet) procForWriteAct(c Caller, idOrName string) (runner.Process, error) {
-	if !c.Owner {
+	if !c.Owner && c.Peer == "" {
 		return nil, errf(KindForbidden, "only the owner types raw input")
 	}
 	f.mu.Lock()
 	r, err := f.resolveLocked(idOrName)
 	if err != nil {
+		f.mu.Unlock()
+		return nil, err
+	}
+	if err := peerShellRefused(c, r); err != nil {
 		f.mu.Unlock()
 		return nil, err
 	}

@@ -1,9 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -164,5 +162,70 @@ func TestFleetHostsRejectsDisallowedPortsAndRedirects(t *testing.T) {
 	}
 	if sawAuth != "Bearer secret-token" {
 		t.Fatalf("the configured host's own token should have reached it: %q", sawAuth)
+	}
+}
+
+// TestFleetHostsIncludesPeers: ONE FLEET (3 Nov) - a real other machine (Python fleet interop,
+// over its own pair token, never this daemon's bearer token) shows up in the same Overview list
+// as a loopback host, kind "peer", with counts derived from GET /api/sessions's session states.
+func TestFleetHostsIncludesPeers(t *testing.T) {
+	ps := newPeerSetup(t)
+	ps.pc.PollAll(context.Background())
+
+	owner := client{t: t, base: ps.url, token: ps.d.OwnerToken}
+	var resp struct {
+		Hosts []api.HostSummary `json:"hosts"`
+	}
+	if s := owner.do("GET", "/api/fleet/hosts", nil, &resp); s != 200 {
+		t.Fatalf("status %d", s)
+	}
+	var peer api.HostSummary
+	found := false
+	for _, h := range resp.Hosts {
+		if h.Kind == "peer" && h.Name == "hosta" {
+			peer, found = h, true
+		}
+	}
+	if !found {
+		t.Fatalf("no hosta peer row: %+v", resp.Hosts)
+	}
+	if peer.Name != "hosta" || !peer.Reachable || peer.Error != "" || peer.Agents != 1 {
+		t.Fatalf("peer row: %+v", peer)
+	}
+	if peer.Port != 0 || peer.CPU != 0 || peer.MemFreeMB != 0 {
+		t.Fatalf("a peer row must never claim loopback-only fields: %+v", peer)
+	}
+
+	// An agent (not the owner) may not read another machine's data through this either.
+	agent := client{t: t, base: ps.url, token: ps.d.AgentToken(t, "head")}
+	if s := agent.do("GET", "/api/fleet/hosts", nil, nil); s != 403 {
+		t.Fatalf("agent read: %d", s)
+	}
+}
+
+// TestFleetHostsPeerUnreachable: a configured peer this daemon has never successfully polled
+// (OK stays false, the zero-value Statuses() entry made when the peer was configured) is still
+// listed, as an unreachable row - the Overview must not hide a real machine just because it
+// has not answered yet.
+func TestFleetHostsPeerUnreachable(t *testing.T) {
+	ps := newPeerSetup(t) // never polled: Statuses() still holds each peer's zero-value seed
+
+	owner := client{t: t, base: ps.url, token: ps.d.OwnerToken}
+	var resp struct {
+		Hosts []api.HostSummary `json:"hosts"`
+	}
+	if s := owner.do("GET", "/api/fleet/hosts", nil, &resp); s != 200 {
+		t.Fatalf("status %d", s)
+	}
+	for _, h := range resp.Hosts {
+		if h.Kind != "peer" {
+			t.Fatalf("unexpected row kind: %+v", h)
+		}
+		if h.Reachable {
+			t.Fatalf("a never-polled peer must not claim reachable: %+v", h)
+		}
+	}
+	if len(resp.Hosts) == 0 {
+		t.Fatal("configured peers must still be listed before the first poll")
 	}
 }

@@ -1,12 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
-	"github.com/blackcode-ch/tmx-go/internal/api/apitest"
 	"strings"
 	"testing"
+
+	"github.com/blackcode-ch/tmx-go/internal/api/apitest"
 )
 
 func TestProjectSectionTool(t *testing.T) {
@@ -20,6 +18,12 @@ func TestProjectSectionTool(t *testing.T) {
 	}
 	if _, bad := call(t, lead, "announce_set", map[string]any{"project": "daily-report", "status": "1\n2\n3\n4"}); !bad {
 		t.Fatal("accepted fourth line")
+	}
+	// Earlier names (private build) are the same tool.
+	for _, old := range LegacyToolNames["announce_set"] {
+		if out := mustOK(t, lead, old, map[string]any{"project": "daily-report", "status": "Via " + old}); !strings.Contains(out, "Via "+old) {
+			t.Fatalf("%s: %s", old, out)
+		}
 	}
 }
 
@@ -37,5 +41,25 @@ func TestContributionAndArtifactsTools(t *testing.T) {
 	}
 	if _, bad := call(t, head, "my_part", map[string]any{"project": "artifacts", "status": "Overwrite"}); !bad {
 		t.Fatal("nonmember wrote contribution")
+	}
+}
+
+func TestProjectCreateSelectsExistingLeadOrNone(t *testing.T) {
+	d := apitest.New(t)
+	head := session(t, d, "head")
+	mustOK(t, head, "project_create", map[string]any{"name": "Original"})
+	out := mustOK(t, head, "project_create", map[string]any{"name": "Shared", "lead": "original-lead"})
+	if !strings.Contains(out, "assigned lead original-lead") {
+		t.Fatalf("existing lead: %s", out)
+	}
+	out = mustOK(t, head, "project_create", map[string]any{"name": "Unassigned", "lead": ""})
+	if !strings.Contains(out, "no lead assigned") {
+		t.Fatalf("no lead: %s", out)
+	}
+	if _, err := d.Fleet.Agent("shared-lead"); err == nil {
+		t.Fatal("launched replacement lead")
+	}
+	if _, err := d.Fleet.Agent("unassigned-lead"); err == nil {
+		t.Fatal("launched unassigned lead")
 	}
 }

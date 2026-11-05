@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { ArrowUpToLine, Check, CirclePause, Fingerprint, MessageCircleQuestion, Play, ShieldAlert, Sparkles, SquareTerminal, X } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +16,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { useGateAsks } from "@/lib/owner-gate";
 import { GuardHoldBody, guardOf } from "./guard";
 import { harnessLabel, terminalMenuHeadline, terminalMenuOf } from "@/lib/harness";
+import { ownerName } from "@/lib/owner-name";
 import { href, paths } from "@/lib/router";
 import { CompanionApprovalBody, companionEffects, isCompanionMessage, isCompanionQuestion, isCompanionSend, isCompanionTask } from "./companion/approval";
 
@@ -64,7 +62,7 @@ function WhatsAppApprovalBody({ a, compact }: { a: Approval; compact?: boolean }
       </p>
       <p
         className={cn(
-          "scroll-thin overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground",
+          "scroll-thin overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 text-[0.8125rem] leading-relaxed whitespace-pre-wrap text-foreground",
           compact ? "max-h-28" : "max-h-48",
         )}
       >
@@ -82,7 +80,7 @@ function TerminalMenuBody({ a, compact }: { a: Approval; compact?: boolean }) {
       {a.question && (
         <pre
           className={cn(
-            "scroll-thin overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-foreground/90",
+            "scroll-thin overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 font-mono text-[0.75rem] leading-relaxed whitespace-pre-wrap text-foreground/90",
             compact ? "max-h-28" : "max-h-48",
           )}
         >
@@ -109,9 +107,9 @@ function TerminalMenuActions({ a, busy, decide }: { a: Approval; busy: boolean; 
               type="button"
               disabled={busy}
               onClick={() => decide(o)}
-              className="group flex min-h-8 items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[12.5px] outline-none transition-colors duration-150 hover:border-border-strong hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              className="group flex min-h-8 items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-[0.7812rem] outline-none transition-colors duration-150 hover:border-border-strong hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
-              <span className="tabular flex size-4 shrink-0 items-center justify-center rounded-[4px] bg-muted font-mono text-[10px] text-muted-foreground">
+              <span className="tabular flex size-4 shrink-0 items-center justify-center rounded-[4px] bg-muted font-mono text-[0.625rem] text-muted-foreground">
                 {i + 1}
               </span>
               <span className="min-w-0 flex-1 break-words">{o}</span>
@@ -128,6 +126,7 @@ function TerminalMenuActions({ a, busy, decide }: { a: Approval; busy: boolean; 
 }
 
 export function ApprovalBody({ a, agent, compact }: { a: Approval; agent?: Agent; compact?: boolean }) {
+  const project = useStore((s) => a.card?.project_id ? s.projects[a.card.project_id] : undefined);
   if (a.tool === "owner_recovery_notice") return <p role="alert">{a.description}</p>;
   if (terminalMenuOf(a)) return <TerminalMenuBody a={a} compact={compact} />;
   if (a.kind === "guard") return <GuardHoldBody a={a} agent={agent} compact={compact} />;
@@ -136,7 +135,7 @@ export function ApprovalBody({ a, agent, compact }: { a: Approval; agent?: Agent
   if (a.kind === "brake") {
     return (
       <div className="space-y-1">
-        <p className="text-[14px] leading-snug font-medium text-foreground">{PAUSE_LABEL[a.tool] ?? "Paused"}</p>
+        <p className="text-[0.875rem] leading-snug font-medium text-foreground">{PAUSE_LABEL[a.tool] ?? "Paused"}</p>
         <p className="text-xs text-muted-foreground">
           {a.description} {agent?.level === "head" ? "The head cannot answer you until it is resumed." : "Its whole process tree is stopped; nothing is lost."}
         </p>
@@ -146,8 +145,16 @@ export function ApprovalBody({ a, agent, compact }: { a: Approval; agent?: Agent
   if (a.kind === "question") {
     return (
       <div className="space-y-1.5">
-        <p className="text-[14px] leading-snug font-medium text-foreground">{a.question}</p>
+        <p className="text-[0.875rem] leading-snug font-medium text-foreground">{a.question}</p>
         {a.description && <p className="text-xs text-muted-foreground">{a.description}</p>}
+        {a.card?.project_id && <p className="text-xs text-muted-foreground">
+          <a className="hover:underline" href={href(paths.project(a.card.project_id))}>{project?.name || a.card.project_id}</a>
+          {a.card.urgent && <span className="ml-2 font-medium">Urgent</span>}
+          {!!a.card.priority && <span className="ml-2">Priority {a.card.priority}</span>}
+          {a.card.owner_only && <span className="ml-2">{ownerName}'s own call</span>}
+          {a.card.batchable && <span className="ml-2">Can wait for a batch</span>}
+        </p>}
+        {a.card?.close_reason && <p className="text-sm">Closed: {a.card.close_reason}</p>}
         {a.card?.context && <p className="whitespace-pre-wrap text-sm">{a.card.context}</p>}
         {a.card?.recommendation && <p className="text-sm">Recommended: {a.card.recommendation}</p>}
         {a.card && <p className="text-xs text-muted-foreground">Version {a.version}</p>}
@@ -167,7 +174,7 @@ export function ApprovalBody({ a, agent, compact }: { a: Approval; agent?: Agent
     <div className="space-y-2">
       {a.description && a.tool !== "Bash" && <p className="text-xs text-muted-foreground">{a.description}</p>}
       {showDetailLine && s.detail && (
-        <p className={cn("truncate text-xs text-foreground/85", s.mono && "font-mono text-[11.5px]")}>{s.detail}</p>
+        <p className={cn("truncate text-xs text-foreground/85", s.mono && "font-mono text-[0.7188rem]")}>{s.detail}</p>
       )}
       <ToolInputView tool={a.tool} input={a.input} cwd={agent?.cwd} compact={compact} hidePath />
       {a.tool === "Bash" && a.description && <p className="text-xs text-muted-foreground">{a.description}</p>}
@@ -205,11 +212,12 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
     const menu = terminalMenuOf(a);
     const decidable = a.tool !== "owner_recovery_notice" && !menu && (a.kind === "permission" || a.kind === "guard" || a.kind === "whatsapp" || isCompanionSend(a));
     const guarded = a.kind === "guard";
+    const [always, setAlways] = useState(false);
     const companionQ = isCompanionQuestion(a);
     // The owner gate asks before allowing a guard hold, or a hand-off to Companion with effects.
     const gated = gateOn && (guarded || (isCompanionSend(a) && companionEffects(a) !== "none"));
 
-    async function decide(decision: DecideBody["decision"], extra: { message?: string; answer?: string } = {}) {
+    async function decide(decision: DecideBody["decision"], extra: { message?: string; answer?: string; scope?: DecideBody["scope"] } = {}) {
       if (busy) return;
       setBusy(true);
       try {
@@ -225,6 +233,7 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
         setBusy(false);
         toast(
           {
+            allow_always: request.scope === "any" ? "Allowed always, for any agent" : `Allowed always for agents like ${name}`,
             allow: guarded ? `Allowed once for ${name}` : isCompanionTask(a) ? `Handed ${name}'s task to Companion` : isCompanionMessage(a) ? `Sent ${name}'s message to Companion` : `Allowed for ${name}`,
             deny: a.kind === "brake" ? `${name} stays paused` : companionQ ? "Cancelled the Companion task" : `Denied for ${name}`,
             answer: companionQ ? "Answer sent to Companion" : `Answer sent to ${name}`,
@@ -280,7 +289,7 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
           <Button size={size} onClick={() => void decide("resume")} disabled={busy}>
             <Play className="fill-current" />
             Resume
-            {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 bg-primary-foreground/15 text-[10px] text-primary-foreground/80 sm:inline-flex">A</Kbd>}
+            {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 bg-primary-foreground/15 text-[0.625rem] text-primary-foreground/80 sm:inline-flex">A</Kbd>}
           </Button>
           {raise && (
             <Button size={size} variant="outline" onClick={() => void decide("raise")} disabled={busy}>
@@ -290,7 +299,7 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
           )}
           <Button size={size} variant="ghost" className="text-muted-foreground" onClick={() => void decide("deny")} disabled={busy}>
             Keep paused
-            {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 text-[10px] sm:inline-flex">D</Kbd>}
+            {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 text-[0.625rem] sm:inline-flex">D</Kbd>}
           </Button>
         </div>
       );
@@ -308,7 +317,7 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
             <div className="flex flex-wrap gap-1.5">
               {opts.map((o, i) => (
                 <Button key={o} variant="outline" size={size} disabled={busy} onClick={() => void decide("answer", { answer: o })} className="h-auto min-h-7 py-1 text-left whitespace-normal">
-                  {showKeys && i < 9 && <Kbd className="mr-0.5 hidden h-4 min-w-4 text-[10px] sm:inline-flex">{i + 1}</Kbd>}
+                  {showKeys && i < 9 && <Kbd className="mr-0.5 hidden h-4 min-w-4 text-[0.625rem] sm:inline-flex">{i + 1}</Kbd>}
                   {o}
                 </Button>
               ))}
@@ -325,7 +334,7 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               placeholder={companionQ ? "Your answer for Companion…" : opts.length ? "Or write your own answer…" : "Your answer…"}
-              className="h-7 flex-1 text-[12.5px]"
+              className="h-7 flex-1 text-[0.7812rem]"
               disabled={busy}
             />
             <Button type="submit" size={size} disabled={busy || !answer.trim()}>
@@ -362,7 +371,7 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
               }
             }}
             placeholder="Reason (optional), tells the agent what to do instead"
-            className="h-7 min-w-[220px] flex-1 text-[12.5px]"
+            className="h-7 min-w-[13.75rem] flex-1 text-[0.7812rem]"
             disabled={busy}
           />
           <Button type="submit" size={size} variant="destructive" disabled={busy}>
@@ -375,17 +384,42 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
       );
     }
 
+    if (always) {
+      // Allow always: remembered for this rule and this exact command; listed and revocable in
+      // Settings > Safety. Always asks for your confirmation, even inside the grace window.
+      return (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button size={size} onClick={() => void decide("allow_always", { scope: "agent" })} disabled={busy} title="Needs your confirmation on this machine">
+            <Fingerprint />
+            Always, agents like {name}
+          </Button>
+          <Button size={size} variant="outline" onClick={() => void decide("allow_always", { scope: "any" })} disabled={busy} title="Needs your confirmation on this machine">
+            <Fingerprint />
+            Always, any agent
+          </Button>
+          <Button size={size} variant="ghost" onClick={() => setAlways(false)} disabled={busy}>
+            Cancel
+          </Button>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <Button size={size} onClick={() => void decide("allow")} disabled={busy} title={gated ? "Needs your confirmation on this machine" : undefined}>
           {gated ? <Fingerprint /> : isCompanionSend(a) ? <Sparkles /> : <Check />}
           {guarded ? "Allow once" : isCompanionSend(a) ? "Send to Companion" : "Allow"}
-          {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 bg-primary-foreground/15 text-[10px] text-primary-foreground/80 sm:inline-flex">A</Kbd>}
+          {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 bg-primary-foreground/15 text-[0.625rem] text-primary-foreground/80 sm:inline-flex">A</Kbd>}
         </Button>
+        {guarded && (
+          <Button size={size} variant="outline" onClick={() => setAlways(true)} disabled={busy} title="Stop asking for this exact command">
+            Allow always…
+          </Button>
+        )}
         <Button size={size} variant="outline" onClick={startDeny} disabled={busy}>
           <X />
           Deny
-          {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 text-[10px] sm:inline-flex">D</Kbd>}
+          {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 text-[0.625rem] sm:inline-flex">D</Kbd>}
         </Button>
       </div>
     );

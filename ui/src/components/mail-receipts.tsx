@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useStore } from "@/lib/store";
 import { absoluteTime } from "@/lib/format";
 

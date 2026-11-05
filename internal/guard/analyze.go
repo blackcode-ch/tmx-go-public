@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package guard
 
 import (
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -26,6 +24,7 @@ type analyzer struct {
 	procVars                    map[string]bool // PowerShell variables holding processes found by name
 	found                       []finding
 	depth                       int
+	fileTool                    bool // a Write/Edit tool call: Check judged its content already
 }
 
 func newAnalyzer(ctx Context) *analyzer {
@@ -53,13 +52,32 @@ func newAnalyzer(ctx Context) *analyzer {
 
 func (a *analyzer) add(rule, detail, match string) {
 	a.found = append(a.found, finding{rule: rule, detail: detail, match: strings.TrimSpace(match)})
+	// The carve-outs ride along with their parent finding: a switched-off parent never hides them.
+	if rule == RuleKillByName && killsTmxRuntime(match) {
+		a.found = append(a.found, finding{rule: RuleKillTmx, detail: detail + ", which includes tmx's own processes", match: strings.TrimSpace(match)})
+	}
+	if rule == RuleTmxState && strings.Contains(detail, "secrets") {
+		a.found = append(a.found, finding{rule: RuleTmxSecrets, detail: detail, match: strings.TrimSpace(match)})
+	}
 }
 
+// verdict is the strongest finding, each one first mapped through the owner's state for its
+// rule: an allowed rule never hides another rule's block in the same command.
 func (a *analyzer) verdict() Verdict {
-	best := -1
+	best, bestOut := -1, Allow
 	for i, f := range a.found {
-		r := ruleByID[f.rule]
-		if best < 0 || r.Outcome.rank() > ruleByID[a.found[best].rule].Outcome.rank() {
+		o := a.ctx.StateOf(f.rule)
+		if o == Allow {
+			continue
+		}
+		if best < 0 || o.rank() > bestOut.rank() {
+			best, bestOut = i, o
+			continue
+		}
+		// Two holds: the verdict's rule decides whether an Allow may be remembered, so a
+		// non-rememberable finding wins over a rememberable one, or `cp x ../out && chmod 700
+		// /etc/x` would be remembered as a mere write-outside (go-reviewer-o4, #241).
+		if o == Hold && bestOut == Hold && Rememberable[a.found[best].rule] && !Rememberable[f.rule] {
 			best = i
 		}
 	}
@@ -68,7 +86,7 @@ func (a *analyzer) verdict() Verdict {
 	}
 	f := a.found[best]
 	r := ruleByID[f.rule]
-	return Verdict{Outcome: r.Outcome, Rule: r.ID, RuleName: r.Name, Why: r.Why, Detail: f.detail, Match: f.match}
+	return Verdict{Outcome: bestOut, Rule: r.ID, RuleName: r.Name, Why: r.Why, Detail: f.detail, Match: f.match}
 }
 
 // resolve turns a path written by a file tool into a target.
@@ -381,7 +399,7 @@ var psAliases = map[string]string{
 // verb is the command name of args[0], with PowerShell aliases and tmx's own names resolved.
 func (a *analyzer) verb(s string, sh Shell) string {
 	v := verbOf(s)
-	if sh == ShellPowerShell {
+	if sh == ShellPowerShell && !strings.Contains(strings.ToLower(s), v+".") { // "sc.exe" is the program, "sc" the alias
 		if cmdlet, ok := psAliases[v]; ok {
 			return cmdlet
 		}
@@ -530,6 +548,16 @@ func (a *analyzer) unwrap(verb string, args []arg, raw string, sh Shell) ([]arg,
 			return rest, true
 		}
 		return skip(wrapperValues[verb]), true
+	case "tmx", "tmxg":
+		// `tmx slot [--kind k] -- cmd ...` only waits for a heavy-command slot, then runs cmd: the
+		// guard checks cmd, not tmx (Hostb's log, 3 Nov: agents use it for builds and tests).
+		if len(rest) > 0 && strings.EqualFold(rest[0].s, "slot") {
+			for i, x := range rest {
+				if x.s == "--" {
+					return rest[i+1:], true
+				}
+			}
+		}
 	case "timeout", "gtimeout":
 		rest = skip(map[string]bool{"-s": true, "--signal": true, "-k": true, "--kill-after": true})
 		if len(rest) > 0 {
@@ -558,6 +586,9 @@ var wrapperValues = map[string]map[string]bool{
 }
 
 // rawChecks catch forms the word view misses (PowerShell method calls).
+// psShadowDelete: removing shadow copies (restore points) through WMI/CIM (Python's SHADOW_PS).
+var psShadowDelete = regexp.MustCompile(`(?i)Win32_ShadowCopy.*\b(Remove-(WmiObject|CimInstance)|Delete\(\))`)
+
 func (a *analyzer) rawChecks(src string, sh Shell) {
 	if sh != ShellPowerShell {
 		return
@@ -567,6 +598,9 @@ func (a *analyzer) rawChecks(src string, sh Shell) {
 	}
 	if psIEX.MatchString(src) && psDownload.MatchString(src) {
 		a.add(RulePipeShell, "runs downloaded code with Invoke-Expression", src)
+	}
+	if psShadowDelete.MatchString(src) {
+		a.add(RuleDisk, "deletes restore points (Win32_ShadowCopy)", src)
 	}
 	if m := psDirDelete.FindString(src); m != "" {
 		a.add(RuleDeleteOutside, "deletes a folder through .NET ("+m+"), which tmx cannot check", src)

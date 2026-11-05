@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// Recordings (ARCHITECTURE.md "Recorder"): the owner's own screen (whole or one window), camera,
+// Recordings (DESIGN.md "Recorder"): the owner's own screen (whole or one window), camera,
 // microphone and device audio, captured in the owner's window and stored by the daemon in
 // segments. The daemon never captures anything itself.
 
@@ -33,7 +30,7 @@ const (
 	// RecordingSourceWeb: the window's MediaRecorder streams chunks and the daemon writes the files.
 	RecordingSourceWeb RecordingSource = "web"
 	// RecordingSourceNative: the macOS app captures with ScreenCaptureKit, writes the files into the
-	// recording's folder itself and reports them (ARCHITECTURE.md "Recorder", native capture).
+	// recording's folder itself and reports them (DESIGN.md "Recorder", native capture).
 	RecordingSourceNative RecordingSource = "native"
 )
 
@@ -51,6 +48,9 @@ type Recording struct {
 	// SystemAudio: the device's own sound (what its speakers play) was captured with the screen
 	// and mixed with the microphone; then every segment has a 16 kHz WAV too.
 	SystemAudio bool `json:"system_audio"`
+	// Sensitivity: SensitivityClinic = medical patient data (Metaesthetics, Aurea; nLPD): its report is written on
+	// our own machines only, and fails with the reason when there is no local model. "" = a cloud model may write it.
+	Sensitivity string `json:"sensitivity,omitempty"`
 	// Dir is the recording's folder (absolute); every segment's files are in it.
 	Dir      string             `json:"dir"`
 	Segments []RecordingSegment `json:"segments"`
@@ -97,6 +97,8 @@ type RecordingFrame struct {
 	MS    int64  `json:"ms"`   // recorded time
 	Path  string `json:"path"` // absolute path of the JPEG
 	Bytes int64  `json:"bytes"`
+	// Key: a key moment (the window saw the picture change), not only the 30-s still.
+	Key bool `json:"key,omitempty"`
 }
 
 // Bus events of the recorder.
@@ -104,3 +106,9 @@ const (
 	EvRecordingUpdated = "recording.updated" // data: Recording (new, changed or finished)
 	EvRecordingRemoved = "recording.removed" // data: {"id"}
 )
+
+// SensitivityClinic marks a recording of medical patient data: local models only (nLPD).
+const SensitivityClinic = "clinic"
+
+// Clinic reports whether the recording holds clinic patient data (local models only).
+func (r Recording) Clinic() bool { return r.Sensitivity == SensitivityClinic }

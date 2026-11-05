@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // "Hand to Companion": the owner writes a task (goal, context, steps, done-when, don't-touch),
 // sees exactly the text tmx will send, and sends it. The create carries the preview's hash, so
 // what is sent is what was shown.
@@ -103,7 +100,7 @@ export function HandOffDialog() {
   const gated = gateOn && preview && preview.effects !== "none";
   return (
     <Dialog open={!!open} onOpenChange={(v) => !v && close()}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[37.5rem]">
         {!preview ? (
           <form onSubmit={showPreview} className="grid gap-4">
             <DialogHeader>
@@ -164,7 +161,7 @@ export function HandOffDialog() {
             </div>
             <pre
               data-companion-preview
-              className="scroll-thin max-h-72 overflow-auto rounded-lg border bg-muted/40 px-3 py-2.5 font-mono text-[12px] leading-relaxed whitespace-pre-wrap text-foreground/90"
+              className="scroll-thin max-h-72 overflow-auto rounded-lg border bg-muted/40 px-3 py-2.5 font-mono text-[0.75rem] leading-relaxed whitespace-pre-wrap text-foreground/90"
             >
               {preview.text}
             </pre>

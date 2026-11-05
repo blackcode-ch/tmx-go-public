@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Recordings of the owner's own screen, camera, microphone and device audio (ARCHITECTURE.md
+// Recordings of the owner's own screen, camera, microphone and device audio (DESIGN.md
 // "Recorder"); mirrors internal/model/recording.go, same JSON names.
 
 export type RecordingKind = "screen" | "window" | "audio" | "camera";
@@ -29,6 +26,8 @@ export interface Recording {
   mic: boolean;
   /** the device's own sound was captured with the screen (mixed with the microphone) */
   system_audio?: boolean;
+  /** "clinic": patient data, the report is written by local models only (lib/clinic.ts) */
+  sensitivity?: "clinic" | "";
   dir: string;
   segments: RecordingSegment[];
   /** still JPEGs for summaries: at the start, every 30 s of recorded time, at stop */
@@ -57,6 +56,8 @@ export interface RecordingFrame {
   /** absolute path of the JPEG */
   path: string;
   bytes: number;
+  /** a key moment: the window saw the screen change */
+  key?: boolean;
 }
 
 /** config.json "recorder", with the defaults filled in */

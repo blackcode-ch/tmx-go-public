@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package ui embeds the built web UI (ui/dist, from `pnpm build`). The daemon serves it at /
 // and the desktop app loads it into its window. Before the first build dist holds only .keep.
 package ui

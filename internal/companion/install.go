@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package companion
 
 import (
@@ -35,12 +32,16 @@ const (
 	skillMarker = "<!-- managed by tmxg (tmxg companion install); tmxg companion uninstall removes it -->"
 )
 
-// AIOSHome requires an explicit isolated Companion root in fleet builds.
+// AIOSHome uses the selected profile root, or Companion's default user home.
 func AIOSHome() (string, error) {
 	if d := os.Getenv(EnvAIOSHome); d != "" {
 		return filepath.Abs(d)
 	}
-	return "", errors.New("trial profile requires an explicit TMXG_AIOS_HOME; shared Companion home is disabled")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".aios"), nil
 }
 
 // Entry is tmx's mcp.json for Companion.
@@ -252,6 +253,9 @@ own app ("Needs you"); you only look and pass messages on.
 ## Tools (MCP server "tmxg")
 
 - ` + "`tmx_fleet`" + `: projects and agents with their state (working, idle, waiting, queued, paused, stopped, error).
+- ` + "`tmx_health`" + `: mail waiting and counts of decisions waiting for the owner.
+- ` + "`tmx_projects`" + `: project names and agent counts.
+- ` + "`tmx_your_turn`" + `: project and title of decisions waiting for the owner; no approval context.
 - ` + "`tmx_needs_you`" + `: what waits for the owner's decision in tmx (permissions, questions). Read-only: the
   owner answers in tmx, never you.
 - ` + "`tmx_chats`" + ` and ` + "`tmx_chat_read`" + `: the owner's chats with other people's tmx (and their agents).

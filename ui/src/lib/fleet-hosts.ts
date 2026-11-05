@@ -1,18 +1,22 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Fleet-wide Overview aggregation (WP4, internal/api/fleethosts.go): other local daemons
 // configured in config.json "hosts", read over loopback only - no p2p, no new network
-// exposure (ARCHITECTURE.md plan phase 10, "multi-machine", is not built; issue #90 keeps p2p off).
+// exposure (DESIGN.md plan phase 10, "multi-machine", is not built; issue #90 keeps p2p off).
 // Line-building and status logic is pure, in fleet-hosts-format.ts; this file is the zustand
 // store and the fetch, kept apart so the pure logic stays unit-testable without a connection.
 import { create } from "zustand";
 import { fleetHostsResult, hidesOnStatus } from "./fleet-hosts-format";
 import { useStore } from "./store";
 
+/** "host" = a loopback daemon on this machine (CPU/mem/disk/head activity, precise). "peer" =
+ * a real other machine (Python fleet interop) - only what GET /api/sessions carries, so no
+ * port/cpu/mem/disk, and running/paused/needs_you are a best-effort read of each session's
+ * display state, not the precise enum a same-process host gets. */
+export type HostKind = "host" | "peer";
+
 export interface HostSummary {
+  kind: HostKind;
   name: string;
-  port: number;
+  port?: number;
   reachable: boolean;
   error?: string;
   machine?: string;
@@ -27,6 +31,9 @@ export interface HostSummary {
   head_name?: string;
   head_state?: string;
   head_line?: string;
+  /** "peer" only: this machine and that peer have each other's pair token (can be Reachable
+   * without being Paired, or the reverse, if a token just rotated). */
+  paired?: boolean;
 }
 
 interface FleetHostsState {

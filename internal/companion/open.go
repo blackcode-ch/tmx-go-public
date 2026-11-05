@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package companion
 
 import (
@@ -25,7 +22,7 @@ const DeepLink = "aios://connect/tmx"
 // Opener hands a link to the operating system, which opens the app registered for its scheme.
 type Opener func(ctx context.Context, url string) error
 
-// OpenURL uses macOS open or xdg-open. Windows shell URL dispatch is disabled.
+// OpenURL uses the operating system's registered URL handler.
 // A handler that keeps running (xdg-open may wait for the app) counts as opened.
 func OpenURL(ctx context.Context, url string) error {
 	var cmd *exec.Cmd
@@ -33,7 +30,7 @@ func OpenURL(ctx context.Context, url string) error {
 	case "darwin":
 		cmd = hiddenexec.Command("/usr/bin/open", url)
 	case "windows":
-		return fmt.Errorf("automatic URL opening is disabled on Windows; open Companion manually")
+		return openWindowsURL(url)
 	default:
 		cmd = hiddenexec.Command("xdg-open", url)
 	}

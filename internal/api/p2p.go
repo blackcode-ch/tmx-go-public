@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -13,15 +10,18 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/blackcode-ch/tmx-go/internal/config"
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 )
 
-// p2pRoutes: the network layer's own owner routes (ARCHITECTURE.md "Peer-to-peer network").
+// p2pRoutes: the network layer's own owner routes (DESIGN.md "Peer-to-peer network").
 // GET /api/p2p is the status; /api/p2p/net/* are low-level diagnostics (invites, join and
 // raw envelopes without the chat layer) used by `tmx p2p` for live checks. The chat layer
 // owns the user-facing invite/contact/chat routes.
 func (s *Server) p2pRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/p2p", s.ownerOnly(s.p2pStatus))
+	mux.HandleFunc("PUT /api/p2p/config", s.ownerOnly(s.putP2PConfig))
+	mux.HandleFunc("POST /api/p2p/restart", s.ownerOnly(s.p2pRestartNow))
 	mux.HandleFunc("PUT /api/p2p/name", s.ownerOnly(s.withNode(s.p2pSetName)))
 	mux.HandleFunc("GET /api/p2p/net/invites", s.ownerOnly(s.withNode(s.p2pInvites)))
 	mux.HandleFunc("POST /api/p2p/net/invites", s.ownerOnly(s.withNode(s.p2pCreateInvite)))
@@ -33,18 +33,32 @@ func (s *Server) p2pRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/p2p/net/log", s.ownerOnly(s.withNode(s.p2pLog)))
 }
 
-// P2PStatus is GET /api/p2p: the node's Status plus its display name.
+// P2PStatus is GET /api/p2p: the node's Status (the RUNNING state - what this process actually
+// started with) plus its display name and, separately, SavedEnabled: config.json's current
+// "p2p.enabled" (what the NEXT restart will start with). The two differ exactly while a save
+// from PUT /api/p2p/config is waiting on a restart to take effect. Production is false in the
+// trial profile, where peer-to-peer always stays off (fillDefaults) whatever "enabled" says -
+// PUT /api/p2p/config refuses to turn it on there, and the UI should explain why rather than
+// just letting the owner flip a switch that can never take effect.
 type P2PStatus struct {
 	p2p.Status
-	Name string `json:"name"`
+	Name           string `json:"name"`
+	SavedEnabled   bool   `json:"saved_enabled"`
+	RestartToApply bool   `json:"restart_to_apply"`
+	Production     bool   `json:"production"`
 }
 
 func (s *Server) p2pStatus(w http.ResponseWriter, r *http.Request) {
+	saved, production := false, false
+	if c, err := config.Load(s.f.Paths()); err == nil {
+		saved, production = c.P2P.On(), c.Production()
+	}
 	if s.p2p == nil {
-		writeJSON(w, http.StatusOK, P2PStatus{Status: p2p.Status{Enabled: false, Addrs: []string{}, Reachability: p2p.Offline}})
+		writeJSON(w, http.StatusOK, P2PStatus{Status: p2p.Status{Enabled: false, Addrs: []string{}, Reachability: p2p.Offline},
+			SavedEnabled: saved, RestartToApply: saved, Production: production})
 		return
 	}
-	out := P2PStatus{Status: s.p2p.Status(), Name: s.p2p.DisplayName()}
+	out := P2PStatus{Status: s.p2p.Status(), Name: s.p2p.DisplayName(), SavedEnabled: saved, RestartToApply: !saved, Production: production}
 	if out.Addrs == nil {
 		out.Addrs = []string{}
 	}
@@ -76,6 +90,83 @@ func (s *Server) p2pSetName(w http.ResponseWriter, r *http.Request) {
 		s.chats.NameChanged()
 	}
 	s.p2pStatus(w, r)
+}
+
+// PUT /api/p2p/config {enabled, dht?}: turns peer-to-peer on or off, and optionally overrides
+// whether it joins the public DHT, saved to config.json's "p2p" block. Like switching the head's
+// harness (PUT /api/config), this takes effect from the next daemon start, not live - *p2p.Host
+// is built once at startup (cli/daemon.go's startP2P) with no running stop/restart of its own,
+// so there is nothing here to hot-swap. GET /api/p2p always shows both the running state
+// (Status.Enabled) and the saved one (SavedEnabled) so the owner can see when they differ;
+// POST /api/p2p/restart offers to apply the change right away.
+//
+// dht is optional: omitting it leaves config.json's own "dht" untouched and lets
+// Config.EffectiveDHT() decide at the next start (production + enabled + not explicitly chosen
+// -> on by default, outbound-only: AutoRelay/AutoNATv2, host.go:238 - no inbound listener, no
+// NATPortMap, no firewall prompt). Setting dht here marks it DHTExplicit: a real owner+PIN
+// choice, which EffectiveDHT then always respects, even to false.
+func (s *Server) putP2PConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Enabled bool  `json:"enabled"`
+		DHT     *bool `json:"dht,omitempty"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	c, err := config.Load(s.f.Paths())
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if req.Enabled && !c.Production() {
+		writeError(w, http.StatusConflict, `peer-to-peer needs the production profile (config.json "profile": "production"); it stays off in trial however this is set`)
+		return
+	}
+	if c.P2P == nil {
+		c.P2P = &config.P2PConfig{}
+	}
+	dhtChanged := req.DHT != nil && (c.P2P.DHT == nil || *c.P2P.DHT != *req.DHT || !c.P2P.DHTExplicit)
+	if req.Enabled != c.P2P.On() || dhtChanged {
+		reason := "turn off peer-to-peer"
+		switch {
+		case req.Enabled && dhtChanged:
+			reason = "change peer-to-peer settings"
+		case req.Enabled:
+			reason = "turn on peer-to-peer"
+		case dhtChanged:
+			reason = "change peer-to-peer settings"
+		}
+		if !s.RequireOwner(w, r, reason, req) {
+			return
+		}
+		c.P2P.Enabled = &req.Enabled
+		if req.DHT != nil {
+			c.P2P.DHT, c.P2P.DHTExplicit = req.DHT, true
+		}
+		if err := config.Save(s.f.Paths(), c); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	s.p2pStatus(w, r)
+}
+
+// POST /api/p2p/restart: a graceful self-restart (the same path POST /api/fleet-ops/restart
+// uses for the head/leads; agents keep running, the daemon starts itself again), offered here
+// so turning peer-to-peer on or off can take effect without the owner running a command herself.
+func (s *Server) p2pRestartNow(w http.ResponseWriter, r *http.Request) {
+	if s.selfRestart == nil {
+		writeError(w, http.StatusNotImplemented, "this daemon cannot restart itself")
+		return
+	}
+	if !s.RequireOwner(w, r, "restart the daemon now to apply the peer-to-peer setting", nil) {
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"restarting": true, "back_in": "about 15 seconds"})
+	go func() {
+		time.Sleep(500 * time.Millisecond) // let the answer reach the owner first
+		s.selfRestart()
+	}()
 }
 
 func (s *Server) withNode(h http.HandlerFunc) http.HandlerFunc {

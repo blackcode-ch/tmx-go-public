@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package update
 
 import (
@@ -17,7 +14,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/config"
 )
 
-// Key rotation (ARCHITECTURE.md "Updates", rotation): a release may carry KEYS, a signed rotation
+// Key rotation (DESIGN.md "Updates", rotation): a release may carry KEYS, a signed rotation
 // statement, and KEYS.sig. KEYS is JSON {repo, serial, fleet_keys, require}: the whole new pin set.
 // KEYS.sig has SHA256SUMS.sig's format and rules (sign.go), over the context FleetKeysContext
 // (webauthn: FleetKeysWebAuthnContext), the repository and "keys-<serial>", then the exact KEYS

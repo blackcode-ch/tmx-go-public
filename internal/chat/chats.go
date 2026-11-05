@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -537,7 +534,7 @@ func (s *Service) RemoveMember(chatID, peer string) (model.Chat, error) {
 }
 
 // Leave leaves a group. The admin leaving closes it for everyone (the admin is the only
-// authority for the member list; see ARCHITECTURE.md "Chats").
+// authority for the member list; see DESIGN.md "Chats").
 func (s *Service) Leave(chatID string) (model.Chat, error) {
 	if !s.Enabled() {
 		return model.Chat{}, ErrOff

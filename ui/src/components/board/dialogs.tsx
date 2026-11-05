@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Dialogs of the board canvas: a new topic (title and colour) and renaming one.
 import { useEffect, useState } from "react";
 import { toast } from "sonner";

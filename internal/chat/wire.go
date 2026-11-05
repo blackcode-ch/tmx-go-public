@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -15,7 +12,7 @@ import (
 
 // Envelope types of the chat layer (p2p.Envelope.Type). Every Body is JSON with "v": 2;
 // receivers ignore unknown fields and drop envelopes of another major version. See
-// ARCHITECTURE.md "Chats" for the semantics. The author of every envelope is Envelope.From,
+// DESIGN.md "Chats" for the semantics. The author of every envelope is Envelope.From,
 // authenticated and signed by the p2p layer: nobody relays another peer's envelopes.
 const (
 	TypeMsg     = "chat.msg"     // a chat message (ID = message ID, ChatID = chat ID)

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The board canvas's side panel: a card, a string's log, or writing in a string. The frame
 // (colour, title, actions, close with Escape) is shared; what it shows is the page's.
 import { useEffect, type CSSProperties, type ReactNode } from "react";
@@ -37,13 +34,13 @@ export function SidePanelFrame({
   return (
     <aside
       data-board-item
-      className="absolute inset-y-0 right-0 z-20 flex w-full flex-col border-l bg-background shadow-xl sm:w-[460px]"
+      className="absolute inset-y-0 right-0 z-20 flex w-full flex-col border-l bg-background shadow-xl sm:w-[28.75rem]"
       style={{ "--lane": color } as CSSProperties}
       aria-label={label}
     >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
         <span className="size-2.5 shrink-0 rounded-full bg-[var(--lane)]" />
-        <span className="min-w-0 truncate text-[13px] font-medium">{title}</span>
+        <span className="min-w-0 truncate text-[0.8125rem] font-medium">{title}</span>
         {sub && <span className="shrink-0 text-xs text-muted-foreground">· {sub}</span>}
         <div className="ml-auto flex items-center gap-1">
           {actions}

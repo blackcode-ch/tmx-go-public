@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -15,7 +12,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 )
 
-// Handing a group's admin role to another member (ARCHITECTURE.md "Chats", Groups). The owner's
+// Handing a group's admin role to another member (DESIGN.md "Chats", Groups). The owner's
 // decision (28 Oct 2026): it is automatic on the new admin's side, and the admin's owner
 // confirms it with biometrics on their machine (the API asks; see api/chats.go).
 //

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -58,6 +55,17 @@ func (f *Fleet) loadProfiles(seed model.Policy) error {
 		if err := f.st.PutProfile(p); err != nil {
 			return err
 		}
+		f.profiles[p.Slug] = &p
+	}
+	if err := f.st.UpgradeModelDefaults(); err != nil {
+		return err
+	}
+	upgraded, err := f.st.ListProfiles()
+	if err != nil {
+		return err
+	}
+	for i := range upgraded {
+		p := upgraded[i]
 		f.profiles[p.Slug] = &p
 	}
 	for _, r := range f.agents {

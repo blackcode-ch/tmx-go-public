@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright 2026 The tmx authors
-
 import json
 import unittest
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useMemo, useState } from "react";
 import { ArrowUpToLine, Hourglass, Pause, Play, ShieldOff, Square } from "lucide-react";
 import { toast } from "sonner";
@@ -80,7 +77,7 @@ export function AgentResourceBanner({ agent }: { agent: Agent }) {
     return (
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b bg-muted/30 px-5 py-2.5 md:px-6">
         <Hourglass className="size-4 shrink-0 text-muted-foreground" />
-        <p className="min-w-0 flex-1 text-[13px]">
+        <p className="min-w-0 flex-1 text-[0.8125rem]">
           <span className="font-medium">Queued{agent.queue_pos ? `, ${ordinal(agent.queue_pos)} in line` : ""}.</span>{" "}
           <span className="text-muted-foreground">
             Waiting for capacity{agent.queue_reason ? ` (${agent.queue_reason})` : ""}; it starts on its own when an agent finishes.
@@ -132,7 +129,7 @@ export function AgentResourceBanner({ agent }: { agent: Agent }) {
   return (
     <div role="status" className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-state-waiting/30 bg-state-waiting/[0.07] px-5 py-2.5 md:px-6">
       <Pause className="size-4 shrink-0 fill-current text-[color-mix(in_oklch,var(--state-waiting)_80%,var(--foreground))]" />
-      <p className="min-w-0 flex-1 text-[13px]">
+      <p className="min-w-0 flex-1 text-[0.8125rem]">
         <span className="font-medium">
           Paused by tmx · {pauseLabel(agent)}
           {agent.paused_at ? <span className="tabular font-normal text-muted-foreground"> · {relativeTime(agent.paused_at)}</span> : null}
@@ -151,7 +148,7 @@ function Stat({ label, value, sub, children }: { label: string; value: string; s
   return (
     <div className="flex min-w-0 flex-col bg-card px-4 pt-3 pb-2.5">
       <dt className="text-2xs font-medium text-subtle-foreground uppercase">{label}</dt>
-      <dd className="tabular mt-1 text-[15px] font-medium">{value}</dd>
+      <dd className="tabular mt-1 text-[0.9375rem] font-medium">{value}</dd>
       {sub && <dd className="tabular truncate text-2xs text-muted-foreground">{sub}</dd>}
       {children && <dd className="mt-auto pt-2">{children}</dd>}
     </div>
@@ -185,7 +182,7 @@ export function AgentResourceDetails({ agent }: { agent: Agent }) {
   return (
     <section className="mb-6" aria-label="Resources">
       <div className="mb-2.5 flex h-7 items-center gap-2">
-        <h2 className="text-[13px] font-medium">Resources</h2>
+        <h2 className="text-[0.8125rem] font-medium">Resources</h2>
         {live && <span className="tabular text-2xs text-subtle-foreground">{u.procs === 1 ? "1 process" : `${u.procs} processes`}{config?.priority === "normal" ? "" : ", low priority"}</span>}
         <Button
           variant="ghost"

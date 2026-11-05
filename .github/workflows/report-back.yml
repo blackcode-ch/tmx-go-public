@@ -17,9 +17,7 @@ permissions:
   contents: read
 jobs:
   status:
-    # Skipped (not red) until the App is configured: vars.PUBLIC_CI_APP_ID set on this repo.
     if: >-
-      vars.PUBLIC_CI_APP_ID != '' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       (startsWith(github.event.workflow_run.head_branch, 'pr/') || github.event.workflow_run.head_branch == 'fleet/main')

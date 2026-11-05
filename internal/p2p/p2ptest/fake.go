@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package p2ptest is an in-memory p2p.Node for tests of the chat layer: a Network connects
 // any number of Fakes; each can be switched offline and back, invites and pairing behave
 // like the real node's (dm invites single use, group invites multi-use until expiry), and

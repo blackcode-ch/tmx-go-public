@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Native screen recording in the macOS app (ARCHITECTURE.md "Recorder", native capture). The WebView
+// Native screen recording in the macOS app (DESIGN.md "Recorder", native capture). The WebView
 // cannot record what the Mac plays. ScreenCaptureKit, in the app's window process, records a
 // display, a window or an app with device audio and the microphone (macOS 15 or later). This
 // page only asks for it and shows it:

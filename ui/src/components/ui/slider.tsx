@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2023 shadcn; adapted for tmx
-
 import * as React from "react"
 import { Slider as SliderPrimitive } from "radix-ui"
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package testpolicy checks test-source safety without running the tested code.
 package testpolicy
 
