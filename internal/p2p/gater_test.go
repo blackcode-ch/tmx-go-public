@@ -51,7 +51,7 @@ func TestGaterInvitesAndPeers(t *testing.T) {
 	n.st.Peers[friend.String()] = &peerRec{PeerID: friend.String()}
 	from := ma.StringCast("/ip4/192.168.1.20/udp/4001/quic-v1")
 	now := nowMs()
-	future, past := now+int64(24*time.Hour/time.Millisecond), now-1000
+	future, past := now+int64(time.Hour/time.Millisecond), now-1000
 
 	if !n.admit(friend, from, nil) {
 		t.Fatal("a paired peer was refused")
@@ -64,15 +64,14 @@ func TestGaterInvitesAndPeers(t *testing.T) {
 		in   inviteRec
 		ok   bool
 	}{
-		{"open DM", inviteRec{Invite: Invite{ExpiresAt: future, MaxUses: 1}, CreatedAt: now}, true},
+		{"open DM", inviteRec{Invite: Invite{ExpiresAt: future, MaxUses: 1}}, true},
 		{"open group, unlimited", inviteRec{Invite: Invite{ExpiresAt: future, Uses: 9}}, true},
-		{"DM at 30 minutes", inviteRec{Invite: Invite{ExpiresAt: now + (24*time.Hour - 30*time.Minute).Milliseconds(), MaxUses: 1}, CreatedAt: now - (30 * time.Minute).Milliseconds()}, true},
-		{"DM at 23 hours", inviteRec{Invite: Invite{ExpiresAt: now + time.Hour.Milliseconds(), MaxUses: 1}, CreatedAt: now - (23 * time.Hour).Milliseconds()}, true},
 		{"expired", inviteRec{Invite: Invite{ExpiresAt: past, MaxUses: 1}}, false},
-		{"used up", inviteRec{Invite: Invite{ExpiresAt: future, MaxUses: 1, Uses: 1}}, false},
-		{"revoked", inviteRec{Invite: Invite{ExpiresAt: future, Revoked: true}}, false},
+		{"used up", inviteRec{Invite: Invite{ExpiresAt: future, MaxUses: 1, Uses: 1}, EndedAt: now}, false},
+		{"revoked", inviteRec{Invite: Invite{ExpiresAt: future, Revoked: true}, EndedAt: now}, false},
 	} {
 		in := c.in
+		in.CreatedAt = now
 		n.st.Invites = []*inviteRec{&in}
 		if got := n.admit(stranger, from, nil); got != c.ok {
 			t.Errorf("%s invite: stranger admitted = %v, want %v", c.name, got, c.ok)

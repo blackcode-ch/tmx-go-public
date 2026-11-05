@@ -181,7 +181,7 @@ MATRIX_VAR = re.compile(r"^\$\{\{\s*matrix\.(\w+)\s*\}\}$")
 def literal_matrix_values(lines, var):
     """Inline literal values for strategy.matrix.<var> in this job block, if there are any
     (e.g. `matrix: {os: [ubuntu-latest, macos-14]}` or a block-style `os:` list under
-    `matrix:`); None if the matrix is itself dynamic (fromJSON(...), a prior job's output, …)
+    `matrix:`); None if the matrix is itself dynamic (fromJSON(...), a prior job's output, ...)
     rather than a literal list - that fails closed, same as any other unresolvable value."""
     for i, line in enumerate(lines):
         m = MATRIX_KEY.match(line)
