@@ -10,6 +10,7 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
+	s.agentProjectRoutes(mux)
 	s.messagePinRoutes(mux)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
