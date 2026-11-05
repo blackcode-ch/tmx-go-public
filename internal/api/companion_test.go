@@ -78,7 +78,7 @@ func TestCompanionCallerRights(t *testing.T) {
 		{"GET", "/api/snapshot"}, {"GET", "/api/approvals"}, {"POST", "/api/approvals/" + ap.ID},
 		{"PUT", "/api/policy"}, {"POST", "/api/agents"}, {"POST", "/api/agents/head/stop"}, {"POST", "/api/projects"},
 		{"GET", "/api/companion"}, {"POST", "/api/companion/tasks"}, {"PUT", "/api/companion/connect"},
-		{"POST", "/api/companion/install"}, {"GET", "/api/events"}, {"POST", "/api/messages"}, {"GET", "/api/chats"},
+		{"POST", "/api/companion/install"}, {"GET", "/api/events"}, {"GET", "/api/messages"}, {"GET", "/api/chats"},
 		{"POST", "/api/invites"}, {"PUT", "/api/gate"}, {"GET", "/api/p2p"}, {"POST", "/api/companion/link/fleet"},
 		{"DELETE", "/api/companion/link/message"}, {"POST", "/api/shutdown"},
 	} {

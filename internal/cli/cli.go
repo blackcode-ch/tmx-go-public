@@ -84,6 +84,11 @@ Chats with other people's tmx (also in the app):
   tmx chat admin CHAT PERSON [--leave]   hand a group to PERSON (confirm with Touch ID / Windows Hello)
   tmx chat admin CHAT --cancel    withdraw that offer while it waits
 
+Peer-to-peer (agents use phone approval):
+  tmx p2p invite-create --label NAME [--kind person|group] [--ttl 24h] [--max-uses 1]
+  tmx p2p agent-join --link LINK  preview and request phone approval
+  tmx p2p invite-create|agent-join --approval ID  resume the same request
+
 Peer-to-peer (network diagnostics):
   tmx p2p [status]                peer ID, addresses, reachability (direct/relayed/offline)
   tmx p2p invite [--group ID]     print an invite link (tmx://join/...)

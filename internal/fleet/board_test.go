@@ -95,7 +95,7 @@ func TestBoardTopicsMailAndCards(t *testing.T) {
 	eventually(t, "general message delivered alone", func() bool { return lastSent(hp) == "[message from owner] how are things?" })
 	hp.Turn("All quiet.", 0.01, 1)
 	eventually(t, "lead report delivered in its topic", func() bool {
-		return lastSent(hp) == "[topic: Alpha]\n[message from alpha-lead (lead)] alpha plan ready"
+		return lastSent(hp) == "[topic: Alpha]\n[message from alpha-lead (lead)]\n│ alpha plan ready"
 	})
 	hp.Turn("Thanks, go ahead.", 0.01, 1)
 

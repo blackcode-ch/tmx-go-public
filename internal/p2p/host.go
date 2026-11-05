@@ -105,16 +105,17 @@ type Host struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	mu       sync.Mutex
-	st       *state
-	reach    network.Reachability
-	limiter  *rateLimiter
-	closed   bool
-	pairing  map[peer.ID]int // proof-checked peers awaiting pairing commit (gater.go)
-	lastConn map[peer.ID]Reachability
-	nextDial map[peer.ID]time.Time
-	backoff  map[peer.ID]time.Duration
-	lookedUp map[peer.ID]time.Time // last background DHT lookup per peer
+	mu        sync.Mutex
+	st        *state
+	reach     network.Reachability
+	limiter   *rateLimiter
+	closed    bool
+	pairReady map[peer.ID]*pairProgress // Join and proof-checked inbound pair streams
+	pairing   map[peer.ID]int           // proof-checked peers awaiting pairing commit (gater.go)
+	lastConn  map[peer.ID]Reachability
+	nextDial  map[peer.ID]time.Time
+	backoff   map[peer.ID]time.Duration
+	lookedUp  map[peer.ID]time.Time // last background DHT lookup per peer
 
 	files       FileSource      // answers /tmx/file/1.0.0; nil refuses all (file.go)
 	filesActive map[peer.ID]int // file streams being served, per peer

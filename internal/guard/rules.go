@@ -19,6 +19,8 @@ type Rule struct {
 
 // Rule IDs.
 const (
+	RuleP2PInvite      = "p2p-invite-create"
+	RuleP2PJoin        = "p2p-join"
 	RuleBrowser        = "browser-automation"
 	RuleBrowserMention = "browser-mention"
 	RuleDisk           = "disk"
@@ -138,8 +140,11 @@ var rules = []Rule{
 		Examples: []string{"open index.html", "open -a Safari https://example.com", "xdg-open .", "start report.pdf", "explorer ."}},
 }
 
-// fixedRules are the carve-outs: no switch, always Block.
+// fixedRules have no switch: their Block or Hold outcome cannot be weakened.
 var fixedRules = []Rule{
+	{ID: RuleP2PInvite, Outcome: Hold, Default: Hold, Fixed: true, Name: "Create pairing invitations", Summary: "Head and lead agents creating pairing invitations.", Why: "Creating an invitation needs your approval unless you allow this tool always.", Examples: []string{"p2p_invite_create"}},
+	{ID: RuleP2PJoin, Outcome: Hold, Default: Hold, Fixed: true, Name: "Join another tmx", Summary: "Head and lead agents joining another tmx.", Why: "Joining another tmx needs your approval unless you allow this tool always.", Examples: []string{"p2p_join"}},
+
 	{ID: RuleKillTmx, Outcome: Block, Default: Block, Fixed: true, Name: "Kill tmx's own processes by name",
 		Summary:  "Killing by name a process tmx itself runs on: tmx, tmxg (the daemon), the agents' harnesses (claude, codex, node, python) and shells, Tailscale or sshd (the owner's way in), or a name only known at run time.",
 		Why:      "That kills every agent's tools and the daemon at once (7 Oct). Kill only the PID you started.",

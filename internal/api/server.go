@@ -37,19 +37,21 @@ const MaxBody = 1 << 20
 
 // Options configures the server.
 type Options struct {
-	SystemWarnings []string
-	Jobs           *jobs.Manager
-	TrustedHosts   []string // exact HTTPS proxy hosts; empty = local only
-	Fleet          *fleet.Fleet
-	OwnerToken     string
-	Port           int           // the daemon's port, for the allowed own origin
-	Shutdown       func()        // POST /api/shutdown (owner); nil = route answers 501
-	Restart        func()        // POST /api/fleet-ops/restart (head, leads): stop and start again; nil = 501
-	Gate           *gate.Gate    // the owner gate; nil = none (gated actions just go ahead)
-	Chats          *chat.Service // chats with other tmx installs; nil or without a node = p2p off (503)
-	P2P            p2p.Node      // the peer-to-peer node; nil = off
-	P2PLog         *p2p.Drain    // config "p2p.debug_drain": the network log; nil = off
-	Logger         *slog.Logger
+	// OpenAgentDesktop can be supplied by an embedding desktop; nil uses the OS.
+	OpenAgentDesktop func(kind, target string) error
+	SystemWarnings   []string
+	Jobs             *jobs.Manager
+	TrustedHosts     []string // exact HTTPS proxy hosts; empty = local only
+	Fleet            *fleet.Fleet
+	OwnerToken       string
+	Port             int           // the daemon's port, for the allowed own origin
+	Shutdown         func()        // POST /api/shutdown (owner); nil = route answers 501
+	Restart          func()        // POST /api/fleet-ops/restart (head, leads): stop and start again; nil = 501
+	Gate             *gate.Gate    // the owner gate; nil = none (gated actions just go ahead)
+	Chats            *chat.Service // chats with other tmx installs; nil or without a node = p2p off (503)
+	P2P              p2p.Node      // the peer-to-peer node; nil = off
+	P2PLog           *p2p.Drain    // config "p2p.debug_drain": the network log; nil = off
+	Logger           *slog.Logger
 
 	Resources *resources.Manager // GET /api/resources ...; nil = those routes answer 501
 	Slots     *slots.Manager     // /api/slots; nil = 501
@@ -70,6 +72,8 @@ type Options struct {
 }
 
 type Server struct {
+	agentDesktop   agentDesktop
+	p2pActions     p2pActionStore
 	systemWarnings []string
 	recoveryNotice func(string, time.Time) error
 	devices        *deviceStore
@@ -112,6 +116,10 @@ func New(o Options) *Server {
 	s := &Server{f: o.Fleet, owner: o.OwnerToken, port: o.Port, stop: o.Shutdown, selfRestart: o.Restart, gate: o.Gate, log: o.Logger,
 		res: o.Resources, slots: o.Slots, chats: o.Chats, p2p: o.P2P, p2pLogs: o.P2PLog, companion: o.Companion, uploads: o.Uploads, saveP2PName: o.SaveP2PName, updater: o.Updater,
 		rec: o.Recorder}
+	s.agentDesktop.open = o.OpenAgentDesktop
+	if s.agentDesktop.open == nil {
+		s.agentDesktop.open = openAgentDesktop
+	}
 	s.voice = o.Voice
 	s.systemWarnings = append([]string{}, o.SystemWarnings...)
 	s.jobs = o.Jobs
