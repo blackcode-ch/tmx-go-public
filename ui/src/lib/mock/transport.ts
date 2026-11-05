@@ -42,7 +42,6 @@ import { MockSummaries } from "./summaries";
 import type { Recording } from "../recording-types";
 import { MockWhatsApp } from "./whatsapp";
 import { MockAccounts } from "./accounts";
-import type { MessagePin, MessageSelection } from "../message-pins";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The daemon's words for a window's length in its prompt ("1 hour", "15 minutes"). */
@@ -76,7 +75,6 @@ export class MockTransport implements Transport {
   private sums: MockSummaries;
   private wa: MockWhatsApp;
   private accounts: MockAccounts;
-  private messagePins: MessagePin[] = [];
 
   constructor(opts: { scenario: string }) {
     this.scenario = opts.scenario;
@@ -317,25 +315,6 @@ export class MockTransport implements Transport {
 
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     await sleep(80 + Math.random() * 160);
-    if (path === "/api/message-pins" && method === "GET") return structuredClone(this.messagePins) as T;
-    if (path === "/api/message-pins" && method === "POST") {
-      const selection = body as MessageSelection;
-      const old = this.messagePins.find((p) => p.source === selection.source);
-      if (old) old.state = "active";
-      else this.messagePins.unshift({ ...selection, id: rid(), pinned_at: Date.now(), state: "active" });
-      this.emit("message.pins.changed", {});
-      return { ok: true } as T;
-    }
-    if (path.startsWith("/api/message-pins/") && method === "PATCH") {
-      const id = decodeURIComponent(path.slice("/api/message-pins/".length));
-      const pin = this.messagePins.find((p) => p.id === id);
-      if (!pin) throw new ApiError(404, "Pin not found");
-      const state = (body as { state: string }).state;
-      if (state === "unpinned") this.messagePins = this.messagePins.filter((p) => p.id !== id);
-      else pin.state = state as MessagePin["state"];
-      this.emit("message.pins.changed", {});
-      return { ok: true } as T;
-    }
     const m = path.match(/^\/api\/gate\/confirmations\/([^/?]+)(?:\?(.*))?$/);
     if (m) return structuredClone(await this.confirmation(method, decodeURIComponent(m[1]), new URLSearchParams(m[2] ?? ""))) as T;
     this.gate(method, path, body);

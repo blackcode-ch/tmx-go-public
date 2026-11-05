@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"time"
+
 	"github.com/libp2p/go-libp2p/core/control"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -24,7 +26,7 @@ import (
 //  2. this node holds an outbound connection to p: it dialled p itself, e.g. the inviter it
 //     is joining, whose hole punch or direct dial back must get through before the pairing
 //     is recorded (p could open streams on that connection anyway);
-//  3. an invite is unexpired, unrevoked and has uses left, or this peer has proved
+//  3. an invite is open within two minutes of its creation, or this peer has proved
 //     the invite and its pairing is being completed:
 //     anyone may connect so that handlePair can check their proof (a stranger whose pairing
 //     fails is disconnected then, see handlePair);
@@ -160,7 +162,7 @@ func (n *Host) autonatDialBack(remote ma.Multiaddr, conns []gateConn, v gateNet)
 // inviteOpen reports whether any invite can still be used.
 func (s *state) inviteOpen(now int64) bool {
 	for _, in := range s.Invites {
-		if in.open(now) {
+		if in.open(now) && in.CreatedAt > 0 && now >= in.CreatedAt && now-in.CreatedAt < int64(2*time.Minute/time.Millisecond) {
 			return true
 		}
 	}
@@ -170,7 +172,7 @@ func (s *state) inviteOpen(now int64) bool {
 // sweepStrangers re-runs the gater over the current inbound connections and closes those
 // it would refuse now. A stranger let in while an invite was open that never opened a pair
 // stream is not dropped by handlePair, so without this it would keep its connection after
-// the invite is used, revoked or expired. Called on every redial tick,
+// the invite is used, revoked or past its admission window. Called on every redial tick,
 // after a revoke and after each pair stream; the caller must not hold n.mu.
 func (n *Host) sweepStrangers() {
 	if !n.hostReady.Load() {

@@ -3,7 +3,6 @@
 // over), Companion on the left (replies, questions, messages to the head), tmx's error notes in
 // the middle. "Answer" on a waiting question puts the composer into reply mode.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { PinMessageButton } from "@/components/message-pins";
 import { AlertCircle, ArrowDown, ArrowUp, Bot, Check, Clock3, CornerDownRight, ListTodo, Loader2, MessageCircleQuestion, RefreshCw, Settings, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -385,7 +384,6 @@ function Timeline({ connected }: { connected: boolean }) {
             </div>
           )}
           {row}
-          <PinMessageButton selection={{ source: `companion:${e.id}`, label: "Companion", href: "#/companion", agent_id: Object.values(useStore.getState().agents).find((a) => a.name === e.agent_name)?.id ?? useStore.getState().headId ?? undefined, text: e.text, message_at: e.at }} />
         </div>
       );
     });
