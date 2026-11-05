@@ -1,5 +1,5 @@
 # Posts the public CI result as commit status "public-ci" on the PRIVATE head commit.
-# Runs only for the mirror's own pushes to pr/** or main. Outside PRs are event "pull_request"
+# Runs only for the mirror's own pushes to fleet-pr/** or main. Outside PRs are event "pull_request"
 # and are skipped by the `if`. workflow_run always runs the DEFAULT-branch (main) copy of this
 # file, and only the mirror deploy key may push there.
 #
@@ -20,7 +20,7 @@ jobs:
     if: >-
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      (startsWith(github.event.workflow_run.head_branch, 'pr/') || github.event.workflow_run.head_branch == 'main')
+      (startsWith(github.event.workflow_run.head_branch, 'fleet-pr/') || github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -31,8 +31,10 @@ jobs:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           msg=$(gh api "repos/${{ github.repository }}/commits/$SHA" --jq .commit.message)
+          repo=$(grep -oE '^Private-Repo: blackcode-ch/tmx-go-fleet$' <<<"$msg")
+          [ "$repo" = "Private-Repo: blackcode-ch/tmx-go-fleet" ] || { echo "missing or ambiguous fleet provenance"; exit 1; }
           priv=$(grep -oE '^Private-Commit: [0-9a-f]{40}$' <<<"$msg" | cut -d' ' -f2)
-          [ -n "$priv" ] || { echo "no Private-Commit trailer"; exit 1; }
+          [[ "$priv" =~ ^[0-9a-f]{40}$ ]] || { echo "missing or ambiguous Private-Commit trailer"; exit 1; }
           echo "sha=$priv" >> "$GITHUB_OUTPUT"
       - name: App token (statuses only, private repo only)
         id: app

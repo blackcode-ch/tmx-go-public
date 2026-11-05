@@ -588,6 +588,7 @@ ALTER TABLE agents ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE recordings ADD COLUMN sensitivity TEXT NOT NULL DEFAULT '';`,
 	`CREATE TABLE profile_default_upgrades (name TEXT PRIMARY KEY);`,
 	`CREATE TABLE project_imports (project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, source TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(project_id,source,id));`,
+	`CREATE TABLE agent_project_views (agent_id TEXT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE, data TEXT NOT NULL);`,
 }
 
 func (s *Store) migrate() error {
