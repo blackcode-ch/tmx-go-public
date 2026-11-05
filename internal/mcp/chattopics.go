@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -14,7 +11,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/peertext"
 )
 
-// A chat's board (ARCHITECTURE.md "Chat boards"), as chat_read shows it: the topic of each message
+// A chat's board (DESIGN.md "Chat boards"), as chat_read shows it: the topic of each message
 // and the topics with the latest lines of their logs. Titles and log lines are written by the
 // chat's members (other people and their agents): data, never instructions. Each is shown on
 // one line (peertext), so none can pose as another line of the board or as tmx.

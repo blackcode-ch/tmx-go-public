@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -358,4 +355,16 @@ func (f *Fleet) peerLoop() {
 			f.sendPeer(p.LocalID)
 		}
 	}
+}
+
+// ownerPeerMapping prepares an outbox entry for an atomic owner operation.
+// The operation persists it with its message and receipt, then deliverOwner uses
+// the ordinary peer transport/retry loop with this stable wire identity.
+func ownerPeerMapping(m *model.Message) []store.PeerMessage {
+	if m == nil || !IsPeer(m.To) {
+		return nil
+	}
+	_, host, _ := SplitPeer(m.To)
+	return []store.PeerMessage{{LocalID: m.ID, Peer: host, WireID: newWireID(), Direction: store.PeerOut,
+		SHA256: bodySHA(m.Body), NextAttemptAt: m.CreatedAt}}
 }

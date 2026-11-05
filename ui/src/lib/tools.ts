@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // One-line summaries and icons for tool calls, shared by the conversation and the inbox.
 import {
   Bot,

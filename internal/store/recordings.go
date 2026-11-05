@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -11,35 +8,35 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// ---- recordings (ARCHITECTURE.md "Recorder"). Segment files are stored by name only (seg-0001.mp4);
+// ---- recordings (DESIGN.md "Recorder"). Segment files are stored by name only (seg-0001.mp4);
 // the recorder service turns them into absolute paths inside the recording's folder.
 
 const recordingCols = `id, title, kind, state, mime, mic, bytes, duration_ms, resumed_at, error, started_at, ended_at, updated_at,
-	system_audio, source`
+	system_audio, source, sensitivity`
 
 func scanRecording(r scanner) (model.Recording, error) {
 	var x model.Recording
 	var mic, sys int
 	err := r.Scan(&x.ID, &x.Title, &x.Kind, &x.State, &x.Mime, &mic, &x.Bytes, &x.DurationMS, &x.ResumedAt, &x.Error,
-		&x.StartedAt, &x.EndedAt, &x.UpdatedAt, &sys, &x.Source)
+		&x.StartedAt, &x.EndedAt, &x.UpdatedAt, &sys, &x.Source, &x.Sensitivity)
 	x.Mic, x.SystemAudio = mic != 0, sys != 0
 	return x, err
 }
 
 // InsertRecording stores a new recording (its segments separately).
 func (s *Store) InsertRecording(x model.Recording) error {
-	_, err := s.db.Exec(`INSERT INTO recordings (`+recordingCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.Exec(`INSERT INTO recordings (`+recordingCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		x.ID, x.Title, x.Kind, x.State, x.Mime, boolInt(x.Mic), x.Bytes, x.DurationMS, x.ResumedAt, x.Error,
-		x.StartedAt, x.EndedAt, x.UpdatedAt, boolInt(x.SystemAudio), recordingSource(x.Source))
+		x.StartedAt, x.EndedAt, x.UpdatedAt, boolInt(x.SystemAudio), recordingSource(x.Source), x.Sensitivity)
 	return err
 }
 
 // UpdateRecording writes everything but the id, kind and start time.
 func (s *Store) UpdateRecording(x model.Recording) error {
 	res, err := s.db.Exec(`UPDATE recordings SET title = ?, state = ?, mime = ?, mic = ?, bytes = ?, duration_ms = ?,
-		resumed_at = ?, error = ?, ended_at = ?, updated_at = ?, system_audio = ? WHERE id = ?`,
+		resumed_at = ?, error = ?, ended_at = ?, updated_at = ?, system_audio = ?, sensitivity = ? WHERE id = ?`,
 		x.Title, x.State, x.Mime, boolInt(x.Mic), x.Bytes, x.DurationMS, x.ResumedAt, x.Error, x.EndedAt, x.UpdatedAt,
-		boolInt(x.SystemAudio), x.ID)
+		boolInt(x.SystemAudio), x.Sensitivity, x.ID)
 	if err != nil {
 		return err
 	}

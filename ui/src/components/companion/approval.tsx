@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Companion in Needs you: an agent's hand-off (the exact text, allow/deny), Companion's question
 // about a task (answer, or cancel the task), and, on a question an agent asked you, "Hand to
 // Companion" with the handed task's progress.
@@ -39,7 +36,7 @@ export function CompanionApprovalBody({ a, compact }: { a: Approval; compact?: b
   if (isCompanionQuestion(a)) {
     return (
       <div className="space-y-1.5">
-        <p className="text-[14px] leading-snug font-medium whitespace-pre-wrap text-foreground">{a.question}</p>
+        <p className="text-[0.875rem] leading-snug font-medium whitespace-pre-wrap text-foreground">{a.question}</p>
         <p className="text-xs text-muted-foreground">
           Companion asks about {task ? <>the task “{task.spec.goal}”</> : "a task tmx handed it"}. Your answer goes to Companion; Cancel task stops it.
         </p>
@@ -50,13 +47,13 @@ export function CompanionApprovalBody({ a, compact }: { a: Approval; compact?: b
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="min-w-0 text-[14px] leading-snug font-medium text-foreground">{a.question}</p>
+        <p className="min-w-0 text-[0.875rem] leading-snug font-medium text-foreground">{a.question}</p>
         <EffectsBadge effects={eff} />
       </div>
       <p className="text-xs text-muted-foreground">{a.description} This is exactly what Companion would receive:</p>
       <pre
         className={
-          "scroll-thin overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-foreground/90 " +
+          "scroll-thin overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 font-mono text-[0.7188rem] leading-relaxed whitespace-pre-wrap text-foreground/90 " +
           (compact ? "max-h-40" : "max-h-64")
         }
       >

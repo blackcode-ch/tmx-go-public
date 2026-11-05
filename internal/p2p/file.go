@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package p2p
 
 import (
@@ -215,39 +212,26 @@ func (n *Host) Fetch(ctx context.Context, peerID, chatID, fileID string, w io.Wr
 	}
 	n.preferDirect(ctx, p)
 
-	hctx, cancel := context.WithTimeout(network.WithAllowLimitedConn(ctx, "tmx-file"), fileHeaderTimeout)
-	defer cancel()
-	s, err := n.h.NewStream(hctx, p, protoID(ProtoFile))
-	if err != nil {
-		if ctx.Err() != nil {
-			return 0, ctx.Err()
+	// One retry when the connection or stream setup closes during setup (*network.ConnError
+	// or *network.StreamError - e.g. a small UDP buffer failing a fresh QUIC connection; a
+	// real race on real networks, confirmed in the p2p Common Core interop CI, 3 Nov). Never
+	// retried for anything else: a header the peer actually answered (refused, busy, too big)
+	// is final. ClosePeer before the retry's connect: the failed connection may still be the
+	// one n.h.Network() reports as Connected (torn down asynchronously), in which case
+	// connect's own Connectedness check would be a no-op and NewStream would open on the same
+	// dead connection again; closing it here forces a genuinely fresh dial.
+	s, h, err := n.openFileStream(ctx, p, chatID, fileID)
+	if err != nil && isConnSetupError(err) {
+		_ = n.h.Network().ClosePeer(p)
+		if cerr := n.connect(ctx, p); cerr == nil {
+			s, h, err = n.openFileStream(ctx, p, chatID, fileID)
 		}
-		return 0, fmt.Errorf("%w: %s", ErrUnreachable, shortErr(err))
+	}
+	if err != nil {
+		return 0, err
 	}
 	defer s.Close()
-	// Cancelling ctx aborts the transfer at once (reads would otherwise wait for a deadline).
-	stop := context.AfterFunc(ctx, func() { s.Reset() })
-	defer stop()
-	dl := time.Now().Add(fileHeaderTimeout)
-	if d, ok := ctx.Deadline(); ok && d.Before(dl) {
-		dl = d
-	}
-	_ = s.SetDeadline(dl)
-	broken := func(what string, err error) (int64, error) {
-		s.Reset()
-		if ctx.Err() != nil {
-			return 0, ctx.Err()
-		}
-		return 0, fmt.Errorf("%w: %s: %s", ErrUnreachable, what, shortErr(err))
-	}
-	if err := writeMsg(s, fileRequest{ChatID: chatID, FileID: fileID}); err != nil {
-		return broken("file request", err)
-	}
-	_ = s.CloseWrite()
-	var h fileHeader
-	if err := readMsg(s, maxFileHeader, &h); err != nil {
-		return broken("no file header", err)
-	}
+
 	switch {
 	case !h.OK && h.Retry:
 		s.Reset()
@@ -300,6 +284,70 @@ func (n *Host) Fetch(ctx context.Context, peerID, chatID, fileID string, w io.Wr
 		}
 	}
 	return got, nil
+}
+
+// openFileStreamFn is overridden in tests to inject a *network.ConnError/*network.StreamError
+// on the opener's first call, without racing a real network connection in-process; nil (the
+// production default) calls the real implementation.
+var openFileStreamFn func(n *Host, ctx context.Context, p peer.ID, chatID, fileID string) (network.Stream, fileHeader, error)
+
+func (n *Host) openFileStream(ctx context.Context, p peer.ID, chatID, fileID string) (network.Stream, fileHeader, error) {
+	if openFileStreamFn != nil {
+		return openFileStreamFn(n, ctx, p, chatID, fileID)
+	}
+	return n.openFileStreamReal(ctx, p, chatID, fileID)
+}
+
+// openFileStreamReal opens the /tmx/file/1.0.0 stream to p, sends the request and reads the
+// header: Fetch's one retryable step (see Fetch's ConnError check). On any error the stream
+// is already reset/closed; the caller never needs to clean it up.
+func (n *Host) openFileStreamReal(ctx context.Context, p peer.ID, chatID, fileID string) (network.Stream, fileHeader, error) {
+	hctx, cancel := context.WithTimeout(network.WithAllowLimitedConn(ctx, "tmx-file"), fileHeaderTimeout)
+	defer cancel()
+	s, err := n.h.NewStream(hctx, p, protoID(ProtoFile))
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, fileHeader{}, ctx.Err()
+		}
+		// %w on err (not shortErr(err), a string): Fetch's retry needs the underlying
+		// *network.ConnError out of errors.As, same as a caller checking ErrUnreachable.
+		return nil, fileHeader{}, fmt.Errorf("%w: %w", ErrUnreachable, err)
+	}
+	// Cancelling ctx aborts the transfer at once (reads would otherwise wait for a deadline).
+	stop := context.AfterFunc(ctx, func() { s.Reset() })
+	defer stop()
+	dl := time.Now().Add(fileHeaderTimeout)
+	if d, ok := ctx.Deadline(); ok && d.Before(dl) {
+		dl = d
+	}
+	_ = s.SetDeadline(dl)
+	broken := func(what string, err error) (network.Stream, fileHeader, error) {
+		s.Reset()
+		if ctx.Err() != nil {
+			return nil, fileHeader{}, ctx.Err()
+		}
+		// %w on err (not shortErr(err), a string): the retry needs the underlying
+		// *network.ConnError out of errors.As, not just the ErrUnreachable sentinel.
+		return nil, fileHeader{}, fmt.Errorf("%w: %s: %w", ErrUnreachable, what, err)
+	}
+	if err := writeMsg(s, fileRequest{ChatID: chatID, FileID: fileID}); err != nil {
+		return broken("file request", err)
+	}
+	_ = s.CloseWrite()
+	var h fileHeader
+	if err := readMsg(s, maxFileHeader, &h); err != nil {
+		return broken("no file header", err)
+	}
+	return s, h, nil
+}
+
+// isConnSetupError reports whether err is a transport-level connection or stream closure
+// (*network.ConnError, *network.StreamError) rather than an application-level answer: the
+// class Fetch's one retry covers.
+func isConnSetupError(err error) bool {
+	var ce *network.ConnError
+	var se *network.StreamError
+	return errors.As(err, &ce) || errors.As(err, &se)
 }
 
 // preferDirect tries to turn a relay-only connection to p into a direct one before a file

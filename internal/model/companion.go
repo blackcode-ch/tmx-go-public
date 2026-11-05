@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// Companion is the owner's desktop agent app (ARCHITECTURE.md "Companion"). tmx hands it tasks, and
+// Companion is the owner's desktop agent app (DESIGN.md "Companion"). tmx hands it tasks, and
 // the head's and the owner's conversation messages, over its local A2A interface; these types
 // are the tmx side of a task or message.
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -76,6 +73,7 @@ func (f *Fleet) systemPromptLocked(a model.Agent) string {
 		fmt.Fprintf(&b, "\nYour brief: %s", a.Brief)
 	}
 	b.WriteString("\n" + mailRules)
+	b.WriteString("\n" + authorityRules) // authority.go
 	if a.Level == model.LevelHead {
 		b.WriteString("\n" + boardRules)
 		b.WriteString("\n" + headCompanionRules)

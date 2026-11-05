@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build !desktop
 
 // Package desktop is the Wails window of `tmx app`; this headless build has none.

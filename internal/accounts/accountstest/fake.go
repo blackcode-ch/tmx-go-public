@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package accountstest installs fake claude, codex and agy executables for tests of the AI
 // accounts (internal/accounts, the API, the CLI). They are shell scripts (Unix only) driven by
 // files next to them, and append their arguments to <name>.log there:
@@ -13,7 +10,8 @@
 //     codex-account.json and account/rateLimits/read with codex-limits.json, or the
 //     not-signed-in error when that file is missing; codex-broken makes it exit at once. `login
 //     status` prints codex-login-status.txt (exit codex-login-status.exit); `login` is like
-//     claude's (codex-account-in.json); `logout` copies codex-account-out.json.
+//     claude's (codex-account-in.json); `logout` copies codex-account-out.json. Each run appends its
+//     CODEX_HOME to codex.home.
 //   - agy: with agy-has-auth, `auth --help` lists login/status/logout, `auth status` prints
 //     agy-status.txt, `auth login` is like claude's (agy-status-in.txt) and `auth logout` copies
 //     agy-status-out.txt; without it `auth …` is an unknown command. `-p …` prints agy-usage.txt.
@@ -56,6 +54,7 @@ exit 2
 const codexScript = `#!/bin/sh
 d=$(dirname "$0")
 printf '%s\n' "$*" >> "$d/codex.log"
+printf '%s\n' "$CODEX_HOME" >> "$d/codex.home"
 case "$1" in
 app-server)
   if [ -f "$d/codex-stderr-after-eof" ]; then
@@ -88,6 +87,24 @@ login)
 logout) cp "$d/codex-account-out.json" "$d/codex-account.json"; echo "Successfully logged out"; exit 0 ;;
 esac
 exit 2
+`
+
+// geminiScript is Gemini CLI's first run: it signs in inside its app, which stays open after.
+// It appends its GEMINI_CLI_HOME, GEMINI_FORCE_FILE_STORAGE and GOOGLE_GENAI_USE_GCA to
+// gemini.env; "ok" writes <home>/.gemini/google_accounts.json, anything else exits 1.
+const geminiScript = `#!/bin/sh
+d=$(dirname "$0")
+printf '%s\n' "$*" >> "$d/gemini.log"
+printf '%s %s %s\n' "$GEMINI_CLI_HOME" "$GEMINI_FORCE_FILE_STORAGE" "$GOOGLE_GENAI_USE_GCA" >> "$d/gemini.env"
+home=${GEMINI_CLI_HOME:-$HOME}
+echo "Please visit the following URL to authorize the application:"
+echo "https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=y"
+IFS= read -r line
+[ "$line" = "ok" ] || exit 1
+mkdir -p "$home/.gemini"
+printf '{"active":"%s","old":[]}' "$(cat "$d/gemini-email" 2>/dev/null || echo owner@example.com)" > "$home/.gemini/google_accounts.json"
+echo "Type your message or @path/to/file"
+sleep 600
 `
 
 const agyScript = `#!/bin/sh
@@ -188,6 +205,8 @@ func Install(t testing.TB, dir string, harnesses ...model.Harness) *Fakes {
 			f.Set("agy-status-out.txt", AgyStatusOut)
 			f.Set("agy-usage.txt", AgyQuota)
 			f.write("agy", agyScript, 0o755)
+		case model.HarnessGemini:
+			f.write("gemini", geminiScript, 0o755)
 		default:
 			t.Fatalf("no fake for %q", h)
 		}

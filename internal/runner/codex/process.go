@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package codex runs OpenAI's Codex CLI in chat mode: `codex app-server`, JSON-RPC on
-// stdio, mapped to runner events (turns, items, approvals as EvApproval). See ARCHITECTURE.md
+// stdio, mapped to runner events (turns, items, approvals as EvApproval). See DESIGN.md
 // "Codex app-server protocol".
 package codex
 
@@ -112,6 +109,7 @@ func (r chatRunner) Start(ctx context.Context, spec runner.Spec) (runner.Process
 		p.parser.guardExecutable = spec.CodexGuardExecutable
 		home, _ := os.UserHomeDir()
 		p.parser.guardContext = &guard.Context{OS: runtime.GOOS, Cwd: spec.Cwd, Own: spec.Cwd, Home: home, Temp: []string{os.TempDir()}, StateDir: spec.CodexGuardHome, Env: os.Getenv}
+		p.parser.guardStates = spec.GuardStates // the owner's rule switches, read per check
 		for _, entry := range spec.Env {
 			key, value, ok := strings.Cut(entry, "=")
 			if !ok {

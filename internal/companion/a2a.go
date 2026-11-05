@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package companion links tmx with Companion, the owner's desktop agent app (ARCHITECTURE.md
+// Package companion links tmx with Companion, the owner's desktop agent app (DESIGN.md
 // "Companion"): the A2A client tmx hands tasks to Companion with, discovery of Companion's
 // local agent server, the effects classification and rendering of a task, the install into
 // Companion's MCP/skill folders, and the service that sends, polls and reports tasks.

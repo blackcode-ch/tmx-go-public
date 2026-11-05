@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -29,7 +26,7 @@ func (s *Store) CardAnswer(id, requestID string) (string, model.Approval, string
 
 // CommitCardAnswer commits closure/deferral/reask, its receipt and any owner mail
 // together. A crash cannot leave a closed card without its queued answer.
-func (s *Store) CommitCardAnswer(old, result model.Approval, requestID, request string, mail *model.Message) error {
+func (s *Store) CommitCardAnswer(old, result model.Approval, requestID, request string, mail *model.Message, peers ...PeerMessage) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -50,6 +47,11 @@ func (s *Store) CommitCardAnswer(old, result model.Approval, requestID, request 
 		m := *mail
 		messageID = m.ID
 		if _, err := tx.Exec(`INSERT INTO messages (`+messageCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.ID, m.From, m.To, m.Body, m.State, nullable(m.ReplyTo), m.CreatedAt, m.DeliveredAt, m.ThreadID, m.RetryID, m.RetryHash, m.Receipt, m.ReceiptAt); err != nil {
+			return err
+		}
+	}
+	for _, peer := range peers {
+		if err := putPeerMapping(tx, peer); err != nil {
 			return err
 		}
 	}

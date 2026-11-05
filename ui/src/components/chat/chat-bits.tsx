@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Small pieces of the chat UI: avatars, the person/agent badge, delivery ticks, reachability.
 import { AlertCircle, Bot, Check, CheckCheck, Clock3, User, Users } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -27,9 +24,9 @@ export function PersonAvatar({ name, className, size = "md" }: { name: string; c
       }}
       className={cn(
         "flex shrink-0 items-center justify-center rounded-full font-semibold select-none dark:brightness-[0.82]",
-        size === "sm" && "size-5 text-[9.5px]",
-        size === "md" && "size-7 text-[11px]",
-        size === "lg" && "size-10 text-[14px]",
+        size === "sm" && "size-5 text-[0.5938rem]",
+        size === "md" && "size-7 text-[0.6875rem]",
+        size === "lg" && "size-10 text-[0.875rem]",
         className,
       )}
     >
@@ -56,7 +53,7 @@ export function ChatAvatar({ chat, size = "md", className }: { chat: Pick<Chat, 
   );
 }
 
-const pill = "inline-flex h-[18px] shrink-0 items-center gap-1 rounded-[5px] border px-1.5 text-[10.5px] font-medium whitespace-nowrap";
+const pill = "inline-flex h-[1.125rem] shrink-0 items-center gap-1 rounded-[5px] border px-1.5 text-[0.6562rem] font-medium whitespace-nowrap";
 
 /** "person" or the agent's name with a bot icon. */
 export function SenderBadge({ m, className }: { m: Pick<ChatMessage, "sender_agent">; className?: string }) {

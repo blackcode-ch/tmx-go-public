@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // "Confirm on this Mac" (elsewhere "this machine"): shown while the daemon asks the OS for the owner's proof (a 428 from a
 // gated request). The UI proves nothing itself; it only waits for the daemon's verdict and lets
 // the owner withdraw the prompt. With the grace window on, it says that this proof also spares
@@ -16,11 +13,11 @@ import { useStore } from "@/lib/store";
 
 export function OwnerConfirmDialog() {
   const c = useGate((s) => s.confirming);
-  if (c?.method === "pin") return <PinConfirmDialog key={c.id} reason={c.reason} />;
+  if (c?.method === "pin") return <PinConfirmDialog key={c.id} reason={c.reason} hello={!!c.hello} />;
   return <OsConfirmDialog />;
 }
 
-function PinConfirmDialog({ reason }: { reason: string }) {
+function PinConfirmDialog({ reason, hello }: { reason: string; hello: boolean }) {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const error = useGate((s) => s.pinError);
@@ -36,7 +33,7 @@ function PinConfirmDialog({ reason }: { reason: string }) {
   };
   return (
     <Dialog open onOpenChange={(open) => !open && void cancelConfirmation()}>
-      <DialogContent className="sm:max-w-[420px]" showCloseButton={false}>
+      <DialogContent className="sm:max-w-[26.25rem]" showCloseButton={false}>
         <form
           className="contents"
           onSubmit={(e) => {
@@ -54,6 +51,7 @@ function PinConfirmDialog({ reason }: { reason: string }) {
             </DialogDescription>
           </DialogHeader>
           <PinInput value={pin} onChange={setPin} autoFocus disabled={busy} />
+          {hello && <p className="text-center text-xs text-muted-foreground">or confirm with Windows Hello / Touch ID on this machine</p>}
           {error && <p role="alert" className="text-center text-xs text-destructive">{error}</p>}
           <DialogFooter className="sm:justify-center">
             <Button type="button" variant="ghost" size="sm" onClick={() => void cancelConfirmation()}>
@@ -77,7 +75,7 @@ function OsConfirmDialog() {
   const grace = useGate((s) => s.graceAsked ?? s.safety?.gate.grace_minutes ?? 0);
   return (
     <Dialog open={!!c} onOpenChange={(open) => !open && void cancelConfirmation()}>
-      <DialogContent className="sm:max-w-[420px]" showCloseButton={false}>
+      <DialogContent className="sm:max-w-[26.25rem]" showCloseButton={false}>
         <DialogHeader className="items-center text-center sm:text-center">
           <div className="mb-1 flex size-12 items-center justify-center rounded-full border border-brand/25 bg-brand/10">
             <Fingerprint className="size-6 text-brand" />

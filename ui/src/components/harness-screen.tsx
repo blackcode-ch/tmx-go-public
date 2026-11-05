@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The harness tab of an agent's window (ARCHITECTURE.md "Switching live"): its harness's own screen
+// The harness tab of an agent's window (DESIGN.md "Switching live"): its harness's own screen
 // (Claude Code, Codex, opencode, pi, a shell) live in xterm. A Claude or Codex agent in chat
 // mode opens its screen on the same conversation, and goes back to chat from there; a switch
 // asked for during a turn happens when the turn ends.

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Pure text/decision logic for the fleet-hosts strip (WP4, lib/fleet-hosts.ts). No runtime
 // project imports, so this stays trivially unit-testable (test/fleet-hosts.test.mjs) without a
 // daemon connection. Every string here is composed from another install's own data: callers

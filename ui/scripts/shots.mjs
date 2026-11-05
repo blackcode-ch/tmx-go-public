@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Screenshots of the mock-data UI for visual review: node scripts/shots.mjs [filter]
 // Serves ui/dist (only) on 127.0.0.1, drives Playwright's bundled Chromium headless, writes
 // PNGs to ui/screenshots/ (git-ignored). Run `pnpm build` first. On a shared machine wrap it:
@@ -33,7 +30,43 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const SIZES = { wide: { width: 1440, height: 900 }, small: { width: 1100, height: 720 }, phone: { width: 390, height: 844 } };
 
 // name, url (query + hash), sizes, setup(page)
+// Every page, for the "readable" check (the owner, 3 Nov: "everything is too tiny"): run with
+// SHOT_TEXT=normal,larger and filter "readable" (e2e.yml's shots job does, by hand).
+const READABLE = [
+  ["overview", "#/"],
+  ["matrix", "#/matrix"],
+  ["inbox", "#/inbox"],
+  ["chats", "#/chats"],
+  ["chat", "#/chats/g8fk2m4q7xz"],
+  ["companion", "#/companion"],
+  ["whatsapp", "#/whatsapp"],
+  ["recordings", "#/recordings"],
+  ["usage", "#/usage"],
+  ["settings", "#/settings"],
+  ["agent", "#/agents/hd3k9q2m7x"],
+  ["project", "#/projects/pbl7n2c4ka"],
+].map(([name, hash]) => [`readable-${name}`, `?mock=still${hash}`, ["wide", "phone"], async (p) => p.waitForTimeout(700)]);
+
+/** Elements that are wider than their box without scrolling (clipped or spilling text): the
+ * page itself, main and main's direct children. "" when none. */
+async function overflowOf(page) {
+  return page.evaluate(() => {
+    const bad = [];
+    const els = [document.documentElement, document.body, ...document.querySelectorAll("main, main > *")];
+    for (const el of els) {
+      const ox = getComputedStyle(el).overflowX;
+      if (ox === "auto" || ox === "scroll") continue; // a scroll area is meant to be wider
+      if (el.scrollWidth > el.clientWidth + 1) {
+        const tag = el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + (typeof el.className === "string" && el.className ? "." + el.className.trim().split(/\s+/).slice(0, 3).join(".") : "");
+        bad.push(`${tag} (${el.scrollWidth} > ${el.clientWidth})`);
+      }
+    }
+    return bad.join("; ");
+  });
+}
+
 const SHOTS = [
+  ...READABLE,
   ["overview", "?mock=still#/", ["wide", "small", "phone"]],
   ["overview-empty", "?mock=empty#/", ["wide", "phone"]],
   ["overview-live", "?mock=1#/", ["wide"], async (p) => p.waitForTimeout(15000)],
@@ -110,55 +143,43 @@ const SHOTS = [
       await p.waitForTimeout(400);
     },
   ],
-  ["board", "?mock=still#/board", ["wide", "small", "phone"], async (p) => p.waitForTimeout(600)],
+  // The Matrix (the Board folded in on 3 Nov). "matrix-thread" wide is the README's hero (docs/images/matrix.png).
+  ["matrix", "?mock=still#/matrix", ["wide", "small", "phone"], async (p) => p.waitForTimeout(600)],
   [
-    "board-card",
-    "?mock=still#/board",
+    "matrix-thread",
+    "?mock=still#/matrix",
     ["wide", "phone"],
     async (p) => {
+      const fit = p.getByRole("button", { name: "Fit the board" }); // the canvas; a phone opens the list
+      if (await fit.isVisible()) await fit.click();
+      await p.getByRole("button", { name: /^Launch page/ }).first().click();
+      await p.getByRole("region", { name: "The head" }).waitFor();
+      await p.waitForTimeout(600);
+    },
+  ],
+  [
+    "matrix-turn",
+    "?mock=still#/matrix",
+    ["wide"],
+    async (p) => {
+      await p.getByRole("button", { name: "Fit the board" }).click();
+      await p.getByRole("button", { name: /^Launch page/ }).first().click();
       await p.getByRole("button", { name: /^You: Plan a one-page launch site/ }).click();
       await p.waitForTimeout(900);
     },
   ],
   [
-    "board-fit",
-    "?mock=still#/board",
+    "matrix-menu",
+    "?mock=still#/matrix",
     ["wide"],
     async (p) => {
       await p.getByRole("button", { name: "Fit the board" }).click();
+      await p.getByRole("button", { name: /^Launch page/ }).first().click();
+      await p.getByRole("button", { name: "Thread options" }).click();
       await p.waitForTimeout(400);
     },
   ],
-  [
-    "board-menu",
-    "?mock=still#/board",
-    ["wide"],
-    async (p) => {
-      await p.getByRole("button", { name: "Launch page options" }).click();
-      await p.getByRole("menuitem", { name: "Colour" }).hover();
-      await p.waitForTimeout(400);
-    },
-  ],
-  [
-    "board-log",
-    "?mock=still#/board",
-    ["wide"],
-    async (p) => {
-      await p.getByRole("button", { name: /^Launch page: open the log/ }).click();
-      await p.waitForTimeout(500);
-    },
-  ],
-  [
-    "board-topic",
-    "?mock=still#/board",
-    ["wide"],
-    async (p) => {
-      await p.getByRole("button", { name: "Topic", exact: true }).click();
-      await p.getByLabel("Topic title").fill("Pricing research");
-      await p.getByRole("radio", { name: "teal" }).click();
-      await p.waitForTimeout(300);
-    },
-  ],
+  ["matrix-board-redirect", "?mock=still#/board", ["wide"], async (p) => p.waitForURL(/#\/matrix/)],
   [
     "settings-updates",
     "?mock=still#/settings?section=updates",
@@ -174,7 +195,7 @@ const SHOTS = [
     ["wide", "phone"],
     async (p) => {
       // The owner names the head's profile "Architect": the head goes by that name everywhere.
-      const name = p.locator("input").first();
+      const name = p.locator("main input").first(); // not the closed drawer's search on a phone
       await name.fill("Architect");
       await p.getByRole("button", { name: "Save changes" }).click();
       await p.waitForTimeout(500);
@@ -411,7 +432,7 @@ const SHOTS = [
     await p.waitForTimeout(300);
   }],
   ["chats-empty", "?mock=empty#/chats", ["wide"]],
-  // chat boards (ARCHITECTURE.md "Chat boards")
+  // chat boards (DESIGN.md "Chat boards")
   ["chat-board", "?mock=still#/chats/g8fk2m4q7xz/board", ["wide", "small", "phone"], async (p) => p.waitForTimeout(600)],
   [
     "chat-board-card",
@@ -679,10 +700,11 @@ const browser = await chromium.launch({
 });
 const errors = [];
 try {
+  for (const text of (process.env.SHOT_TEXT ?? "normal").split(",")) {
   for (const theme of (process.env.SHOT_THEMES ?? "light,dark").split(",")) {
     for (const [name, url, sizes, setup] of SHOTS) {
       for (const size of sizes) {
-        const id = `${name}-${size}-${theme}`;
+        const id = `${name}-${size}-${theme}` + (text === "normal" ? "" : `-${text}`);
         if (filter && !id.includes(filter)) continue;
         const ctx = await browser.newContext({
           viewport: SIZES[size],
@@ -699,15 +721,28 @@ try {
         });
         page.on("pageerror", (e) => errors.push(`${id}: ${e.message}`));
         page.on("console", (m) => m.type() === "error" && errors.push(`${id}: console: ${m.text()}`));
+        await page.addInitScript((t) => localStorage.setItem("tmx.textSize", t), text); // lib/text-size.ts
         await page.goto(base + url);
         await page.waitForSelector("main", { timeout: 10000 });
         await page.waitForTimeout(900);
-        if (setup) await setup(page);
+        try {
+          if (setup) await setup(page);
+        } catch (e) {
+          // keep what the page showed when a step failed, and go on with the other shots
+          await page.screenshot({ path: path.join(out, `${id}-FAILED.png`) });
+          errors.push(`${id}: ${e.message.split("\n")[0]}`);
+          console.log("FAILED", id);
+          await ctx.close();
+          continue;
+        }
         await page.screenshot({ path: path.join(out, `${id}.png`) });
+        const over = await overflowOf(page);
+        if (over) errors.push(`${id}: overflow: ${over}`);
         console.log("shot", id);
         await ctx.close();
       }
     }
+  }
   }
 } finally {
   await browser.close();

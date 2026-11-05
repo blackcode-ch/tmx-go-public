@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Recordings: what happens when a recording stops. It is transcribed on this machine
 // (voice is set up first when it is missing), then Claude writes a summary from the transcript
 // and the still frames, with the chosen model.

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The dictation button of the message boxes (agent composer, chat composer, WhatsApp): click to
 // start and click to stop, or hold it while speaking. The words go into the box at the cursor for
 // review; nothing is ever sent by itself. Transcription runs on this machine (Settings → Voice).

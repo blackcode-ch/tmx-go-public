@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package fake is a scripted runner.Runner for tests: tests emit events on a Process and
 // inspect what the fleet sent to it (Send/Write/Answer/Interrupt/Stop).
 package fake

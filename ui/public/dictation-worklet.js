@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The AudioWorklet of dictation (src/lib/dictation.ts): it passes the microphone's samples
 // (channel 0, at the context's rate) to the page in batches of 4096 frames, and the rest when the
 // page sends "flush". The page turns them into a 16 kHz mono WAV for the daemon.

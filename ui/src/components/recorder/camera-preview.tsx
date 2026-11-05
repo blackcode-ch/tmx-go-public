@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The camera in the recorder (ARCHITECTURE.md "Recorder"): the start dialog's live preview with the
+// The camera in the recorder (DESIGN.md "Recorder"): the start dialog's live preview with the
 // camera and microphone pickers (shown when there is more than one), and the small mirrored
 // tile that shows the camera while a camera clip records in this window. The preview's stream
 // is handed to the recorder at Start, so the camera opens once.

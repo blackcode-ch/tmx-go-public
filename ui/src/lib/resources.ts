@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Resource control (ARCHITECTURE.md "Resources"): GET /api/resources once per connection, then
+// Resource control (DESIGN.md "Resources"): GET /api/resources once per connection, then
 // resources.sampled / slots.updated events. Kept apart from the fleet store: samples arrive
 // every few seconds and only the views that show numbers subscribe to them.
 import { create } from "zustand";

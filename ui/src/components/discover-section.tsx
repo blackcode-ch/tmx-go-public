@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Harnesses (what is installed here) and Running outside tmx (GET /api/discover):
 // Claude Code, Codex, opencode and pi sessions no tmx started, each adoptable into tmx.
 import { useCallback, useEffect, useState } from "react";
@@ -24,13 +21,13 @@ import { useStore } from "@/lib/store";
 import type { DiscoveredAgent, HarnessInfo } from "@/lib/types";
 
 function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex h-[18px] items-center rounded-[5px] bg-muted px-1.5 text-2xs font-medium text-muted-foreground">{children}</span>;
+  return <span className="inline-flex h-[1.125rem] items-center rounded-[5px] bg-muted px-1.5 text-2xs font-medium text-muted-foreground">{children}</span>;
 }
 
 function HarnessRow({ h }: { h: HarnessInfo }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
-      <span className="w-28 text-[13px] font-medium">{h.label}</span>
+      <span className="w-28 text-[0.8125rem] font-medium">{h.label}</span>
       <span className="flex gap-1">
         {h.modes.map((m) => (
           <Tag key={m}>{m === "chat" ? "Chat" : "Terminal"}</Tag>
@@ -39,7 +36,7 @@ function HarnessRow({ h }: { h: HarnessInfo }) {
       <span className="ml-auto flex min-w-0 items-center gap-1 text-xs">
         {h.installed ? (
           h.path ? (
-            <Truncate className="max-w-[300px] font-mono text-[11.5px] text-muted-foreground" title={h.path}>
+            <Truncate className="max-w-[18.75rem] font-mono text-[0.7188rem] text-muted-foreground" title={h.path}>
               {displayPath(h.path)}
             </Truncate>
           ) : (
@@ -50,7 +47,7 @@ function HarnessRow({ h }: { h: HarnessInfo }) {
             <span className="text-subtle-foreground">Not installed</span>
             {h.install && (
               <>
-                <code className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground sm:inline">{h.install}</code>
+                <code className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem] text-muted-foreground sm:inline">{h.install}</code>
                 <CopyButton text={h.install} label="Copy install command" />
               </>
             )}
@@ -74,7 +71,7 @@ function OutsideRow({ d, onAdopt }: { d: DiscoveredAgent; onAdopt: () => void })
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex min-w-0 items-center gap-2">
           <HarnessBadge harness={d.harness} />
-          <Truncate className="min-w-0 font-mono text-[12.5px]" title={d.cwd}>
+          <Truncate className="min-w-0 font-mono text-[0.7812rem]" title={d.cwd}>
             {displayPath(d.cwd) || "folder unknown"}
           </Truncate>
         </div>
@@ -139,7 +136,7 @@ function AdoptDialog({ d, onClose, onDone }: { d: DiscoveredAgent | null; onClos
 
   return (
     <Dialog open={!!d} onOpenChange={(v) => !v && !busy && onClose()}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[32.5rem]">
         <form onSubmit={adopt} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>Adopt this session?</DialogTitle>
@@ -161,7 +158,7 @@ function AdoptDialog({ d, onClose, onDone }: { d: DiscoveredAgent | null; onClos
                 value={name}
                 onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
                 placeholder={suggested || "adopted"}
-                className="font-mono text-[13px]"
+                className="font-mono text-[0.8125rem]"
                 autoComplete="off"
                 spellCheck={false}
               />
@@ -196,7 +193,7 @@ function AdoptDialog({ d, onClose, onDone }: { d: DiscoveredAgent | null; onClos
                   {candidates.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       <span className="font-mono text-2xs">{c.id.slice(0, 8)}</span>
-                      <span className="max-w-[260px] truncate">{c.preview || "(no message yet)"}</span>
+                      <span className="max-w-[16.25rem] truncate">{c.preview || "(no message yet)"}</span>
                       <span className="text-2xs text-muted-foreground">{relativeTime(c.updated)}</span>
                     </SelectItem>
                   ))}

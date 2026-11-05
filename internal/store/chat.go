@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -11,7 +8,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Chats between tmx installs (schema 3; ARCHITECTURE.md "Chats").
+// Chats between tmx installs (schema 3; DESIGN.md "Chats").
 
 // ---- contacts
 
@@ -499,7 +496,7 @@ func (s *Store) DeleteChat(id string) error {
 	return tx.Commit()
 }
 
-// ---- admin handover (ARCHITECTURE.md "Chats", Groups): beside the chat row, so PutChat leaves
+// ---- admin handover (DESIGN.md "Chats", Groups): beside the chat row, so PutChat leaves
 // them alone. proof is the JSON certificate chain, offer our open offer (both "" = none).
 
 func (s *Store) ChatAdmin(chatID string) (proof, offer string, err error) {

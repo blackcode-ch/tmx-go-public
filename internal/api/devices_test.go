@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -29,6 +26,7 @@ type deviceFixture struct {
 	auth    *gate.Fake
 	now     time.Time
 	grace   string
+	paths   config.Paths
 }
 
 func newDeviceFixture(t *testing.T) *deviceFixture {
@@ -43,13 +41,14 @@ func newDeviceFixture(t *testing.T) *deviceFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(g.Close)
-	f := &deviceFixture{now: time.Now(), auth: fake}
+	f := &deviceFixture{now: time.Now(), auth: fake, paths: p}
 	f.s = &Server{owner: "test-owner", port: 8787, gate: g, log: slog.New(slog.DiscardHandler), trustedHosts: []string{deviceTestHost, otherDeviceHost}, devices: newDeviceStore(filepath.Join(p.SecretsDir(), "devices.json")),
 		pin: ownerpin.Open(filepath.Join(p.SecretsDir(), "owner-pin.json"))}
 	f.s.devices.now = func() time.Time { return f.now }
 	f.s.pin.Now = func() time.Time { return f.now }
 	mux := http.NewServeMux()
 	f.s.deviceRoutes(mux)
+	f.s.gatePINRoutes(mux)
 	mux.HandleFunc("PUT /api/gate", f.s.ownerOnly(f.s.putGate))
 	mux.HandleFunc("PUT /api/gate/grace", f.s.ownerOnly(f.s.putGrace))
 	mux.HandleFunc("POST /api/protected", f.s.ownerOnly(func(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // AI accounts (the Usage page): the payload of GET /api/accounts and accounts.updated, and the
 // pure helpers that word it. No imports beyond types, so node's test runner can load it.
 
@@ -26,6 +23,10 @@ export interface AccountLimit {
 
 export interface AccountStatus {
   harness: string;
+  /** the account's name among the harness's; "default" is the harness's usual one */
+  name: string;
+  /** agents of this harness launched without an account use this one */
+  launch_default: boolean;
   label: string;
   installed: boolean;
   connected: boolean;
@@ -93,9 +94,9 @@ export function methodLabel(m: string | undefined | null): string {
   return "";
 }
 
-/** A short mark for a harness (no logos): Claude → Cl, Codex → Cx, Antigravity → Ag. */
+/** A short mark for a harness (no logos): Claude → Cl, Codex → Cx, Antigravity → Ag, Gemini CLI → Gm. */
 export function harnessMark(harness: string, label?: string): string {
-  const known: Record<string, string> = { claude: "Cl", codex: "Cx", antigravity: "Ag" };
+  const known: Record<string, string> = { claude: "Cl", codex: "Cx", antigravity: "Ag", gemini: "Gm" };
   if (known[harness]) return known[harness];
   const s = (label || harness).replace(/[^\p{L}\p{N}]/gu, "");
   return s ? s[0].toUpperCase() + (s[1] ?? "").toLowerCase() : "?";
@@ -141,10 +142,30 @@ export function isLink(s: string | undefined | null): boolean {
   return !!s && /^https?:\/\/\S+$/.test(s.trim());
 }
 
+/** The account every harness has: its usual home. */
+export const DEFAULT_ACCOUNT = "default";
+
+/** An account's key among all of them: "codex/work". */
+export function accountKey(a: Pick<AccountStatus, "harness" | "name">): string {
+  return `${a.harness}/${a.name || DEFAULT_ACCOUNT}`;
+}
+
+/** "Codex", or "Codex · work" for a harness's other accounts. */
+export function accountTitle(a: Pick<AccountStatus, "label" | "name">): string {
+  return !a.name || a.name === DEFAULT_ACCOUNT ? a.label : `${a.label} · ${a.name}`;
+}
+
+/** An account name the daemon accepts (it is also a folder name). */
+export function validAccountName(s: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,31}$/.test(s) && s !== DEFAULT_ACCOUNT;
+}
+
 /** Fills in what an older or partial answer leaves out, so views need no null checks. */
 export function normalizeAccounts(p: Partial<AccountsPayload> | null | undefined): AccountsPayload {
   const accounts = (p?.accounts ?? []).map((a) => ({
     ...a,
+    name: a.name || DEFAULT_ACCOUNT,
+    launch_default: a.launch_default ?? (a.name || DEFAULT_ACCOUNT) === DEFAULT_ACCOUNT,
     limits: a.limits ?? [],
     limits_note: a.limits_note ?? "",
     error: a.error ?? "",

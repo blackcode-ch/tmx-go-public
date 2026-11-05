@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// The Matrix (ARCHITECTURE.md "Matrix"): the Board's threads, each with links to everything that
+// The Matrix (DESIGN.md "Matrix"): the Board's threads, each with links to everything that
 // works on it (agents, shells, documents, secret names, ...). A link points at something that
 // lives elsewhere; the Matrix never copies it, and never holds a secret's value.
 

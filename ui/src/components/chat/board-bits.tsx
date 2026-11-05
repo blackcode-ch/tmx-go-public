@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Small pieces of chat boards used outside the board itself: the topic chip on a message in
-// the chat, and the topic picker in the chat's composer (ARCHITECTURE.md "Chat boards").
+// the chat, and the topic picker in the chat's composer (DESIGN.md "Chat boards").
 import { useEffect, useState } from "react";
 import { Check, Hash, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +31,7 @@ export function TopicChip({ chatId, topic, className }: { chatId: string; topic?
   return (
     <span
       title={`Topic: ${t.title}${t.archived ? " (archived)" : ""}`}
-      className={cn("inline-flex h-[18px] max-w-44 shrink-0 items-center gap-1 rounded-[5px] border px-1.5 text-[10.5px] font-medium text-muted-foreground", className)}
+      className={cn("inline-flex h-[1.125rem] max-w-44 shrink-0 items-center gap-1 rounded-[5px] border px-1.5 text-[0.6562rem] font-medium text-muted-foreground", className)}
     >
       <span className="size-1.5 shrink-0 rounded-full" style={{ background: threadColor(t) }} />
       <span className="truncate">{t.title}</span>

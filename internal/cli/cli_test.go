@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -65,21 +62,25 @@ func TestCommandsAgainstDaemon(t *testing.T) {
 	if _, _, code := tmx(t, "project", "new", "Unsupported", "--harness", "pi"); code == 0 {
 		t.Fatal("project with unsupported guard adapter accepted")
 	}
-	if out, errs, code := tmx(t, "project", "new", "Web", "Shop", "--brief", "sell things", "--harness", "claude"); code != 0 || !strings.Contains(out, "web-shop") {
+	if out, errs, code := tmx(t, "project", "new", "Web", "Shop", "--brief", "sell things", "--harness", "claude", "--model", "claude-sonnet-5"); code != 0 || !strings.Contains(out, "web-shop") {
 		t.Fatalf("project new: %d %s %s", code, out, errs)
 	}
 	lead, err := d.Fleet.Agent("web-shop-lead")
-	if err != nil || lead.Harness != "claude" {
+	if err != nil || lead.Harness != "claude" || lead.Model != "claude-sonnet-5" {
 		t.Fatalf("project lead harness = %q, err %v", lead.Harness, err)
 	}
 	if out, _, _ := tmx(t, "project", "ls"); !strings.Contains(out, "web-shop-lead") {
 		t.Fatalf("project ls: %s", out)
 	}
-	if out, errs, code := tmx(t, "run", "w1", "--project", "web-shop", "--prompt", "go"); code != 0 || !strings.Contains(out, "claude-sonnet-5-5") {
+	if out, errs, code := tmx(t, "run", "w1", "--project", "web-shop", "--prompt", "go"); code != 0 || !strings.Contains(out, "claude-sonnet-5") {
 		t.Fatalf("run: %d %s %s", code, out, errs)
 	}
-	if _, errs, code := tmx(t, "run", "w2", "--project", "web-shop", "--model", "claude-opus-5-5"); code != 1 || !strings.Contains(errs, "not allowed") {
+	if _, errs, code := tmx(t, "run", "w2", "--project", "web-shop", "--model", "unsupported-model"); code != 1 || !strings.Contains(errs, "not allowed") {
 		t.Fatalf("run wrong model: %d %s", code, errs)
+	}
+	// --account reaches the launch: this test daemon has no second account.
+	if _, errs, code := tmx(t, "run", "w3", "--project", "web-shop", "--account", "nope"); code != 1 || !strings.Contains(errs, `no account "nope"`) {
+		t.Fatalf("run unknown account: %d %s", code, errs)
 	}
 	out, _, _ := tmx(t, "ls")
 	for _, want := range []string{"head  head", "project Web Shop (web-shop)", "web-shop-lead  lead", "w1  worker"} {

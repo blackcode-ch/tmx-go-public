@@ -1,11 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import "github.com/blackcode-ch/tmx-go/internal/model"
 
-// Group members talk to each other directly (ARCHITECTURE.md "Chats", Groups). A member paired
+// Group members talk to each other directly (DESIGN.md "Chats", Groups). A member paired
 // only with the admin (through the admin's invite), so the node accepts the other members
 // only once the chat layer trusts them: on every newer group state from the admin, each
 // member calls Node.Trust for the other current members (with the addresses the admin

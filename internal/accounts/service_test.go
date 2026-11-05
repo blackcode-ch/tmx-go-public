@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -79,7 +76,7 @@ func newFixture(t *testing.T, mod func(*Options), harnesses ...model.Harness) fi
 	fx := fixture{f: accountstest.Install(t, t.TempDir(), harnesses...), ev: &events{}, codexHome: t.TempDir()}
 	o := Options{Dir: t.TempDir(), LookPath: fx.f.LookPath, Publish: fx.ev.publish, Every: -1,
 		CheckTimeout: 5 * time.Second, UsageTimeout: 5 * time.Second, StopGrace: 500 * time.Millisecond,
-		Env: []string{"CODEX_HOME=" + fx.codexHome, "CLAUDE_CONFIG_DIR=" + t.TempDir()}}
+		Env: []string{"CODEX_HOME=" + fx.codexHome, "CLAUDE_CONFIG_DIR=" + t.TempDir(), "GEMINI_CLI_HOME=" + t.TempDir()}}
 	if mod != nil {
 		mod(&o)
 	}
@@ -111,7 +108,7 @@ func (fx fixture) acct(h string) Account {
 // refresh checks h and waits for the result.
 func (fx fixture) refresh(t *testing.T, h string) Account {
 	t.Helper()
-	if err := fx.s.Refresh(h); err != nil {
+	if err := fx.s.Refresh(h, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, h+" refreshed", func() bool { return !fx.acct(h).Refreshing && !fx.ev.last(h).Refreshing })
@@ -120,7 +117,7 @@ func (fx fixture) refresh(t *testing.T, h string) Account {
 
 func TestClaudeAccount(t *testing.T) {
 	fx := newFixture(t, nil, Claude)
-	if err := fx.s.Refresh("nope"); !errors.Is(err, ErrUnknown) {
+	if err := fx.s.Refresh("nope", ""); !errors.Is(err, ErrUnknown) {
 		t.Fatalf("unknown harness: %v", err)
 	}
 	a := fx.refresh(t, "claude")
@@ -145,7 +142,7 @@ func TestClaudeAccount(t *testing.T) {
 		t.Fatal("no accounts.updated for the start and the end of the refresh")
 	}
 	p := fx.s.Payload()
-	if len(p.Accounts) != 3 || p.Accounts[0].Harness != "claude" || p.Accounts[1].Harness != "codex" || p.Accounts[2].Harness != "antigravity" || p.UpdatedAt == 0 {
+	if len(p.Accounts) != 4 || p.Accounts[3].Harness != "gemini" || p.Accounts[0].Harness != "claude" || p.Accounts[1].Harness != "codex" || p.Accounts[2].Harness != "antigravity" || p.UpdatedAt == 0 {
 		t.Fatalf("payload %+v", p)
 	}
 
@@ -189,7 +186,7 @@ func TestClaudeAccount(t *testing.T) {
 
 func TestNotInstalled(t *testing.T) {
 	fx := newFixture(t, nil)
-	if err := fx.s.Refresh(""); err != nil {
+	if err := fx.s.Refresh("", ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "all refreshed", func() bool {
@@ -205,13 +202,13 @@ func TestNotInstalled(t *testing.T) {
 			t.Errorf("%+v", a)
 		}
 	}
-	if _, err := fx.s.Login("codex"); !errors.Is(err, ErrNotInstalled) {
+	if _, err := fx.s.Login("codex", ""); !errors.Is(err, ErrNotInstalled) {
 		t.Fatalf("login: %v", err)
 	}
-	if _, err := fx.s.Login("gemini"); !errors.Is(err, ErrUnknown) {
+	if _, err := fx.s.Login("nope", ""); !errors.Is(err, ErrUnknown) {
 		t.Fatalf("login unknown: %v", err)
 	}
-	if err := fx.s.LoginInput("claude", []byte("x")); !errors.Is(err, ErrNoLogin) {
+	if err := fx.s.LoginInput("claude", "", []byte("x")); !errors.Is(err, ErrNoLogin) {
 		t.Fatalf("input: %v", err)
 	}
 }
@@ -220,7 +217,7 @@ func TestRefreshOneAtATime(t *testing.T) {
 	fx := newFixture(t, nil, Claude)
 	fx.f.Set("claude-usage.delay", "0.4")
 	for range 4 {
-		if err := fx.s.Refresh("claude"); err != nil {
+		if err := fx.s.Refresh("claude", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -348,10 +345,10 @@ func TestAntigravityWithoutAuthCommand(t *testing.T) {
 	if strings.Contains(fx.f.Log("agy"), "auth status") {
 		t.Fatal("asked an agy without auth for its status")
 	}
-	if args := agyLogin(fx.s.ctx, fx.s, filepath.Join(fx.f.Dir, "agy")); args != nil {
+	if args := agyLogin(fx.s.ctx, &scope{Service: fx.s}, filepath.Join(fx.f.Dir, "agy")); args != nil {
 		t.Fatalf("login args %q", args)
 	}
-	if args := agyLogout(fx.s.ctx, fx.s, filepath.Join(fx.f.Dir, "agy")); strings.Join(args, " ") != "-p /logout" {
+	if args := agyLogout(fx.s.ctx, &scope{Service: fx.s}, filepath.Join(fx.f.Dir, "agy")); strings.Join(args, " ") != "-p /logout" {
 		t.Fatalf("logout args %q", args)
 	}
 	fx.f.Set("agy-usage.txt", "Please sign in to continue")
@@ -383,30 +380,30 @@ func TestLoginInATerminal(t *testing.T) {
 	if a := fx.refresh(t, "claude"); a.Connected {
 		t.Fatal("signed in already")
 	}
-	id, err := fx.s.Login("claude")
+	id, err := fx.s.Login("claude", "")
 	if err != nil || id == "" {
 		t.Fatal(err)
 	}
-	if again, err := fx.s.Login("claude"); err != nil || again != id {
+	if again, err := fx.s.Login("claude", ""); err != nil || again != id {
 		t.Fatalf("a second sign-in: %q %v", again, err)
 	}
 	if l := fx.acct("claude").Login; l.State != LoginRunning || l.Message == "" {
 		t.Fatalf("login %+v", l)
 	}
-	sub, err := fx.s.AttachLogin("claude")
+	sub, err := fx.s.AttachLogin("claude", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var seen strings.Builder
 	seen.Write(sub.Replay)
 	readUntil(t, sub, &seen, "Opening your browser")
-	if err := fx.s.LoginResize("claude", 80, 24); err != nil {
+	if err := fx.s.LoginResize("claude", "", 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	if err := fx.s.LoginResize("claude", 0, 24); err == nil {
+	if err := fx.s.LoginResize("claude", "", 0, 24); err == nil {
 		t.Fatal("size 0 accepted")
 	}
-	if err := fx.s.LoginInput("claude", []byte("ok\r")); err != nil {
+	if err := fx.s.LoginInput("claude", "", []byte("ok\r")); err != nil {
 		t.Fatal(err)
 	}
 	readUntil(t, sub, &seen, "got:ok")
@@ -425,43 +422,43 @@ func TestLoginInATerminal(t *testing.T) {
 		t.Fatalf("claude ran %q", fx.f.Log("claude"))
 	}
 	// The last sign-in's screen can still be seen; it is over.
-	late, err := fx.s.AttachLogin("claude")
+	late, err := fx.s.AttachLogin("claude", "")
 	if err != nil || !strings.Contains(string(late.Replay), "got:ok") {
 		t.Fatalf("late attach: %v %q", err, late.Replay)
 	}
 	if _, ok := <-late.C(); ok {
 		t.Fatal("a finished sign-in still streams")
 	}
-	if err := fx.s.LoginInput("claude", []byte("x")); !errors.Is(err, ErrNoLogin) {
+	if err := fx.s.LoginInput("claude", "", []byte("x")); !errors.Is(err, ErrNoLogin) {
 		t.Fatalf("input after the end: %v", err)
 	}
 	// A new sign-in is a new session.
-	id2, err := fx.s.Login("claude")
+	id2, err := fx.s.Login("claude", "")
 	if err != nil || id2 == id {
 		t.Fatalf("new session %q %v", id2, err)
 	}
-	if err := fx.s.CancelLogin("claude"); err != nil {
+	if err := fx.s.CancelLogin("claude", ""); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestLoginCancelFailTimeout(t *testing.T) {
 	fx := newFixture(t, func(o *Options) { o.LoginTimeout = 700 * time.Millisecond }, Codex, Antigravity)
-	if _, err := fx.s.Login("codex"); err != nil {
+	if _, err := fx.s.Login("codex", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := fx.s.CancelLogin("codex"); err != nil {
+	if err := fx.s.CancelLogin("codex", ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "cancelled", func() bool { return fx.acct("codex").Login == Login{State: LoginIdle, Message: "Sign-in cancelled"} })
 
-	if _, err := fx.s.Login("codex"); err != nil {
+	if _, err := fx.s.Login("codex", ""); err != nil {
 		t.Fatal(err)
 	}
-	sub, _ := fx.s.AttachLogin("codex")
+	sub, _ := fx.s.AttachLogin("codex", "")
 	var seen strings.Builder
 	readUntil(t, sub, &seen, "localhost:1455")
-	if err := fx.s.LoginInput("codex", []byte("nope\r")); err != nil {
+	if err := fx.s.LoginInput("codex", "", []byte("nope\r")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "failed", func() bool { return fx.acct("codex").Login.State == LoginFailed })
@@ -469,7 +466,7 @@ func TestLoginCancelFailTimeout(t *testing.T) {
 		t.Fatalf("message %q", m)
 	}
 
-	if _, err := fx.s.Login("antigravity"); err != nil {
+	if _, err := fx.s.Login("antigravity", ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "timed out", func() bool { return fx.acct("antigravity").Login.State == LoginFailed })
@@ -487,7 +484,7 @@ func TestLogout(t *testing.T) {
 		if a := fx.refresh(t, h); !a.Connected {
 			t.Fatalf("%s: %+v", h, a)
 		}
-		p, err := fx.s.Logout(t.Context(), h)
+		p, err := fx.s.Logout(t.Context(), h, "")
 		if err != nil {
 			t.Fatalf("%s: %v", h, err)
 		}
@@ -502,7 +499,7 @@ func TestLogout(t *testing.T) {
 			t.Errorf("%s ran %q", name, fx.f.Log(name))
 		}
 	}
-	if _, err := fx.s.Logout(t.Context(), "nope"); !errors.Is(err, ErrUnknown) {
+	if _, err := fx.s.Logout(t.Context(), "nope", ""); !errors.Is(err, ErrUnknown) {
 		t.Fatal(err)
 	}
 }
@@ -511,12 +508,12 @@ func TestRateLimited(t *testing.T) {
 	fx := newFixture(t, nil, Claude)
 	fx.refresh(t, "claude")
 	n := fx.ev.count()
-	fx.s.RateLimited(Claude, "five_hour", 1800000000)
+	fx.s.RateLimited(Claude, "", "five_hour", 1800000000)
 	a := fx.acct("claude")
 	if a.Limits[0].ID != "session" || a.Limits[0].UsedPercent != 100 || a.Limits[0].ResetsAt != 1800000000000 {
 		t.Fatalf("%+v", a.Limits)
 	}
-	fx.s.RateLimited(Claude, "seven_day_opus", 0)
+	fx.s.RateLimited(Claude, "", "seven_day_opus", 0)
 	a = fx.acct("claude")
 	if l := a.Limits[len(a.Limits)-1]; l != (Limit{ID: "week_opus", Label: "Current week (Opus)", UsedPercent: 100}) {
 		t.Fatalf("%+v", l)
@@ -553,10 +550,10 @@ func TestClaudeLoginHoldsTheStartQueue(t *testing.T) {
 		return false
 	}
 
-	if _, err := fx.s.Login("claude"); err != nil {
+	if _, err := fx.s.Login("claude", ""); err != nil {
 		t.Fatal(err)
 	}
-	sub, err := fx.s.AttachLogin("claude")
+	sub, err := fx.s.AttachLogin("claude", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,7 +564,7 @@ func TestClaudeLoginHoldsTheStartQueue(t *testing.T) {
 	if !blocked() {
 		t.Fatal("a running sign-in gave up its start-queue turn")
 	}
-	if err := fx.s.LoginInput("claude", []byte("ok\r")); err != nil {
+	if err := fx.s.LoginInput("claude", "", []byte("ok\r")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "signed in", func() bool { return fx.acct("claude").Login.State == LoginSucceeded })
@@ -576,7 +573,7 @@ func TestClaudeLoginHoldsTheStartQueue(t *testing.T) {
 	}
 
 	// Past LoginTimeout: stopped (fail closed), reported, and the queue moves on.
-	if _, err := fx.s.Login("claude"); err != nil {
+	if _, err := fx.s.Login("claude", ""); err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(300 * time.Millisecond)

@@ -1,12 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // AI accounts (the Usage page, #/usage): which harness accounts are connected and how much of
 // their quota is used, as the harnesses report it. GET /api/accounts on each connection, then
 // accounts.updated events carry the whole payload. The sign-in runs the harness's own login
 // in a terminal on the daemon (loginTerminalPath); its progress arrives as login.state.
+import { useMemo } from "react";
 import { create } from "zustand";
-import { normalizeAccounts, type AccountsPayload, type AccountStatus } from "./accounts-format";
+import { DEFAULT_ACCOUNT, normalizeAccounts, type AccountsPayload, type AccountStatus } from "./accounts-format";
 import { ownerAction, withConfirmation } from "./owner-gate";
 import { onBusEvent, useStore } from "./store";
 import type { BusEvent } from "./types";
@@ -52,20 +50,47 @@ onBusEvent((ev: BusEvent) => {
 
 const enc = encodeURIComponent;
 
+/** ?account= of a harness's sign-in routes ("" for the default account). */
+export function accountQuery(name?: string): string {
+  return name && name !== DEFAULT_ACCOUNT ? `?account=${enc(name)}` : "";
+}
+
 export const accountsApi = {
-  /** Asks the harnesses again (all of them without a harness); the answer says refreshing. */
-  refresh: (harness?: string) =>
+  /** Asks the harnesses again (all of them without a harness; every account of harness without
+   * a name); the answer says refreshing. */
+  refresh: (harness?: string, account?: string) =>
     transport()
-      .request<AccountsPayload>("POST", "/api/accounts/refresh", harness ? { harness } : {})
+      .request<AccountsPayload>("POST", "/api/accounts/refresh", harness ? { harness, account: account ?? "" } : {})
       .then(put),
-  /** Starts the harness's own sign-in on the daemon; its terminal is loginTerminalPath(harness). */
-  login: (harness: string) =>
-    ownerAction((c) => transport().request<{ session: string }>("POST", withConfirmation(`/api/accounts/${enc(harness)}/login`, c))),
-  cancelLogin: (harness: string) => transport().request<unknown>("DELETE", `/api/accounts/${enc(harness)}/login`),
-  logout: (harness: string) =>
-    ownerAction((c) => transport().request<AccountsPayload>("POST", withConfirmation(`/api/accounts/${enc(harness)}/logout`, c))).then(put),
+  /** Starts the account's own sign-in on the daemon; its terminal is loginTerminalPath(harness, account). */
+  login: (harness: string, account?: string) =>
+    ownerAction((c) =>
+      transport().request<{ session: string }>("POST", withConfirmation(`/api/accounts/${enc(harness)}/login${accountQuery(account)}`, c)),
+    ),
+  cancelLogin: (harness: string, account?: string) =>
+    transport().request<unknown>("DELETE", `/api/accounts/${enc(harness)}/login${accountQuery(account)}`),
+  logout: (harness: string, account?: string) =>
+    ownerAction((c) =>
+      transport().request<AccountsPayload>("POST", withConfirmation(`/api/accounts/${enc(harness)}/logout${accountQuery(account)}`, c)),
+    ).then(put),
+  /** Adds a signed-out account to harness (its own private folder on the daemon). */
+  add: (harness: string, name: string) =>
+    transport().request<AccountsPayload>("POST", `/api/accounts/${enc(harness)}/accounts`, { name }).then(put),
+  /** Takes an account off the list; its folder, and any sign-in in it, stay on the daemon. */
+  remove: (harness: string, name: string) =>
+    transport().request<AccountsPayload>("DELETE", `/api/accounts/${enc(harness)}/accounts/${enc(name)}`).then(put),
+  /** The account agents of harness use when their launch names none. */
+  setLaunchDefault: (harness: string, name: string) =>
+    transport().request<AccountsPayload>("PUT", `/api/accounts/${enc(harness)}/launch-default`, { name }).then(put),
 };
 
-export function useAccount(harness: string): AccountStatus | undefined {
-  return useAccounts((s) => s.payload?.accounts.find((a) => a.harness === harness));
+export function useAccount(harness: string, account: string = DEFAULT_ACCOUNT): AccountStatus | undefined {
+  return useAccounts((s) => s.payload?.accounts.find((a) => a.harness === harness && a.name === account));
+}
+
+/** harness's accounts (the agents' harness name "agy" is "antigravity" here). */
+export function useHarnessAccounts(harness: string): AccountStatus[] {
+  const h = harness === "agy" ? "antigravity" : harness || "claude";
+  const all = useAccounts((s) => s.payload?.accounts);
+  return useMemo(() => (all ?? []).filter((a) => a.harness === h), [all, h]);
 }

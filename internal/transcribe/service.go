@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package transcribe is local voice transcription with whisper.cpp (ARCHITECTURE.md "Voice"): it
+// Package transcribe is local voice transcription with whisper.cpp (DESIGN.md "Voice"): it
 // downloads the engine (whisper-cli, built by tmx's CI) and the models on demand, verified;
 // runs one job at a time in a heavy slot at low priority; stores transcripts of recordings
 // (searchable) and answers dictation directly. Audio stays local unless an explicitly

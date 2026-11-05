@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -17,7 +14,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// The owner's recordings of their screen, camera and microphone (ARCHITECTURE.md "Recorder"). Agents may
+// The owner's recordings of their screen, camera and microphone (DESIGN.md "Recorder"). Agents may
 // read them by the owner's decision: the tool names the files, the agent reads them itself.
 // Nothing here can start, stop or change a recording.
 

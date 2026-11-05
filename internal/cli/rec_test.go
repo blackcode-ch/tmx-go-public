@@ -1,12 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
 	"strings"
 	"testing"
 
+	"github.com/blackcode-ch/tmx-go/internal/fleet"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/recorder"
 )
@@ -40,5 +38,20 @@ func TestRecCommands(t *testing.T) {
 	}
 	if _, errs, code := tmx(t, "rec", "show", r.ID); code == 0 || !strings.Contains(errs, "no recording") {
 		t.Fatalf("show deleted: %d %s", code, errs)
+	}
+}
+
+// `tmx rec process` (the report worker's one command) takes exactly one recording id, nothing else, and runs only
+// inside the worker (its agent env).
+func TestRecProcessArgs(t *testing.T) {
+	t.Setenv(fleet.EnvURL, "")
+	t.Setenv(fleet.EnvToken, "")
+	for _, args := range [][]string{{}, {"abc", "--json"}, {"abc; rm -rf /"}, {"../x"}, {"ABC"}, {strings.Repeat("a", 33)}} {
+		if _, errs, code := tmx(t, append([]string{"rec", "process"}, args...)...); code == 0 || !strings.Contains(errs, "usage") {
+			t.Fatalf("%q: %d %s", args, code, errs)
+		}
+	}
+	if _, errs, code := tmx(t, "rec", "process", "abc123"); code == 0 || !strings.Contains(errs, "only inside the report worker") {
+		t.Fatalf("outside a worker: %d %s", code, errs)
 	}
 }

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package gate
 
 // Windows Hello's answers and what the gate makes of them. This file has no build tag on

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Fleet-wide Overview aggregation (src/lib/fleet-hosts-format.ts, WP4): the pure line-building
 // and error-handling logic the FleetHostsStrip component uses.
 import test from "node:test";
@@ -18,7 +15,17 @@ test("hidesOnStatus: owner-only and older daemons disappear; other failures keep
 test("fleetHostsResult: a missing hosts array becomes an empty list, not undefined", () => {
   assert.deepEqual(fleetHostsResult(null), { loaded: true, hosts: [] });
   assert.deepEqual(fleetHostsResult(undefined), { loaded: true, hosts: [] });
-  const hosts = [{ name: "remote", port: 8787, reachable: true, agents: 1, projects: 0, running: 1, paused: 0, needs_you: 0 }];
+  const hosts = [{ kind: "host", name: "remote", port: 8787, reachable: true, agents: 1, projects: 0, running: 1, paused: 0, needs_you: 0 }];
+  assert.deepEqual(fleetHostsResult(hosts), { loaded: true, hosts });
+});
+
+// ONE FLEET, 3 Nov: a real other machine (Python fleet interop) shows up alongside a loopback
+// host, kind "peer" - no port, cpu, mem or disk (GET /api/sessions never carries those).
+test("fleetHostsResult: a mixed list of loopback hosts and real peers passes through unchanged", () => {
+  const hosts = [
+    { kind: "host", name: "remote", port: 8787, reachable: true, agents: 1, projects: 0, running: 1, paused: 0, needs_you: 0 },
+    { kind: "peer", name: "hosta", reachable: true, paired: true, agents: 2, projects: 0, running: 1, paused: 0, needs_you: 1 },
+  ];
   assert.deepEqual(fleetHostsResult(hosts), { loaded: true, hosts });
 });
 

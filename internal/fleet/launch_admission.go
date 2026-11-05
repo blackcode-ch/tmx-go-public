@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -50,10 +47,23 @@ func (f *Fleet) guardAdmissionLocked(a model.Agent) error {
 		}
 		return errf(KindForbidden, "the command guard has no enforced adapter for %s", a.Harness)
 	}
-	if where := hooksDisabledIn(a.Cwd); where != "" {
-		return errf(KindForbidden, "the command guard is disabled in %s", where)
+	// o4 / tmx-lead, 3 Nov: also the Claude config folders the launch uses (the daemon's own
+	// CLAUDE_CONFIG_DIR; per-account folders join via claudeConfigDirsLocked).
+	if where := hooksDisabledIn(a.Cwd, f.claudeConfigDirsLocked(a)...); where != "" {
+		return errf(KindForbidden, "the command guard is disabled in %s (disableAllHooks); remove that setting, then launch again", where)
 	}
 	return nil
+}
+
+// claudeConfigDirsLocked: the CLAUDE_CONFIG_DIR folders a Claude launch of a may read settings
+// from: its account's home (#236), and the daemon's own folder (the default account; checked
+// in any case, it is cheap).
+func (f *Fleet) claudeConfigDirsLocked(a model.Agent) []string {
+	dirs := []string{f.agentClaudeConfigDirLocked(a)}
+	if d := f.opts.Paths.ClaudeConfigDir(); d != dirs[0] {
+		dirs = append(dirs, d)
+	}
+	return dirs
 }
 
 func (f *Fleet) codexParityEligibleLocked(a model.Agent) bool {

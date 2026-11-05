@@ -1,13 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package guardhook is `tmx hook pretooluse`: Claude Code's PreToolUse hook for guarded agents.
 // It reads the tool call on stdin, classifies it with package guard and answers in Claude's
 // hook format on stdout. Allowed calls get no answer at all (Claude's own permission mode
 // decides as usual); a block is denied with the reason; a hold asks the daemon, which puts it
 // in Needs you, and waits for the owner. It fails closed: when the daemon cannot be reached or
 // anything goes wrong, a held or blocked call is denied. Only a plain allow never needs the
-// daemon. See ARCHITECTURE.md "Safety".
+// daemon. See DESIGN.md "Safety".
 package guardhook
 
 import (
@@ -121,21 +118,28 @@ func Run(ctx context.Context, in io.Reader, out io.Writer, o Options) error {
 	// Browser permission is fetched from the owner's host settings for each call,
 	// never inherited from an agent-controlled environment or cached across revocation.
 	// Missing daemon, malformed responses and lookup failures all retain the refusal.
+	// The owner's rule switches are fetched the same way, per call: a flip applies to the next
+	// tool call. If the daemon can't be asked (or sends no states), the strict built-in outcomes
+	// apply: never looser than a switch the owner set.
 	o.Context.AllowBrowserAutomation = false
-	call := guard.Call{Tool: hin.ToolName, Input: hin.ToolInput, Cwd: hin.Cwd}
-	v := guard.Check(o.Context, call)
-	if v.Rule == guard.RuleBrowser && o.Client != nil {
+	o.Context.States = nil
+	if o.Client != nil {
 		var policy struct {
-			AllowBrowserAutomation bool `json:"allow_browser_automation"`
+			AllowBrowserAutomation bool                     `json:"allow_browser_automation"`
+			States                 map[string]guard.Outcome `json:"states"`
 		}
 		pctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		err := o.Client.Get(pctx, "/api/guard/policy", &policy)
 		cancel()
-		if err == nil && policy.AllowBrowserAutomation {
-			o.Context.AllowBrowserAutomation = true
-			v = guard.Check(o.Context, call)
+		if err == nil {
+			o.Context.AllowBrowserAutomation = policy.AllowBrowserAutomation
+			if len(policy.States) > 0 {
+				o.Context.States = policy.States
+			}
 		}
 	}
+	call := guard.Call{Tool: hin.ToolName, Input: hin.ToolInput, Cwd: hin.Cwd}
+	v := guard.Check(o.Context, call)
 	req := fleetReq(hin, v)
 	switch v.Outcome {
 	case guard.Allow:
@@ -182,6 +186,12 @@ func hold(ctx context.Context, out io.Writer, o Options, v guard.Verdict, req ho
 	}
 	switch ap.State {
 	case model.ApprovalAllowed:
+		if ap.Answer == "always" { // fleet.AnswerAlways: the owner's standing Allow always
+			return answer(out, "allow", "tmx guard: the owner allows this always.")
+		}
+		if ap.Answer == "same as approved" { // fleet.AnswerSame: allowed once before
+			return answer(out, "allow", "tmx guard: the owner allowed this exact command before.")
+		}
 		return answer(out, "allow", "tmx guard: the owner allowed this once.")
 	case model.ApprovalDenied:
 		msg := "tmx guard: the owner denied this (" + v.RuleName + ")."

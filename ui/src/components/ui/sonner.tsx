@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2023 shadcn; adapted for tmx
-
 import {
   CircleCheckIcon,
   InfoIcon,

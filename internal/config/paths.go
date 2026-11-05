@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package config resolves the state directory and reads/writes the small files in it:
-// config.json, secrets/owner-token, daemon.json and the single-instance lock. See ARCHITECTURE.md
+// config.json, secrets/owner-token, daemon.json and the single-instance lock. See DESIGN.md
 // "State on disk".
 package config
 
@@ -118,7 +115,12 @@ func (p Paths) ClaudeConfigDir() string { return filepath.Join(p.Home, "claude-c
 // sign-in, nothing secret): otherwise a terminal agent would stop at the theme picker. An
 // existing .claude.json is never touched.
 func (p Paths) EnsureClaudeConfigDir() (string, error) {
-	dir := p.ClaudeConfigDir()
+	return EnsureClaudeDir(p.ClaudeConfigDir())
+}
+
+// EnsureClaudeDir prepares dir as a CLAUDE_CONFIG_DIR the way EnsureClaudeConfigDir does (also
+// a second Claude account's folder, internal/accounts).
+func EnsureClaudeDir(dir string) (string, error) {
 	if err := MkdirSecret(dir); err != nil {
 		return "", fmt.Errorf("claude config folder %s: %w", dir, err)
 	}
@@ -156,10 +158,10 @@ func (p Paths) HostTokenFile(name string) string {
 	return filepath.Join(p.SecretsDir(), "host-"+name+"-token")
 }
 
-// VoiceDir holds local voice transcription (ARCHITECTURE.md "Voice"): voice/engine/<version>/whisper-cli
+// VoiceDir holds local voice transcription (DESIGN.md "Voice"): voice/engine/<version>/whisper-cli
 // and voice/models/ggml-*.bin, both downloaded on demand.
 func (p Paths) VoiceDir() string { return filepath.Join(p.Home, "voice") }
 
 // RecordingsDir holds the owner's screen and microphone recordings: recordings/<id>/seg-0001.mp4
-// and seg-0001.wav (0600). Agents may read them (the owner's decision; ARCHITECTURE.md "Recorder").
+// and seg-0001.wav (0600). Agents may read them (the owner's decision; DESIGN.md "Recorder").
 func (p Paths) RecordingsDir() string { return filepath.Join(p.Home, "recordings") }

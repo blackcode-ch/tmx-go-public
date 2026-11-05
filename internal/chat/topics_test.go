@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -495,7 +492,17 @@ func TestTopicLogRules(t *testing.T) {
 			return false
 		})
 	}
-	// cleo files the very same line the same day as alex: one entry everywhere.
+	// cleo files the very same line the same day as alex: one entry everywhere. CI flake, 3 Nov
+	// (run 41661909708, 15:15-15:24 UTC - nowhere near a UTC day boundary, so that was never the
+	// cause): the loop above (line 485) only waits for cleo to have the CORRECTION (fix.ID) in
+	// her board - it never waits for cleo to have e1 ITSELF. e1 and fix are two separate wire
+	// messages (sendBoardLocked sends one per AddTopicEntry call), sent by two different peers
+	// (alex, then bo) into cleo's one incoming channel; nothing in this test or the delivery
+	// path promises cleo's chat_topic_entries table has e1's row before fix's row does. Without
+	// e1's row, cleo's own AddTopicEntry for the identical text finds no existing (chat_id, id)
+	// to collide with and genuinely inserts a new row - added=true - which is the exact failure
+	// seen. Wait for e1 explicitly, the same way bo was already waited for at line 480.
+	eventually(t, "cleo has alex's original line", func() bool { return strings.Contains(entryTexts(board(t, cleo, gid)), "CHF 600") })
 	if _, added, _ := cleo.svc.AddTopicEntry(gid, TopicEntryRequest{Topic: tp.ID, Kind: "decision", Text: "CHF 600 each."}); added {
 		t.Fatal("cleo's copy of alex's line was new")
 	}
@@ -548,7 +555,10 @@ func TestBoardForANewMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, "dave shows it on Fresh", func() bool {
+	// Under -race's instrumentation (fleet-ci run 41644672751: 11.05s observed, the whole
+	// package at 228.9s) the default 5s eventually() is too tight for this delivery; a longer
+	// deadline, still polling with an early exit, not a fixed sleep.
+	eventuallyWithin(t, 20*time.Second, "dave shows it on Fresh", func() bool {
 		return msgTopic(dave, gid, m.ID) == "tfresh" && topicOf(board(t, dave, gid), "tfresh").Title == "Fresh"
 	})
 	renamed := "Fresh air"
@@ -716,5 +726,30 @@ func TestAgentOrganisesBoard(t *testing.T) {
 	}
 	if _, err := bo.svc.UpdateTopic(gid, tp.ID, TopicPatch{Color: &c}); err != nil {
 		t.Fatalf("the owner is limited: %v", err)
+	}
+}
+
+// agentBoardChangeLocked used to read c.AgentID == "" as "this is the owner, never limited" -
+// true for the owner, but also true for a peer machine (its standing is c.Peer, not c.AgentID)
+// and for Companion, so both bypassed the per-caller rate limit entirely. Only c.Owner skips it
+// now; every other caller, including an empty AgentID, is limited.
+func TestAgentBoardChangeLimitsPeerAndCompanion(t *testing.T) {
+	for _, c := range []fleet.Caller{fleet.PeerCaller("hosta"), fleet.CompanionCaller} {
+		s := &Service{}
+		for i := 0; i < AgentBoardChanges; i++ {
+			if err := s.agentBoardChangeLocked(c); err != nil {
+				t.Fatalf("%+v change %d: %v", c, i, err)
+			}
+		}
+		if err := s.agentBoardChangeLocked(c); fleet.KindOf(err) != fleet.KindTooMany {
+			t.Fatalf("%+v over the budget: %v", c, err)
+		}
+	}
+	// The owner is still never limited.
+	s := &Service{}
+	for i := 0; i < AgentBoardChanges+5; i++ {
+		if err := s.agentBoardChangeLocked(fleet.OwnerCaller); err != nil {
+			t.Fatalf("owner change %d: %v", i, err)
+		}
 	}
 }

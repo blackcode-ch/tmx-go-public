@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2023 shadcn; adapted for tmx
-
 import { cn } from "@/lib/utils"
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {

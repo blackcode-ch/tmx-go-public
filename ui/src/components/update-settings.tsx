@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Updates: the version, what the updater is doing, auto/channel, check/install now,
 // and a GitHub token when the release repository is private.
 import { useEffect, useState } from "react";

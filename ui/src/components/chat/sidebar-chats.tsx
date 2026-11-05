@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The sidebar's "Chats" section: Companion first (once it is set up), DMs and groups with other
 // people's tmx, unread badges, and the invite / join / new group actions.
 import { useMemo } from "react";
@@ -23,7 +20,7 @@ export function MentionBadge({ n, className }: { n: number | undefined; classNam
   return (
     <span
       title={`${n} unread ${n === 1 ? "mention" : "mentions"} of you`}
-      className={cn("inline-flex size-[18px] items-center justify-center rounded-full bg-brand text-2xs font-semibold text-brand-foreground", className)}
+      className={cn("inline-flex size-[1.125rem] items-center justify-center rounded-full bg-brand text-2xs font-semibold text-brand-foreground", className)}
     >
       @
     </span>
@@ -35,7 +32,7 @@ export function UnreadBadge({ n, className }: { n: number; className?: string })
   return (
     <span
       className={cn(
-        "tabular inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1.5 text-2xs font-semibold text-brand-foreground",
+        "tabular inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-brand px-1.5 text-2xs font-semibold text-brand-foreground",
         className,
       )}
     >
@@ -107,7 +104,7 @@ export function SidebarChats({ path, onNavigate, open, onToggle }: { path: strin
         <a
           href={href(paths.chats())}
           onClick={onNavigate}
-          className="flex h-7 items-center gap-2 rounded-md px-2 text-[12.5px] text-subtle-foreground outline-none hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-7 items-center gap-2 rounded-md px-2 text-[0.7812rem] text-subtle-foreground outline-none hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <MessagesSquare className="size-4 shrink-0" />
           Peer-to-peer is off
@@ -116,7 +113,7 @@ export function SidebarChats({ path, onNavigate, open, onToggle }: { path: strin
         <button
           type="button"
           onClick={() => chatUI.openInvite("dm")}
-          className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground outline-none hover:bg-sidebar-accent/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-[0.8125rem] text-muted-foreground outline-none hover:bg-sidebar-accent/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
           <QrCode className="size-4" />
           Invite someone
@@ -133,7 +130,7 @@ export function SidebarChats({ path, onNavigate, open, onToggle }: { path: strin
                 onClick={onNavigate}
                 aria-current={on ? "page" : undefined}
                 className={cn(
-                  "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
+                  "flex h-7 items-center gap-2 rounded-md px-2 text-[0.8125rem] text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
                   on && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
                   over && !on && "text-muted-foreground",
                 )}
@@ -152,7 +149,7 @@ export function SidebarChats({ path, onNavigate, open, onToggle }: { path: strin
             <a
               href={href(paths.chats())}
               onClick={onNavigate}
-              className="flex h-7 items-center gap-2 rounded-md px-2 text-[12.5px] text-muted-foreground outline-none hover:bg-sidebar-accent/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-7 items-center gap-2 rounded-md px-2 text-[0.7812rem] text-muted-foreground outline-none hover:bg-sidebar-accent/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               <MessagesSquare className="size-4" />
               All chats

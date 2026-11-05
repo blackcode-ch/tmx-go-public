@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Attaching files to a message box: paperclip, paste and drag-and-drop, with chips that show
 // each file uploading, ready or failed. Used by the agent composer and the chat composer;
 // each passes its own upload call (files upload as soon as they are added, so sending is fast).

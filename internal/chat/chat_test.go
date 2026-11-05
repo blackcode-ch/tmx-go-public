@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -96,7 +93,15 @@ var owner = fleet.OwnerCaller
 
 func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	eventuallyWithin(t, 5*time.Second, what, cond)
+}
+
+// eventuallyWithin is eventually with its own deadline, for a condition that needs longer than
+// the default 5s under -race's instrumentation overhead and CI load (still a poll with an early
+// exit, never a blind sleep).
+func eventuallyWithin(t *testing.T, timeout time.Duration, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if cond() {
 			return
@@ -882,18 +887,18 @@ func TestRenameReachesGroupsAndContacts(t *testing.T) {
 		}
 		return ""
 	}
-	bo.name = "Bert"
+	bo.name = "Bala"
 	bo.svc.NameChanged()
 	for _, s := range []*side{alex, bo, cleo} {
 		eventually(t, s.name+" sees the new name in the group", func() bool {
-			return memberName(s, gid, bo.node.ID()) == "Bert"
+			return memberName(s, gid, bo.node.ID()) == "Bala"
 		})
 	}
 	eventually(t, "cleo's contact for bo follows it", func() bool {
 		ct, err := cleo.svc.contact(bo.node.ID())
-		return err == nil && ct.Name == "Bert" && ct.RemoteName == "Bert"
+		return err == nil && ct.Name == "Bala" && ct.RemoteName == "Bala"
 	})
-	if ch, _ := cleo.svc.Chat(dm); ch.Name != "Bert" {
+	if ch, _ := cleo.svc.Chat(dm); ch.Name != "Bala" {
 		t.Fatalf("dm name %q", ch.Name)
 	}
 }
@@ -906,11 +911,11 @@ func TestRenameKeepsLocalContactName(t *testing.T) {
 	if _, err := alex.svc.UpdateContact(bo.node.ID(), ContactPatch{Name: &mine}); err != nil {
 		t.Fatal(err)
 	}
-	bo.name = "Bert"
+	bo.name = "Bala"
 	bo.svc.NameChanged()
 	eventually(t, "remote name updates", func() bool {
 		ct, err := alex.svc.contact(bo.node.ID())
-		return err == nil && ct.RemoteName == "Bert"
+		return err == nil && ct.RemoteName == "Bala"
 	})
 	if ct, _ := alex.svc.contact(bo.node.ID()); ct.Name != mine {
 		t.Fatalf("local name overwritten: %q", ct.Name)

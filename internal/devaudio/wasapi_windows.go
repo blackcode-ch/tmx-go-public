@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build windows && (amd64 || arm64)
 
 package devaudio

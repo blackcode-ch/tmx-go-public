@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -15,7 +12,7 @@ import (
 
 const probationPoll = 5 * time.Second
 
-// watchProbation is the post-swap health watchdog (ARCHITECTURE.md "Updates"). While the running binary
+// watchProbation is the post-swap health watchdog (DESIGN.md "Updates"). While the running binary
 // is on probation it asks its own /api/health until the answer is ok with the governor not
 // degraded (the database migrated before the API opened), then confirms the update. At the
 // deadline without that, it calls fail: the daemon stops and starts this binary again, whose

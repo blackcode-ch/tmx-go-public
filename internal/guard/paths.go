@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package guard
 
 import (
@@ -72,6 +69,29 @@ func within(p, root string) bool {
 
 // inside reports whether p is strictly below root.
 func inside(p, root string) bool { return p != root && within(p, root) }
+
+// userContent: p lies inside one of the owner's own folders under the home (Documents\x,
+// Desktop\y, D... at least two levels below the home), where deleting a tree is ordinary work,
+// not machine protection (the owner, 3 Nov 13:55: ordinary deletes in user folders never ask him).
+// Not the home itself or its direct folders, not AppData/Library or dot-folders (programs and
+// credentials live there), and never a folder named NROP (the owner's private exclusion).
+func (a *analyzer) userContent(p string) bool {
+	if a.home == "" || depthBelow(p, a.home) < 2 {
+		return false
+	}
+	rest := strings.TrimPrefix(strings.TrimPrefix(p, a.home), "/")
+	first, _, _ := strings.Cut(rest, "/")
+	switch f := strings.ToLower(first); {
+	case f == "appdata", f == "library", strings.HasPrefix(f, "."):
+		return false
+	}
+	for _, seg := range strings.Split(strings.ToLower(rest), "/") {
+		if seg == "nrop" {
+			return false
+		}
+	}
+	return true
+}
 
 func depthBelow(p, root string) int {
 	if !inside(p, root) {
@@ -192,6 +212,19 @@ func (a *analyzer) claudeData(p string) bool {
 	return false
 }
 
+// claudeSettingsFile: a Claude Code settings file in any scope, incl. the agents' CLAUDE_CONFIG_DIRs
+// in tmx's state (<home>/claude-config, and a Claude account's <home>/ai-accounts/homes/claude/<name>).
+func (a *analyzer) claudeSettingsFile(p string) bool {
+	if claudeSettings.MatchString(p) {
+		return true
+	}
+	if a.state != "" && (within(p, a.state+"/claude-config") || within(p, a.state+"/ai-accounts/homes/claude")) {
+		b := path.Base(p)
+		return b == "settings.json" || b == "settings.local.json"
+	}
+	return false
+}
+
 var claudeSettings = regexp.MustCompile(`(^|/)\.claude/settings(\.local)?\.json$|(^|/)managed-settings\.json$|/\.claude\.json$`)
 
 func isNullDevice(p string) bool {
@@ -208,7 +241,13 @@ func (a *analyzer) stateSecret(p string) bool {
 	if a.state == "" || p == "" {
 		return false
 	}
-	return within(p, a.state+"/secrets") || within(p, a.state+"/agents") || within(p, a.state+"/whatsapp")
+	return within(p, a.state+"/secrets") || within(p, a.state+"/agents") || within(p, a.state+"/whatsapp") ||
+		// the AI accounts' homes: sign-ins, and a Claude account's settings.json, which is the
+		// user settings of every agent on that account (disableAllHooks there would unguard them)
+		within(p, a.state+"/ai-accounts") ||
+		// the guard's own settings (config.json: rule_states, off_for, always_allow), the approvals
+		// (tmx.db and its -wal/-shm) and daemon.json: an agent writing them would undo the owner gate
+		p == a.state+"/config.json" || p == a.state+"/daemon.json" || strings.HasPrefix(p, a.state+"/tmx.db")
 }
 
 // inState reports whether p is in tmx's state folder. Secrets and agent folders always count;

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -16,7 +13,7 @@ import (
 // TestLiveClaude reads the real Claude Code's account and usage, only reading (no sign-in or
 // sign-out, no model turn): TMXG_LIVE=1 go test -run TestLiveClaude -v ./internal/accounts
 //
-// Checked on 29 Oct 2026 against Claude Code 2.1.311 (a Max subscription): see ARCHITECTURE.md "AI
+// Checked on 29 Oct 2026 against Claude Code 2.1.311 (a Max subscription): see DESIGN.md "AI
 // accounts and usage".
 func TestLiveClaude(t *testing.T) {
 	if os.Getenv("TMXG_LIVE") != "1" {
@@ -29,7 +26,7 @@ func TestLiveClaude(t *testing.T) {
 	s := New(Options{Dir: t.TempDir()})
 	defer s.Close()
 	start := time.Now()
-	r := claudeCheck(s.ctx, s, path)
+	r := claudeCheck(s.ctx, &scope{Service: s}, path)
 	took := time.Since(start)
 	if !r.known {
 		t.Fatalf("not read: %s", r.err)
