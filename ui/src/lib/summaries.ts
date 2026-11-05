@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Summaries of recordings (ARCHITECTURE.md "Summaries"): Claude's short account of each finished
+// Summaries of recordings (DESIGN.md "Summaries"): Claude's short account of each finished
 // recording, written from its transcripts and still frames; mirrors internal/model/summary.go,
 // same JSON names. Kept current by summary.updated events; lists show the first sentence.
 import { create } from "zustand";

@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Mirror of internal/model/chat.go and the chat API (ARCHITECTURE.md "Chats"); JSON names are the
+// Mirror of internal/model/chat.go and the chat API (DESIGN.md "Chats"); JSON names are the
 // contract. Chats connect this tmx with other people's tmx installs (peer to peer).
 
 export type Reachability = "direct" | "relayed" | "offline";
@@ -184,7 +181,7 @@ export function currentMembers(c: Pick<Chat, "members">): ChatMember[] {
 }
 
 // ---------------------------------------------------------------------------------------------
-// chat boards (ARCHITECTURE.md "Chat boards"; Go internal/model/chattopic.go)
+// chat boards (DESIGN.md "Chat boards"; Go internal/model/chattopic.go)
 
 /** The catch-all topic every chat board has (not stored; messages without a topic). */
 export const CHAT_GENERAL_TOPIC = "general";

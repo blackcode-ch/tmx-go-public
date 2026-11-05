@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Chats with other people's tmx installs: contacts, DMs and groups, kept current by the
-// chat.* and contact.* BusEvents (ARCHITECTURE.md "Chats"). Separate from the fleet store; it hooks
+// chat.* and contact.* BusEvents (DESIGN.md "Chats"). Separate from the fleet store; it hooks
 // into the same event stream and reloads on every (re)connect.
 import { create } from "zustand";
 import { ApiError } from "./transport";

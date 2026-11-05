@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package p2p
 
 import (
@@ -36,7 +33,7 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
-// Protocol IDs (ARCHITECTURE.md "Peer-to-peer network").
+// Protocol IDs (DESIGN.md "Peer-to-peer network").
 const (
 	ProtoPair = "/tmx/pair/1.0.0"
 	ProtoMsg  = "/tmx/msg/1.0.0"
@@ -333,6 +330,7 @@ func (n *Host) start() error {
 	}
 	n.wg.Add(1)
 	go n.eventLoop(sub)
+	n.logAddrs()
 
 	if o.DHT {
 		if err := n.startDHT(); err != nil {
@@ -526,7 +524,7 @@ func (n *Host) rememberAddrsLocked(p peer.ID, addrs []string) {
 // Status and reachability
 
 // Status reports this node: its peer ID, the addresses an invite would carry, and how the
-// internet can reach it (ARCHITECTURE.md: direct = public or port-mapped address, relayed = only
+// internet can reach it (DESIGN.md: direct = public or port-mapped address, relayed = only
 // through a circuit relay, offline = no usable address or AutoNAT found us unreachable and
 // no relay reservation yet).
 func (n *Host) Status() Status {
@@ -593,6 +591,14 @@ func (n *Host) peerReach(p peer.ID) Reachability {
 func isRelayAddr(a ma.Multiaddr) bool {
 	_, err := a.ValueForProtocol(ma.P_CIRCUIT)
 	return err == nil
+}
+
+// logAddrs reports the address set an invite would carry right now, so a relay reservation
+// (a /p2p-circuit address, once AutoRelay engages) shows up in the log the moment it appears -
+// the thing to grep for when checking whether a machine behind NAT has become reachable at all.
+func (n *Host) logAddrs() {
+	addrs := n.addrStrings(n.inviteAddrs())
+	n.log.Info("p2p addrs", "addrs", addrs, "reachability", n.selfReachability())
 }
 
 func (n *Host) addrStrings(addrs []ma.Multiaddr) []string {
@@ -711,6 +717,7 @@ func (n *Host) eventLoop(sub event.Subscription) {
 					n.nextDial[p] = time.Time{}
 				}
 				n.mu.Unlock()
+				n.logAddrs()
 			case event.EvtPeerConnectednessChanged:
 				n.peerChanged(e.Peer)
 			}

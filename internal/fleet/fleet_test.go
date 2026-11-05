@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -23,7 +20,7 @@ import (
 
 const (
 	opus   = "claude-opus-5-5"
-	sonnet = "claude-sonnet-5-5"
+	sonnet = "claude-sonnet-5"
 )
 
 type env struct {
@@ -34,6 +31,12 @@ type env struct {
 	chat      *fake.Runner
 	term      *fake.Runner
 	guard     *guard.Settings
+	bypass    *bool // Options.AgentBypass (nil = the default, on)
+	accounts  AccountHomes
+	// hostExe and termRunner: session hosts (hosting_test.go); nil/"" = none, e.term.
+	hostExe    string
+	termRunner runner.Runner
+	chatRunner runner.Runner
 }
 
 // Explicit owner opt-out for tests of harness behavior unrelated to the guard.
@@ -67,12 +70,21 @@ func newEnv(t *testing.T) *env {
 // fleet builds a Fleet on the env's store (a second call simulates a daemon restart).
 func (e *env) fleet() *Fleet {
 	e.t.Helper()
+	var term, chat runner.Runner = e.term, e.chat
+	if e.termRunner != nil {
+		term = e.termRunner
+	}
+	if e.chatRunner != nil {
+		chat = e.chatRunner
+	}
 	f, err := New(Options{Elevated: func() bool { return false },
-		Store: e.st, Paths: config.Paths{Home: e.home},
-		Runners: map[model.Mode]runner.Runner{model.ModeChat: e.chat, model.ModeTerminal: e.term},
+		Store: e.st, Paths: config.Paths{Home: e.home}, HostExecutable: e.hostExe,
+		Runners: map[model.Mode]runner.Runner{model.ModeChat: chat, model.ModeTerminal: term},
 		Machine: "testbox", Version: "test", Workspace: e.workspace, URL: "http://127.0.0.1:1",
-		Executable: "/opt/tmx/tmx",
-		Guard:      e.guard,
+		Executable:  "/opt/tmx/tmx",
+		Guard:       e.guard,
+		AgentBypass: e.bypass,
+		Accounts:    e.accounts,
 	})
 	if err != nil {
 		e.t.Fatal(err)
@@ -179,7 +191,7 @@ func TestHeadBootstrap(t *testing.T) {
 		t.Fatal("head not started")
 	}
 	if p.Spec.Model != opus || !slices.Equal(p.Spec.AllowedTools, []string{"mcp__tmxg"}) ||
-		!strings.Contains(p.Spec.SystemPrompt, "head agent") || p.Spec.PermissionMode != "auto" {
+		!strings.Contains(p.Spec.SystemPrompt, "head agent") || p.Spec.PermissionMode != "bypassPermissions" { // guarded: bypass (guard.go)
 		t.Fatalf("spec: %+v", p.Spec)
 	}
 	// New conversation: id assigned up front, not resumed.
@@ -225,7 +237,7 @@ func TestHeadBootstrap(t *testing.T) {
 	}
 }
 
-func TestProjectCreateLaunchesLeadOnSonnet(t *testing.T) {
+func TestProjectCreateLaunchesLeadOnOpus(t *testing.T) {
 	e := newEnv(t)
 	f := e.started()
 	head := mustAgent(t, f, "head")
@@ -240,12 +252,12 @@ func TestProjectCreateLaunchesLeadOnSonnet(t *testing.T) {
 		t.Fatal("folder not created")
 	}
 	lead := mustAgent(t, f, "my-app-lead")
-	if lead.ID != p.LeadID || lead.Level != model.LevelLead || lead.Model != sonnet ||
+	if lead.ID != p.LeadID || lead.Level != model.LevelLead || lead.Model != opus ||
 		lead.ParentID != head.ID || lead.ProjectID != p.ID || lead.Cwd != p.Folder {
 		t.Fatalf("lead: %+v", lead)
 	}
 	proc := e.chat.Last(lead.ID)
-	if proc == nil || proc.Spec.Model != sonnet || proc.Spec.Cwd != p.Folder {
+	if proc == nil || proc.Spec.Model != opus || proc.Spec.Cwd != p.Folder {
 		t.Fatalf("lead process: %+v", proc)
 	}
 	sent := proc.Sent()
@@ -277,8 +289,8 @@ func TestProjectCreateSelectsLeadHarness(t *testing.T) {
 		want    model.Harness
 		model   string
 	}{
-		{name: "default", want: model.HarnessClaude, model: sonnet},
-		{name: "claude", harness: model.HarnessClaude, want: model.HarnessClaude, model: sonnet},
+		{name: "default", want: model.HarnessClaude, model: opus},
+		{name: "claude", harness: model.HarnessClaude, want: model.HarnessClaude, model: opus},
 		{name: "codex", harness: model.HarnessCodex, want: model.HarnessCodex, model: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -346,7 +358,7 @@ func TestLaunchPolicy(t *testing.T) {
 		kind Kind
 	}{
 		{"worker cannot launch", callerFor(t, f, e.chat, w.ID), LaunchRequest{Name: "w2"}, KindForbidden},
-		{"wrong model", lc, LaunchRequest{Name: "w3", Model: opus}, KindForbidden},
+		{"wrong model", lc, LaunchRequest{Name: "w3", Model: "unsupported-model"}, KindForbidden},
 		{"lead cannot launch lead", lc, LaunchRequest{Name: "l2", Level: model.LevelLead}, KindForbidden},
 		{"lead stays in its project", lc, LaunchRequest{Name: "w4", ProjectID: other.ID}, KindForbidden},
 		{"nobody launches a head", OwnerCaller, LaunchRequest{Name: "h2", Level: model.LevelHead}, KindForbidden},

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package transcribe
 
 // Recording transcripts keep only what was said (tmx-lead, 3 Nov, ported from the Python fleet's review_clean):

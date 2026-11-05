@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";

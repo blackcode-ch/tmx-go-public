@@ -1,18 +1,20 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package p2p
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // pairNodes starts two hosts and pairs them with a DM invite (a invites, b joins).
@@ -305,5 +307,91 @@ func TestFileFetchTCP(t *testing.T) {
 	}
 	if _, err := carol.Fetch(ctxT(t), alice.PeerID(), "chat1", "big", io.Discard, 25<<20); !errors.Is(err, ErrNoFile) {
 		t.Fatalf("unpaired over TCP: %v", err)
+	}
+}
+
+// TestFileFetchRetriesOnceOnConnectionClose (go-shells-s, 3 Nov, the p2p Common Core interop
+// CI's finding): openFileStream failing with a transport-level close
+// (*network.ConnError/*network.StreamError, e.g. "Application error 0x0" under a constrained
+// UDP buffer) is retried once by Fetch, transparently to the caller. openFileStreamFn injects
+// the error on the first call only and delegates to the real implementation after, so the
+// test proves Fetch's retry logic deterministically, without racing a real connection
+// teardown in-process (tmx-lead, 3 Nov: "don't sink an hour into in-process racing").
+func TestFileFetchRetriesOnceOnConnectionClose(t *testing.T) {
+	alice, bob := pairNodes(t)
+	big := []byte("second time works")
+	alice.ServeFiles((&fileStore{files: map[string][]byte{"retry-me": big}}).source)
+
+	var calls atomic.Int32
+	t.Cleanup(func() { openFileStreamFn = nil })
+	openFileStreamFn = func(n *Host, ctx context.Context, p peer.ID, chatID, fileID string) (network.Stream, fileHeader, error) {
+		if calls.Add(1) == 1 {
+			return nil, fileHeader{}, fmt.Errorf("%w: %w", ErrUnreachable,
+				&network.ConnError{Remote: true, ErrorCode: network.ConnNoError, TransportError: errors.New("simulated transport close")})
+		}
+		return n.openFileStreamReal(ctx, p, chatID, fileID)
+	}
+
+	var out bytes.Buffer
+	n, err := bob.Fetch(ctxT(t), alice.PeerID(), "chat1", "retry-me", &out, 1<<20)
+	if err != nil {
+		t.Fatalf("Fetch did not survive the retry: %v", err)
+	}
+	if n != int64(len(big)) || out.String() != string(big) {
+		t.Fatalf("got %d bytes %q", n, out.String())
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("openFileStream called %d times, want exactly 2 (one retry)", calls.Load())
+	}
+}
+
+// TestFileFetchDoesNotRetryANonConnectionError confirms the retry is scoped exactly to
+// *network.ConnError/*network.StreamError: an application-level answer (the file source
+// refuses outright, the connection stays up) is never retried.
+func TestFileFetchDoesNotRetryANonConnectionError(t *testing.T) {
+	alice, bob := pairNodes(t)
+	var calls atomic.Int32
+	alice.ServeFiles(func(req FileRequest) (io.ReadCloser, int64, error) {
+		calls.Add(1)
+		return nil, 0, errors.New("no such file")
+	})
+	if _, err := bob.Fetch(ctxT(t), alice.PeerID(), "chat1", "nope", io.Discard, 1<<20); !errors.Is(err, ErrNoFile) {
+		t.Fatalf("got %v, want ErrNoFile", err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("file source called %d times, want exactly 1 (no retry on a real refusal)", calls.Load())
+	}
+}
+
+// TestFileFetchRetryRedialsAClosedConnection is the one real-redial check (tmx-lead, 3 Nov):
+// when the connection itself is gone, not just one stream, Fetch's retry must still succeed -
+// ClosePeer before the retry's connect forces a fresh dial even if libp2p's own Connectedness
+// bookkeeping has not caught up yet. Real nodes, real connection, cheap (loopback, no CI-only
+// subprocess cost).
+func TestFileFetchRetryRedialsAClosedConnection(t *testing.T) {
+	alice, bob := pairNodes(t)
+	big := []byte("fetched after a redial")
+	alice.ServeFiles((&fileStore{files: map[string][]byte{"retry-me": big}}).source)
+
+	var calls atomic.Int32
+	t.Cleanup(func() { openFileStreamFn = nil })
+	openFileStreamFn = func(n *Host, ctx context.Context, p peer.ID, chatID, fileID string) (network.Stream, fileHeader, error) {
+		if calls.Add(1) == 1 {
+			for _, c := range n.h.Network().ConnsToPeer(p) {
+				_ = c.Close()
+			}
+			return nil, fileHeader{}, fmt.Errorf("%w: %w", ErrUnreachable,
+				&network.ConnError{Remote: true, ErrorCode: network.ConnNoError, TransportError: errors.New("simulated connection close")})
+		}
+		return n.openFileStreamReal(ctx, p, chatID, fileID)
+	}
+
+	var out bytes.Buffer
+	n, err := bob.Fetch(ctxT(t), alice.PeerID(), "chat1", "retry-me", &out, 1<<20)
+	if err != nil {
+		t.Fatalf("Fetch did not survive a real connection close: %v", err)
+	}
+	if n != int64(len(big)) || out.String() != string(big) {
+		t.Fatalf("got %d bytes %q", n, out.String())
 	}
 }

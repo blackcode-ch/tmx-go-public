@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Companion in the mock daemon (?mock=1): connected and reachable, a finished task, one asking a
 // question (Needs you), an agent's hand-off waiting for the owner, and new tasks that run through
 // queued → working → completed. ?mock=companion-off: nothing installed or connected.

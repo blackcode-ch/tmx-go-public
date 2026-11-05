@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Recordings (#/recordings, #/recordings/<id>[?seg=N&t=MS]): the owner's screen, camera and
 // microphone recordings on this machine. A list, a player that plays the segments in order, the
 // still frames, the transcript (from the local transcription service, when it is there), and
@@ -19,6 +16,7 @@ import {
   Monitor,
   MoreHorizontal,
   Pencil,
+  Settings2,
   Share2,
   Trash2,
   Video,
@@ -28,6 +26,7 @@ import { toast } from "sonner";
 import { CopyButton } from "@/components/copy-button";
 import { EmptyState, PageBody, PageHeader, PageTitle } from "@/components/page";
 import { FrameStrip } from "@/components/recorder/frame-strip";
+import { lineAt, segmentStarts, type MomentLine } from "@/lib/key-moments";
 import { BoardLinkDialog, DeleteRecordingDialog, fileSize, ShareRecordingDialog } from "@/components/recorder/recording-dialogs";
 import { useLiveRecording } from "@/components/recorder/recording-bar";
 import { SummaryPanel } from "@/components/recorder/summary-panel";
@@ -38,7 +37,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNow } from "@/hooks/use-now";
 import { absoluteTime, relativeTime } from "@/lib/format";
 import { openRecordDialog } from "@/lib/recorder";
+import { recordNow } from "@/lib/record-now";
 import { loadRecordings, onTranscriptUpdated, recApi, segmentURL, upsertRecording, useRecordings } from "@/lib/recordings";
+import { isClinic, sensitivityOf } from "@/lib/clinic";
+import { ClinicCheckbox } from "@/components/recorder/clinic-checkbox";
 import type { Recording, RecordingTranscript } from "@/lib/recording-types";
 import { captureLabel, clock, elapsedMs, hasSound, isLive, transcriptSegment } from "@/lib/recording-types";
 import { href, paths } from "@/lib/router";
@@ -100,11 +102,24 @@ export function RecordingsPage({ id }: { id?: string }) {
   }, [id, list, selected]);
   const rec = selected ?? (extra?.id === id ? extra : undefined);
 
+  // ONE tap records (the owner): screen + camera + microphone at once (record-now.ts); the options are beside it
+  const busy = !!live.rec || !available;
   const recordButton = (
-    <Button variant="destructive" size="sm" onClick={() => openRecordDialog(true)} disabled={!!live.rec || !available}>
-      <span className="size-2 rounded-full bg-white" aria-hidden />
-      Record
-    </Button>
+    <div className="flex items-center gap-1">
+      <Button
+        variant="destructive"
+        size="sm"
+        disabled={busy}
+        onClick={() => void recordNow().catch((e) => toast.error("The recording didn't start", { description: (e as Error).message, duration: 12000 }))}
+        data-record-now
+      >
+        <span className="size-2 rounded-full bg-white" aria-hidden />
+        Record
+      </Button>
+      <Button variant="ghost" size="icon-sm" disabled={busy} onClick={() => openRecordDialog(true)} aria-label="Recording options" title="Recording options">
+        <Settings2 />
+      </Button>
+    </div>
   );
 
   return (
@@ -144,12 +159,13 @@ export function RecordingsPage({ id }: { id?: string }) {
         <PageBody>
           {/* ONE Record button (the owner): the header's; the empty state points to it instead of repeating it */}
           <EmptyState icon={CircleDot} title="No recordings yet">
-            Tap Record above to record your own screen, one window, a camera clip, or your microphone. Recordings stay on this machine, and your agents can read them.
+            Tap Record above: it records this device's screen, camera and microphone (on a phone: camera and microphone) until you tap Stop. The options beside it record one
+            window, a camera clip or the microphone only. Recordings stay on this machine, and your agents can read them.
           </EmptyState>
         </PageBody>
       ) : (
         <div className="flex min-h-0 flex-1">
-          <div className={cn("scroll-thin min-h-0 w-full shrink-0 overflow-y-auto border-r p-2 lg:block lg:w-[320px]", id ? "hidden" : "block")}>
+          <div className={cn("scroll-thin min-h-0 w-full shrink-0 overflow-y-auto border-r p-2 lg:block lg:w-[20rem]", id ? "hidden" : "block")}>
             <ul className="flex flex-col gap-px" aria-label="Recordings">
               {list.map((r) => (
                 <li key={r.id}>
@@ -194,7 +210,7 @@ function RecordingRow({ rec, active }: { rec: Recording; active: boolean }) {
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium">{rec.title}</span>
+          <span className="truncate text-[0.8125rem] font-medium">{rec.title}</span>
           <StateBadge rec={rec} />
         </span>
         <span className="tabular block truncate text-2xs text-muted-foreground">
@@ -247,10 +263,26 @@ function RecordingDetail({ rec }: { rec: Recording }) {
     }
   }
 
+  const [savingClinic, setSavingClinic] = useState(false);
+  async function setClinic(on: boolean) {
+    setSavingClinic(true);
+    try {
+      upsertRecording(await recApi.setSensitivity(rec.id, sensitivityOf(on)));
+    } catch (e) {
+      toast.error("Not changed", { description: (e as Error).message });
+    } finally {
+      setSavingClinic(false);
+    }
+  }
+
   const onSeek = useCallback((n: number, ms: number) => setSeek((s) => ({ n, ms, nonce: (s?.nonce ?? 0) + 1 })), []);
+  // where the player is (the transcript marks the line being heard)
+  const [at, setAt] = useState<{ n: number; ms: number } | null>(null);
+  const transcripts = useTranscripts(rec);
+  const lines = useMemo(() => momentLines(rec, transcripts.list), [rec, transcripts.list]);
 
   return (
-    <PageBody width="max-w-[880px]" className="space-y-5">
+    <PageBody width="max-w-[55rem]" className="space-y-5">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border bg-card">
           <Icon className="size-4 text-muted-foreground" />
@@ -270,12 +302,12 @@ function RecordingDetail({ rec }: { rec: Recording }) {
                   setRenaming(false);
                 }
               }}
-              className="h-8 text-[15px] font-semibold"
+              className="h-8 text-[0.9375rem] font-semibold"
               aria-label="Title"
             />
           ) : (
             <button type="button" className="group flex max-w-full items-center gap-1.5 text-left" onClick={() => (setTitle(rec.title), setRenaming(true))}>
-              <h2 className="truncate text-[15px] font-semibold tracking-tight">{rec.title}</h2>
+              <h2 className="truncate text-[0.9375rem] font-semibold tracking-tight">{rec.title}</h2>
               <Pencil className="size-3.5 shrink-0 text-subtle-foreground opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
           )}
@@ -302,6 +334,9 @@ function RecordingDetail({ rec }: { rec: Recording }) {
             )}
             <StateBadge rec={rec} />
           </p>
+          <div className="mt-2">
+            <ClinicCheckbox checked={isClinic(rec)} onChange={(on) => void setClinic(on)} disabled={savingClinic} />
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="outline" size="sm" onClick={() => setShare(true)} disabled={live || rec.bytes === 0}>
@@ -337,19 +372,21 @@ function RecordingDetail({ rec }: { rec: Recording }) {
         </p>
       )}
 
+      {/* the report (the owner): the summary on top, then the video with its sound, the key moments, the transcript */}
+      <SummaryPanel rec={rec} onSeek={onSeek} />
+
       {live ? (
-        <div className="flex aspect-video max-h-[300px] w-full flex-col items-center justify-center gap-2 rounded-lg border bg-muted/30 text-sm text-muted-foreground">
+        <div className="flex aspect-video max-h-[18.75rem] w-full flex-col items-center justify-center gap-2 rounded-lg border bg-muted/30 text-sm text-muted-foreground">
           <span className="size-3 animate-pulse rounded-full bg-state-error" aria-hidden />
           Still recording. It plays here once it is stopped.
         </div>
       ) : rec.segments.some((g) => g.bytes > 0) ? (
-        <Player rec={rec} seek={seek} />
+        <Player rec={rec} seek={seek} onTime={setAt} />
       ) : null}
 
-      {!live && <FrameStrip rec={rec} onSeek={onSeek} />}
-      <SummaryPanel rec={rec} onSeek={onSeek} />
+      {!live && <FrameStrip rec={rec} lines={lines} onSeek={onSeek} />}
 
-      <TranscriptPane rec={rec} onSeek={onSeek} />
+      <TranscriptPane rec={rec} v={transcripts} at={at} onSeek={onSeek} />
 
       <FilesSection rec={rec} />
 
@@ -370,7 +407,7 @@ type Source = { n: number; url: string; blob: boolean };
  * short-lived ticket (Range requests, so seeking works); through the desktop bridge, or when
  * that URL fails to load, the segment comes through the transport as a blob instead.
  */
-function Player({ rec, seek }: { rec: Recording; seek: SeekRequest | null }) {
+function Player({ rec, seek, onTime }: { rec: Recording; seek: SeekRequest | null; onTime?: (at: { n: number; ms: number }) => void }) {
   const transport = useStore((s) => s.transport);
   const segs = rec.segments.filter((g) => g.bytes > 0);
   const [n, setN] = useState(segs[0]?.n ?? 1);
@@ -504,6 +541,7 @@ function Player({ rec, seek }: { rec: Recording; seek: SeekRequest | null }) {
           onLoadedMetadata={onLoaded}
           onDurationChange={onDuration}
           onEnded={onEnded}
+          onTimeUpdate={(e) => onTime?.({ n, ms: e.currentTarget.currentTime * 1000 })}
           onError={() => void onError()}
           className="aspect-video w-full rounded-lg bg-black"
           data-recording-player
@@ -518,6 +556,7 @@ function Player({ rec, seek }: { rec: Recording; seek: SeekRequest | null }) {
           onLoadedMetadata={onLoaded}
           onDurationChange={onDuration}
           onEnded={onEnded}
+          onTimeUpdate={(e) => onTime?.({ n, ms: e.currentTarget.currentTime * 1000 })}
           onError={() => void onError()}
           className="w-full"
           data-recording-player
@@ -554,9 +593,9 @@ function Player({ rec, seek }: { rec: Recording; seek: SeekRequest | null }) {
 
 type TranscriptView = { loading: boolean; missing: boolean; error: string; list: RecordingTranscript[] };
 
-function TranscriptPane({ rec, onSeek }: { rec: Recording; onSeek: (n: number, ms: number) => void }) {
+/** The recording's transcripts (one per part), kept current as parts are transcribed. */
+function useTranscripts(rec: Recording): TranscriptView {
   const [v, setV] = useState<TranscriptView>({ loading: true, missing: false, error: "", list: [] });
-  const [busy, setBusy] = useState(false);
   const prefix = `recording:${rec.id}/`;
 
   useEffect(() => {
@@ -582,17 +621,20 @@ function TranscriptPane({ rec, onSeek }: { rec: Recording; onSeek: (n: number, m
       off();
     };
   }, [rec.id, prefix]);
+  return v;
+}
 
+/** Every transcript line at its time in the whole recording (for the key moments). */
+function momentLines(rec: Recording, list: RecordingTranscript[]): MomentLine[] {
+  const starts = segmentStarts(rec.segments);
+  return list.flatMap((tr) => (tr.segments ?? []).map((s) => ({ ms: (starts.get(transcriptSegment(tr.source)) ?? 0) + s.from_ms, text: s.text })));
+}
+
+function TranscriptPane({ rec, v, at, onSeek }: { rec: Recording; v: TranscriptView; at: { n: number; ms: number } | null; onSeek: (n: number, ms: number) => void }) {
+  const [busy, setBusy] = useState(false);
   // where each part starts in the whole recording
-  const starts = useMemo(() => {
-    const m = new Map<number, number>();
-    let t = 0;
-    for (const g of rec.segments) {
-      m.set(g.n, t);
-      t += g.duration_ms;
-    }
-    return m;
-  }, [rec.segments]);
+  const starts = useMemo(() => segmentStarts(rec.segments), [rec.segments]);
+  const box = useRef<HTMLDivElement>(null);
   const sorted = [...v.list].sort((a, b) => transcriptSegment(a.source) - transcriptSegment(b.source));
 
   async function transcribe() {
@@ -607,12 +649,21 @@ function TranscriptPane({ rec, onSeek }: { rec: Recording; onSeek: (n: number, m
     }
   }
 
+  // keep the line being heard in view, scrolling the transcript only (never the page)
+  useEffect(() => {
+    const b = box.current;
+    const li = b?.querySelector<HTMLElement>("[data-heard]");
+    if (!b || !li) return;
+    const top = li.offsetTop; // the box is positioned: its own coordinates
+    if (top < b.scrollTop || top + li.offsetHeight > b.scrollTop + b.clientHeight) b.scrollTop = Math.max(0, top - b.clientHeight / 3);
+  }, [at?.n, at && Math.floor(at.ms / 1000)]); // eslint-disable-line react-hooks/exhaustive-deps -- once a second is enough
+
   const canTranscribe = hasSound(rec) && !isLive(rec) && rec.segments.some((g) => (g.wav_bytes ?? 0) > 44);
   return (
     <section aria-label="Transcript" className="rounded-xl border bg-card">
       <div className="flex h-10 items-center gap-2 border-b px-3.5">
         <Languages className="size-4 text-muted-foreground" />
-        <h3 className="text-[13px] font-medium">Transcript</h3>
+        <h3 className="text-[0.8125rem] font-medium">Transcript</h3>
         {canTranscribe && !v.missing && (
           <Button variant="ghost" size="xs" className="ml-auto" onClick={() => void transcribe()} disabled={busy}>
             {busy && <Loader2 className="animate-spin" />}
@@ -620,7 +671,7 @@ function TranscriptPane({ rec, onSeek }: { rec: Recording; onSeek: (n: number, m
           </Button>
         )}
       </div>
-      <div className="px-3.5 py-3 text-[13px]">
+      <div ref={box} className="scroll-thin relative max-h-[32.5rem] overflow-y-auto px-3.5 py-3 text-[0.8125rem]" data-transcript>
         {v.loading ? (
           <Skeleton className="h-10" />
         ) : v.missing ? (
@@ -636,6 +687,7 @@ function TranscriptPane({ rec, onSeek }: { rec: Recording; onSeek: (n: number, m
             {sorted.map((tr) => {
               const n = transcriptSegment(tr.source);
               const base = starts.get(n) ?? 0;
+              const heard = at && at.n === n && tr.segments ? lineAt(tr.segments, at.ms) : -1;
               return (
                 <div key={tr.id} data-transcript-part={n}>
                   {sorted.length > 1 && (
@@ -658,7 +710,12 @@ function TranscriptPane({ rec, onSeek }: { rec: Recording; onSeek: (n: number, m
                           <button
                             type="button"
                             onClick={() => onSeek(n, s.from_ms)}
-                            className="group flex w-full items-baseline gap-2.5 rounded px-1 py-0.5 text-left outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-current={i === heard ? "true" : undefined}
+                            data-heard={i === heard ? "" : undefined}
+                            className={cn(
+                              "group flex w-full items-baseline gap-2.5 rounded px-1 py-0.5 text-left outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring",
+                              i === heard && "bg-accent font-medium",
+                            )}
                           >
                             <span className="tabular w-12 shrink-0 font-mono text-2xs text-subtle-foreground group-hover:text-foreground">{clock(base + s.from_ms)}</span>
                             <span className="min-w-0">{s.text.trim()}</span>
@@ -692,7 +749,7 @@ function FilesSection({ rec }: { rec: Recording }) {
         <span className="text-subtle-foreground">· your agents read them from here</span>
       </button>
       {open && (
-        <div className="mt-2 space-y-1.5 rounded-lg border bg-card p-3 font-mono text-[11.5px]">
+        <div className="mt-2 space-y-1.5 rounded-lg border bg-card p-3 font-mono text-[0.7188rem]">
           <div className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate" title={rec.dir}>
               {rec.dir}

@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package peers is the Python fleet interop (ARCHITECTURE.md "Python fleet interop"): this daemon
+// Package peers is the Python fleet interop (DESIGN.md "Python fleet interop"): this daemon
 // stays visible and sendable from the Python tmx daemons on the fleet's other machines, over
 // their pair-token API. It keeps the pair tokens, hands one over to a peer whose name sorts
 // after this machine's (the Python rule: the lower name generates it), reads each peer's agents

@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
-// VoiceConfig is config.json "voice": whisper.cpp transcription (ARCHITECTURE.md "Voice"),
+// VoiceConfig is config.json "voice": whisper.cpp transcription (DESIGN.md "Voice"),
 // with explicitly enabled fallback to configured local daemon hosts.
 // Every field is optional; internal/transcribe fills the defaults.
 type VoiceConfig struct {

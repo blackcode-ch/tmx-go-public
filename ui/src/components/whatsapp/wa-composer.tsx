@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The WhatsApp composer: text (Enter sends), a reply, files (paperclip, paste, drop) and
 // dictation, built from the same pieces as the chat composer. Files go with the message itself
 // (POST …/messages uploads), so "uploading" here only reads them; the daemon sends them on.
@@ -93,7 +90,7 @@ export function WaComposer({
 
   return (
     <div className="shrink-0 px-4 pt-2 pb-4 md:px-6">
-      <div className="mx-auto max-w-[820px]">
+      <div className="mx-auto max-w-[51.25rem]">
         <div
           className={cn(
             "relative rounded-xl border border-border-strong bg-card transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25",

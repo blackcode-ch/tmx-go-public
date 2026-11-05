@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -78,8 +75,8 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "this daemon answers only on 127.0.0.1")
 			return
 		}
-		if peerRoute(r) { // the fleet's other machines: their own auth, never a browser (peers.go)
-			s.servePeer(w, r)
+		if peerHeaderRoute(r) { // the fleet's other machines: their own auth, never a browser (peers.go)
+			s.servePeer(w, r, next)
 			return
 		}
 		origins := r.Header.Values("Origin")

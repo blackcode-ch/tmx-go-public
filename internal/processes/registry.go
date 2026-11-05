@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package processes owns explicitly launched tools and their supervision.
 package processes
 
@@ -15,6 +12,7 @@ import (
 
 	"github.com/blackcode-ch/tmx-go/internal/hiddenexec"
 	"github.com/blackcode-ch/tmx-go/internal/model"
+	"github.com/blackcode-ch/tmx-go/internal/runner/host"
 	"github.com/blackcode-ch/tmx-go/internal/sysinfo"
 )
 
@@ -27,11 +25,15 @@ type Spec struct {
 type entry struct {
 	info     model.ProcessInfo
 	spec     Spec
-	cmd      *exec.Cmd
+	cmd      *exec.Cmd  // a tool of the daemon's own (system tools, or no hosts)
+	conn     *host.Conn // a tool in a session host (hosted.go)
+	dir      string     // its host folder, for a hosted tool
 	exited   chan struct{}
 	done     chan struct{}
 	cancel   chan struct{}
 	stopping bool
+	detached bool // Detach: it runs on in its host; its end here is not an exit
+	unknown  bool // adopted, but its host could not be checked (hosted.go)
 	identity int64
 }
 
@@ -39,6 +41,9 @@ type Registry struct {
 	mu      sync.Mutex
 	entries map[string]*entry
 	closed  bool
+	// hostExe and dir: agents' tools run in session hosts that outlive the daemon
+	// (EnableHosts); "" = the daemon's own children.
+	hostExe, dir string
 }
 
 func New() *Registry { return &Registry{entries: make(map[string]*entry)} }
@@ -71,6 +76,9 @@ func (r *Registry) Start(s Spec) (model.ProcessInfo, error) {
 
 // spawn and fields of entry are guarded by mu; Wait alone owns cmd.Wait.
 func (r *Registry) spawn(e *entry) error {
+	if r.hosted(e) {
+		return r.spawnHosted(e) // hosted.go
+	}
 	cmd := hiddenexec.Command(e.spec.Command, e.spec.Args...)
 	cmd.Dir = e.spec.Cwd
 	// Do not delegate the daemon's bearer credentials or harness identity to tools.
@@ -98,7 +106,7 @@ func (r *Registry) spawn(e *entry) error {
 func (r *Registry) supervise(e *entry) {
 	defer func() {
 		r.mu.Lock()
-		if e.stopping {
+		if e.stopping && !e.detached {
 			e.info.PID = 0
 			e.info.State = "stopped"
 		}
@@ -108,19 +116,31 @@ func (r *Registry) supervise(e *entry) {
 	for {
 		r.mu.Lock()
 		exited := e.exited
-		running := e.cmd != nil
+		running := e.cmd != nil || e.conn != nil
 		r.mu.Unlock()
 		if running {
 			select {
 			case <-exited:
 			case <-e.cancel:
-				r.terminate(e)
+				r.mu.Lock()
+				detached := e.detached
+				r.mu.Unlock()
+				if !detached {
+					r.terminate(e)
+				}
 				return
 			}
 		}
 		r.mu.Lock()
+		if e.detached { // the daemon left it running in its host
+			r.mu.Unlock()
+			return
+		}
 		e.info.PID = 0
 		e.info.State = "exited"
+		if e.conn != nil {
+			r.forgetHosted(e) // hosted.go: its host has ended with it
+		}
 		if e.stopping || !e.spec.System {
 			r.mu.Unlock()
 			return
@@ -147,10 +167,13 @@ func (r *Registry) supervise(e *entry) {
 
 func (r *Registry) terminate(e *entry) {
 	r.mu.Lock()
-	cmd, exited, identity := e.cmd, e.exited, e.identity
+	cmd, conn, exited, identity := e.cmd, e.conn, e.exited, e.identity
 	e.info.State = "stopping"
 	r.mu.Unlock()
-	if cmd != nil {
+	switch {
+	case conn != nil:
+		r.terminateHosted(e, conn, exited) // hosted.go
+	case cmd != nil:
 		// Pin before graceful exit can reparent descendants; PID reuse cannot
 		// redirect this cleanup to a replacement process.
 		if cleanup, err := sysinfo.PinStopTree(cmd.Process.Pid, identity); err == nil {
@@ -196,6 +219,9 @@ func (r *Registry) Promote(id, owner, project string) error {
 	e.info.OwnerID = owner
 	e.info.ProjectID = project
 	e.info.Promoted = true
+	if e.conn != nil {
+		r.saveMeta(e) // hosted.go: the next daemon adopts it with its new owner
+	}
 	return nil
 }
 
@@ -228,6 +254,8 @@ func (r *Registry) StopProject(project string) {
 		return p.ProjectID == project && p.Category != model.CategorySystemTool
 	})
 }
+
+// Close stops every tool. A daemon that is restarting uses Detach instead.
 func (r *Registry) Close() {
 	r.mu.Lock()
 	r.closed = true

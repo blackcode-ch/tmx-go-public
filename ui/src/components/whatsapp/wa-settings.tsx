@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → WhatsApp: linking the owner's own WhatsApp as a companion device (a QR code from the
 // daemon, or a pairing code for a phone number), the state, the warning, the settings, Unlink.
 // WaLinkPanel is the linking flow alone; the WhatsApp page shows it too while nothing is linked.
@@ -91,10 +88,10 @@ function QRStep({ onPhone }: { onPhone: () => void }) {
           <img
             src={qr.png}
             alt="QR code to link WhatsApp"
-            className={cn("size-[216px] rounded-xl bg-white p-2 shadow-sm ring-1 ring-black/10 [image-rendering:pixelated]", stale && "opacity-30")}
+            className={cn("size-[13.5rem] rounded-xl bg-white p-2 shadow-sm ring-1 ring-black/10 [image-rendering:pixelated]", stale && "opacity-30")}
           />
         ) : (
-          <div className="flex size-[216px] flex-col items-center justify-center gap-2 rounded-xl border bg-muted/40 text-xs text-muted-foreground">
+          <div className="flex size-[13.5rem] flex-col items-center justify-center gap-2 rounded-xl border bg-muted/40 text-xs text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
             Getting a code from WhatsApp…
           </div>
@@ -355,7 +352,7 @@ function ChatList({ value, onChange, empty, addLabel }: { value: string[]; onCha
       <Button variant="ghost" size="xs" className="text-muted-foreground" onClick={() => setOpen(true)} disabled={options.length === 0}>
         <Plus /> {addLabel}
       </Button>
-      <CommandDialog open={open} onOpenChange={setOpen} title={addLabel} description="Pick a WhatsApp chat" className="sm:max-w-[440px]" showCloseButton={false}>
+      <CommandDialog open={open} onOpenChange={setOpen} title={addLabel} description="Pick a WhatsApp chat" className="sm:max-w-[27.5rem]" showCloseButton={false}>
         <CommandInput placeholder="Search chats…" />
         <CommandList className="scroll-thin">
           <CommandEmpty>No chat matches.</CommandEmpty>
@@ -411,7 +408,7 @@ function StatusLine({ s }: { s: WaStatus }) {
       <div className="min-w-0 flex-1">
         <p>
           Linked{s.name ? ` as ${s.name}` : ""}
-          {s.phone && <span className="font-mono text-[12.5px] text-muted-foreground"> · {s.phone}</span>}
+          {s.phone && <span className="font-mono text-[0.7812rem] text-muted-foreground"> · {s.phone}</span>}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {since ? `Since ${since}. ` : ""}This machine is one of your linked devices; you can also remove it on your phone.

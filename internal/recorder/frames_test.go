@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package recorder
 
 import (
@@ -171,5 +168,33 @@ func TestFrameName(t *testing.T) {
 	}
 	if n := FrameName(maxFrameMS); n != "f-999999999.jpg" || !frameRx.MatchString(n) {
 		t.Fatal(n)
+	}
+}
+
+// A key moment (the window saw the picture change) is marked next to its JPEG and listed as one.
+func TestKeyFrames(t *testing.T) {
+	r := newRig(t)
+	rec := begin(t, r.s, model.RecordingScreen, true)
+	frame := testJPEG(t, 640, 360)
+	if _, err := r.s.PutFrame(rec.ID, 0, frame); err != nil {
+		t.Fatal(err)
+	}
+	r.clk.add(20 * time.Second)
+	f, err := r.s.PutKeyFrame(rec.ID, 12_345, frame, true)
+	if err != nil || !f.Key {
+		t.Fatalf("key frame: %+v %v", f, err)
+	}
+	if _, err := os.Stat(filepath.Join(rec.Dir, "frames", "f-000012345.key")); err != nil {
+		t.Fatalf("marker: %v", err)
+	}
+	if _, err := r.s.PutFrame(rec.ID, 12_345, frame); err != nil { // a retry without the flag keeps it a key moment
+		t.Fatal(err)
+	}
+	got, err := r.s.Get(rec.ID)
+	if err != nil || len(got.Frames) != 2 || got.Frames[0].Key || !got.Frames[1].Key || got.Frames[1].MS != 12_345 {
+		t.Fatalf("frames: %+v %v", got.Frames, err)
+	}
+	if _, err := r.s.FrameFile(rec.ID, 12_345); err != nil {
+		t.Fatalf("the JPEG is served as before: %v", err)
 	}
 }

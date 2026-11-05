@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package recorder
 
 import (
@@ -21,7 +18,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Still frames for the summaries (ARCHITECTURE.md "Recorder"): a JPEG of the screen or camera at the
+// Still frames for the summaries (DESIGN.md "Recorder"): a JPEG of the screen or camera at the
 // start, every 30 s of recorded time and at stop, kept as recordings/<id>/frames/f-<ms>.jpg
 // with the recorded time (pauses excluded) in 9 digits: f-000030000.jpg is at 0:30. The files
 // are the list (no table), so a recorder that writes its own frames into the folder (the
@@ -37,7 +34,12 @@ const (
 	frameLead = 2 * time.Minute
 )
 
-var frameRx = regexp.MustCompile(`^f-(\d{9})\.jpg$`)
+var (
+	frameRx = regexp.MustCompile(`^f-(\d{9})\.jpg$`)
+	keyRx   = regexp.MustCompile(`^f-(\d{9})\.key$`) // a key moment's marker (PutKeyFrame)
+)
+
+func keyName(ms int64) string { return fmt.Sprintf("f-%09d.key", ms) }
 
 // FrameName is the file name of the frame at ms of recorded time: f-000030000.jpg.
 func FrameName(ms int64) string { return fmt.Sprintf("f-%09d.jpg", ms) }
@@ -45,6 +47,13 @@ func FrameName(ms int64) string { return fmt.Sprintf("f-%09d.jpg", ms) }
 // PutFrame stores one JPEG of the live screen or camera recording id at ms of recorded time; a
 // frame at the same time again (a retry) replaces it. It counts as a sign of life.
 func (s *Service) PutFrame(id string, ms int64, data []byte) (model.RecordingFrame, error) {
+	return s.PutKeyFrame(id, ms, data, false)
+}
+
+// PutKeyFrame is PutFrame for a key moment when key is set: the window saw the picture change
+// (another page, another window). An empty f-<ms>.key next to the JPEG marks it, so the files
+// stay the list; the report shows the key moments.
+func (s *Service) PutKeyFrame(id string, ms int64, data []byte, key bool) (model.RecordingFrame, error) {
 	if ms < 0 || ms > maxFrameMS {
 		return model.RecordingFrame{}, invalid("a frame's time is 0 to %d ms", int64(maxFrameMS))
 	}
@@ -85,7 +94,12 @@ func (s *Service) PutFrame(id string, ms int64, data []byte) (model.RecordingFra
 	if err := writeFileAtomic(path, data); err != nil {
 		return model.RecordingFrame{}, err
 	}
-	return model.RecordingFrame{MS: ms, Path: path, Bytes: int64(len(data))}, nil
+	if key {
+		if err := os.WriteFile(filepath.Join(dir, keyName(ms)), nil, 0o600); err != nil {
+			return model.RecordingFrame{}, err
+		}
+	}
+	return model.RecordingFrame{MS: ms, Path: path, Bytes: int64(len(data)), Key: key}, nil
 }
 
 // FrameFile returns the path of recording id's frame at ms.
@@ -120,6 +134,12 @@ func (s *Service) frames(id string) []model.RecordingFrame {
 	if err != nil {
 		return nil
 	}
+	keys := map[string]bool{}
+	for _, e := range ents {
+		if m := keyRx.FindStringSubmatch(e.Name()); m != nil {
+			keys[m[1]] = true
+		}
+	}
 	var out []model.RecordingFrame
 	for _, e := range ents {
 		m := frameRx.FindStringSubmatch(e.Name())
@@ -131,7 +151,7 @@ func (s *Service) frames(id string) []model.RecordingFrame {
 		if info, err := e.Info(); err == nil {
 			size = info.Size()
 		}
-		out = append(out, model.RecordingFrame{MS: ms, Path: filepath.Join(dir, e.Name()), Bytes: size})
+		out = append(out, model.RecordingFrame{MS: ms, Path: filepath.Join(dir, e.Name()), Bytes: size, Key: keys[m[1]]})
 	}
 	slices.SortFunc(out, func(a, b model.RecordingFrame) int { return cmp.Compare(a.MS, b.MS) })
 	return out

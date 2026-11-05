@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -15,7 +12,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 )
 
-// chatRoutes: invites, contacts and chats with other tmx installs (ARCHITECTURE.md "Chats").
+// chatRoutes: invites, contacts and chats with other tmx installs (DESIGN.md "Chats").
 // Everything is owner-only except listing/reading/writing the chats an agent takes part in.
 // While peer-to-peer is off every route answers 503.
 func (s *Server) chatRoutes(mux *http.ServeMux) {

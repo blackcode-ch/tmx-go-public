@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import type { Agent } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +10,7 @@ export function AgentAvatar({ agent, label, className }: { agent: Pick<Agent, "n
     <span
       aria-hidden
       className={cn(
-        "flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold",
+        "flex size-6 shrink-0 items-center justify-center rounded-md text-[0.6875rem] font-semibold",
         agent.level === "head" && "bg-foreground text-background",
         agent.level === "lead" && "border border-border-strong bg-background text-foreground",
         agent.level === "worker" && "bg-muted text-muted-foreground",

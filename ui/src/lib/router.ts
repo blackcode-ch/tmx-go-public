@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // A tiny hash router: #/agents/abc. Hash routing works the same when the daemon serves the UI
 // at / and inside the Wails window, and needs no server-side fallback for deep links.
 import { useSyncExternalStore } from "react";
@@ -8,7 +5,6 @@ import { useSyncExternalStore } from "react";
 export type Route =
   | { name: "overview" }
   | { name: "inbox" }
-  | { name: "board" }
   | { name: "matrix" }
   | { name: "settings" }
   | { name: "profile"; slug: string }
@@ -20,6 +16,7 @@ export type Route =
   | { name: "whatsapp"; jid?: string }
   | { name: "companion" }
   | { name: "usage" }
+  | { name: "features" }
   | { name: "notfound"; path: string };
 
 function currentPath(): string {
@@ -33,7 +30,8 @@ export function parse(path: string): Route {
   const parts = p.split("/").filter(Boolean).map(decodeURIComponent);
   if (parts.length === 0) return { name: "overview" };
   if (parts[0] === "inbox" && parts.length === 1) return { name: "inbox" };
-  if (parts[0] === "board" && parts.length === 1) return { name: "board" };
+  // The Board folded into the Matrix on 3 Nov; its old address opens the Matrix.
+  if (parts[0] === "board" && parts.length === 1) return { name: "matrix" };
   if (parts[0] === "matrix" && parts.length === 1) return { name: "matrix" };
   if (parts[0] === "settings" && parts.length === 1) return { name: "settings" };
   if (parts[0] === "settings" && parts[1] === "profiles" && parts[2] && parts.length === 3) return { name: "profile", slug: parts[2] };
@@ -45,6 +43,7 @@ export function parse(path: string): Route {
   if (parts[0] === "whatsapp" && parts.length <= 2) return { name: "whatsapp", jid: parts[1] };
   if (parts[0] === "companion" && parts.length === 1) return { name: "companion" };
   if (parts[0] === "usage" && parts.length === 1) return { name: "usage" };
+  if (parts[0] === "features" && parts.length === 1) return { name: "features" };
   return { name: "notfound", path: p };
 }
 
@@ -78,8 +77,7 @@ export function navigate(path: string, opts: { replace?: boolean } = {}) {
 export const paths = {
   overview: () => "/",
   inbox: () => "/inbox",
-  board: () => "/board",
-  /** the Matrix: every thread with everything on it (ARCHITECTURE.md "Matrix") */
+  /** the Matrix: every thread with everything on it (DESIGN.md "Matrix") */
   matrix: () => "/matrix",
   settings: () => "/settings",
   /** "new" opens the editor for a new profile */
@@ -88,17 +86,19 @@ export const paths = {
   project: (id: string) => `/projects/${encodeURIComponent(id)}`,
   chats: () => "/chats",
   chat: (id: string) => `/chats/${encodeURIComponent(id)}`,
-  /** a chat's board (ARCHITECTURE.md "Chat boards") */
+  /** a chat's board (DESIGN.md "Chat boards") */
   chatBoard: (id: string) => `/chats/${encodeURIComponent(id)}/board`,
   recordings: () => "/recordings",
   recording: (id: string) => `/recordings/${encodeURIComponent(id)}`,
-  /** WhatsApp chats (ARCHITECTURE.md "WhatsApp"); a chat by its JID */
+  /** WhatsApp chats (DESIGN.md "WhatsApp"); a chat by its JID */
   whatsapp: () => "/whatsapp",
   waChat: (jid: string) => `/whatsapp/${encodeURIComponent(jid)}`,
-  /** the 1:1 conversation with Companion (ARCHITECTURE.md "Companion") */
+  /** the 1:1 conversation with Companion (DESIGN.md "Companion") */
   companion: () => "/companion",
   /** AI accounts and how much of their quota is used */
   usage: () => "/usage",
+  /** every ordered feature with its status and evidence */
+  features: () => "/features",
 };
 
 export function href(path: string): string {

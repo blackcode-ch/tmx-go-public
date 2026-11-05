@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // "New agent" in a project: name, harness (installed or not, chat or terminal only), mode,
 // profile, model, role and brief. The brief is also the agent's first message.
 import { useEffect, useMemo, useState } from "react";
@@ -15,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { modelName } from "@/lib/format";
 import { FALLBACK_HARNESSES } from "@/lib/harness";
+import { useHarnessAccounts } from "@/lib/accounts";
 import { sortProfiles } from "@/lib/profiles";
 import { navigate, paths } from "@/lib/router";
 import { useStore } from "@/lib/store";
@@ -32,7 +30,7 @@ function Tag({ children, tone = "muted" }: { children: React.ReactNode; tone?: "
   return (
     <span
       className={cn(
-        "inline-flex h-[18px] items-center rounded-[5px] px-1.5 text-2xs font-medium whitespace-nowrap",
+        "inline-flex h-[1.125rem] items-center rounded-[5px] px-1.5 text-2xs font-medium whitespace-nowrap",
         tone === "ok" && "bg-state-ok/12 text-[color-mix(in_oklch,var(--state-ok)_70%,var(--foreground))]",
         tone === "warn" && "bg-muted text-subtle-foreground",
         tone === "muted" && "bg-muted text-muted-foreground",
@@ -57,7 +55,7 @@ function HarnessOption({ h, selected, onSelect }: { h: HarnessInfo; selected: bo
         selected ? "border-brand/50 bg-brand-soft" : "border-border hover:bg-muted/50",
       )}
     >
-      <span className="text-[13px] font-medium">{h.label}</span>
+      <span className="text-[0.8125rem] font-medium">{h.label}</span>
       <span className="flex flex-wrap gap-1">
         <Tag>{h.structured ? "Chat + terminal" : "Terminal only"}</Tag>
         {h.installed ? <Tag tone="ok">Installed</Tag> : <Tag tone="warn">Not installed</Tag>}
@@ -78,6 +76,8 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
   const [role, setRole] = useState("");
   const [brief, setBrief] = useState("");
   const [agyFullAccess, setAgyFullAccess] = useState(false);
+  const [account, setAccount] = useState(""); // "" = the harness's default for new agents
+  const harnessAccounts = useHarnessAccounts(harness);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -119,6 +119,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
 
   function pickHarness(h: HarnessInfo) {
     setHarness(h.name);
+    setAccount("");
     setMode(h.modes.includes(mode) ? mode : h.modes[0]);
     setModel("");
   }
@@ -139,6 +140,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
         role: role.trim() || undefined,
         brief: brief.trim() || undefined,
         agy_full_access: (harness === "agy" || harness === "antigravity") && agyFullAccess || undefined,
+        account: account || undefined,
       });
       onOpenChange(false);
       toast.success(`Started ${a.name}`, { description: `${info.label} in ${mode} mode` });
@@ -151,7 +153,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[600px]">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-[37.5rem]">
         <form onSubmit={create} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>New agent in {project.name}</DialogTitle>
@@ -169,7 +171,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
               autoComplete="off"
               spellCheck={false}
               aria-invalid={!!name && !nameOK}
-              className="font-mono text-[13px]"
+              className="font-mono text-[0.8125rem]"
             />
             {!!name && !nameOK && <p className="text-2xs text-state-error">Lowercase letters, digits and dashes, up to 40.</p>}
           </div>
@@ -198,7 +200,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
                     disabled={!ok}
                     onClick={() => setMode(m)}
                     className={cn(
-                      "flex h-7 items-center gap-1.5 rounded-md px-3 text-[12.5px] text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-muted-foreground",
+                      "flex h-7 items-center gap-1.5 rounded-md px-3 text-[0.7812rem] text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:text-muted-foreground",
                       mode === m && "bg-background font-medium text-foreground shadow-sm dark:bg-accent",
                     )}
                   >
@@ -267,7 +269,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                   placeholder={`${info?.label ?? "The harness"}'s default`}
-                  className="font-mono text-[12.5px]"
+                  className="font-mono text-[0.7812rem]"
                   spellCheck={false}
                 />
               )}
@@ -278,6 +280,28 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
               )}
             </div>
           </div>
+
+          {harnessAccounts.length > 1 && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="na-account">Account</Label>
+              <Select value={account || (harnessAccounts.find((a) => a.launch_default)?.name ?? "default")} onValueChange={setAccount}>
+                <SelectTrigger id="na-account" className="w-full" aria-label="Account">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {harnessAccounts.map((a) => (
+                    <SelectItem key={a.name} value={a.name}>
+                      <span>{a.name}</span>
+                      <span className="text-2xs text-muted-foreground">
+                        {[a.connected ? a.account?.email || "signed in" : "not signed in", a.launch_default ? "default" : ""].filter(Boolean).join(" · ")}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-2xs text-muted-foreground">Which of your {info?.label ?? "harness"} accounts this agent runs as.</p>
+            </div>
+          )}
 
           <div className="grid gap-1.5">
             {(harness === "agy" || harness === "antigravity") && <label className="flex items-start gap-2 text-sm">

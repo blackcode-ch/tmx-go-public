@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -20,6 +17,7 @@ type DecideRequest struct {
 	Message  string `json:"message,omitempty"`
 	Answer   string `json:"answer,omitempty"`
 	FreeText bool   `json:"free_text,omitempty"` // owner-written words may be delivered as correspondence after closure
+	Scope    string `json:"scope,omitempty"`     // allow_always on a guard hold: agent (its profile) | any
 }
 
 // AskRequest is POST /api/approvals (an extension for the MCP tool ask_owner).
@@ -71,7 +69,7 @@ func (f *Fleet) addPermissionLocked(r *agentRec, proc runner.Process, req runner
 
 // AskOwner records a question from an agent; the answer arrives later as owner mail.
 func (f *Fleet) AskOwner(c Caller, req AskRequest) (model.Approval, error) {
-	if c.Owner {
+	if c.Owner || c.Peer != "" {
 		return model.Approval{}, errf(KindForbidden, "only agents ask the owner questions")
 	}
 	card, err := prepareOwnerCard(&req)
@@ -86,9 +84,18 @@ func (f *Fleet) AskOwner(c Caller, req AskRequest) (model.Approval, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.saveOwnerQuestionLocked(c, req, card, nil)
+}
+
+// saveOwnerQuestionLocked shares versioning and persistence across ordinary and project cards.
+// The caller holds f.mu and has validated the typed card and project membership.
+func (f *Fleet) saveOwnerQuestionLocked(c Caller, req AskRequest, card *model.OwnerCard, later *bool) (model.Approval, error) {
 	r, err := f.callerRecLocked(c)
 	if err != nil {
 		return model.Approval{}, err
+	}
+	if r == nil {
+		return model.Approval{}, errf(KindForbidden, "only agents ask the owner questions")
 	}
 	opts := req.Options
 	if opts == nil {
@@ -110,14 +117,23 @@ func (f *Fleet) AskOwner(c Caller, req AskRequest) (model.Approval, error) {
 		if old.AgentID != r.a.ID || old.Card == nil {
 			return model.Approval{}, errf(KindForbidden, "only the asker can edit an owner card")
 		}
+		if old.Card.ProjectID != card.ProjectID {
+			return model.Approval{}, errf(KindForbidden, "use the matching project card operation")
+		}
 		if old.State != model.ApprovalPending {
 			return model.Approval{}, errf(KindConflict, "this card was already resolved")
 		}
 		ap.ID, ap.CreatedAt, ap.ThreadID, ap.Version = old.ID, old.CreatedAt, old.ThreadID, old.Version
 		ap.Deferred = old.Deferred
-		if old.Question != ap.Question || !reflect.DeepEqual(old.Options, ap.Options) || !reflect.DeepEqual(old.Card, ap.Card) {
+		if later != nil {
+			ap.Deferred = *later
+		}
+		if old.Deferred != ap.Deferred || old.Question != ap.Question || !reflect.DeepEqual(old.Options, ap.Options) || !reflect.DeepEqual(old.Card, ap.Card) {
 			ap.Version++
 		}
+	}
+	if req.ID == "" && later != nil {
+		ap.Deferred = *later
 	}
 	if err := f.st.PutApproval(ap); err != nil {
 		return model.Approval{}, err

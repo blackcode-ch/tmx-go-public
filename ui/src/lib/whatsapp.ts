@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// WhatsApp in the UI (ARCHITECTURE.md "WhatsApp"): the link state, the chats and their messages, kept
+// WhatsApp in the UI (DESIGN.md "WhatsApp"): the link state, the chats and their messages, kept
 // current by the whatsapp.* BusEvents. Like lib/chats.ts it is its own store on the same event
 // stream and reloads on every (re)connect. Messages are other people's words: the UI shows
 // them as text, never as markup.

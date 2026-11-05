@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package recorder keeps the owner's recordings of their own screen (whole or one window),
-// camera, microphone and device audio (ARCHITECTURE.md "Recorder"). The owner's window captures
+// camera, microphone and device audio (DESIGN.md "Recorder"). The owner's window captures
 // (getDisplayMedia, getUserMedia) and streams chunks of about a second to owner-only routes;
 // this package appends them to segment files, keeps the still frames for summaries, tracks the
 // session's state, marks a session interrupted when its chunks stop (the window closed), and
@@ -297,9 +294,14 @@ type BeginRequest struct {
 	Title       string `json:"title,omitempty"`
 	// Source: web (the default; chunks) or native (the macOS app writes the files; native.go).
 	Source model.RecordingSource `json:"source,omitempty"`
+	// Sensitivity: model.SensitivityClinic for patient data (local models only), "" otherwise.
+	Sensitivity string `json:"sensitivity,omitempty"`
 }
 
 var idRx = regexp.MustCompile(`^[a-z0-9]{1,32}$`)
+
+// ValidID reports whether id has a recording id's form.
+func ValidID(id string) bool { return idRx.MatchString(id) }
 
 var mimeRx = regexp.MustCompile(`^(video|audio)/[a-z0-9.+-]+(;[a-z0-9 =,.+"-]*)?$`)
 
@@ -307,6 +309,9 @@ var mimeRx = regexp.MustCompile(`^(video|audio)/[a-z0-9.+-]+(;[a-z0-9 =,.+"-]*)?
 func (s *Service) Begin(req BeginRequest) (model.Recording, error) {
 	if req.Source == model.RecordingSourceNative && strings.TrimSpace(req.Mime) == "" {
 		req.Mime = NativeMime
+	}
+	if err := validSensitivity(req.Sensitivity); err != nil {
+		return model.Recording{}, err
 	}
 	mime := strings.ToLower(strings.TrimSpace(req.Mime))
 	if len(mime) > 120 || !mimeRx.MatchString(mime) {
@@ -373,7 +378,7 @@ func (s *Service) Begin(req BeginRequest) (model.Recording, error) {
 	}
 	ms := now.UnixMilli()
 	r := model.Recording{ID: model.NewID(), Title: title, Kind: req.Kind, State: model.RecordingActive, Mime: mime,
-		Mic: req.Mic, SystemAudio: req.SystemAudio, Segments: []model.RecordingSegment{}, ResumedAt: ms, StartedAt: ms, UpdatedAt: ms}
+		Mic: req.Mic, SystemAudio: req.SystemAudio, Sensitivity: req.Sensitivity, Segments: []model.RecordingSegment{}, ResumedAt: ms, StartedAt: ms, UpdatedAt: ms}
 	if err := os.MkdirAll(s.recDir(r.ID), 0o700); err != nil {
 		return model.Recording{}, err
 	}
@@ -417,6 +422,7 @@ func (s *Service) Append(id string, n int, track Track, offset, durMS int64, dat
 	now := s.o.Now()
 	sess.last = now
 	size, created, err := s.appendLocked(sess, n, track, offset, durMS, data)
+	closed := s.closedLocked(sess, n, created)
 	if created {
 		s.flushLocked(sess)
 		s.publish(model.EvRecordingUpdated, s.view(s.liveRecLocked(sess)))
@@ -431,10 +437,47 @@ func (s *Service) Append(id string, n int, track Track, offset, durMS int64, dat
 		}
 	}
 	s.mu.Unlock()
+	if closed != nil {
+		s.transcribeClosed(*closed)
+	}
 	if fin != nil {
 		s.afterFinish(*fin)
 	}
 	return size, err
+}
+
+// closedPart is a segment the window has moved on from: its WAV is complete (the window sends a
+// segment's last PCM before the next segment's first chunk), so it can be transcribed already.
+type closedPart struct {
+	id  string
+	n   int
+	wav string // absolute path
+	tr  Transcriber
+}
+
+// closedLocked returns segment n-1 when chunk n created segment n of a web recording with sound
+// and automatic transcription, so the report is ready minutes after Stop and not a whole
+// recording's transcription later (the owner: "chunks of 5 min"). nil otherwise.
+func (s *Service) closedLocked(sess *session, n int, created bool) *closedPart {
+	if !created || n < 2 || sess.nat != nil || s.tr == nil || !hasSound(sess.rec) {
+		return nil
+	}
+	seg, g := sess.rec.Segments[n-2], sess.segs[n-2]
+	if seg.WAV == "" || g.pcm == 0 {
+		return nil
+	}
+	return &closedPart{id: sess.rec.ID, n: seg.N, wav: filepath.Join(s.recDir(sess.rec.ID), seg.WAV), tr: s.tr}
+}
+
+// transcribeClosed queues a closed segment's WAV (outside the lock). The summary's watcher
+// finds it queued or done and queues only the segments still missing after Stop.
+func (s *Service) transcribeClosed(p closedPart) {
+	if !p.tr.AutoTranscribe() {
+		return
+	}
+	if err := p.tr.Enqueue(Source(p.id, p.n), p.wav, ""); err != nil {
+		s.o.Logger.Info("recorder: closed segment not transcribed yet", "id", p.id, "segment", p.n, "err", err)
+	}
 }
 
 func (s *Service) appendLocked(sess *session, n int, track Track, offset, durMS int64, data []byte) (int64, bool, error) {
@@ -853,9 +896,31 @@ func (s *Service) Rename(id, title string) (model.Recording, error) {
 	if t == "" {
 		return model.Recording{}, invalid("the title is empty")
 	}
+	return s.update(id, func(r *model.Recording) { r.Title = t })
+}
+
+// SetSensitivity tags a recording: model.SensitivityClinic (patient data: its report is written by local models
+// only) or "" (any model).
+func (s *Service) SetSensitivity(id, v string) (model.Recording, error) {
+	if err := validSensitivity(v); err != nil {
+		return model.Recording{}, err
+	}
+	return s.update(id, func(r *model.Recording) { r.Sensitivity = v })
+}
+
+func validSensitivity(v string) error {
+	if v != "" && v != model.SensitivityClinic {
+		return invalid("sensitivity is %q or empty, not %q", model.SensitivityClinic, v)
+	}
+	return nil
+}
+
+// update changes a recording, live or stored, and announces it.
+func (s *Service) update(id string, fn func(*model.Recording)) (model.Recording, error) {
 	s.mu.Lock()
 	if s.live != nil && s.live.rec.ID == id {
-		s.live.rec.Title, s.live.rec.UpdatedAt = t, s.o.Now().UnixMilli()
+		fn(&s.live.rec)
+		s.live.rec.UpdatedAt = s.o.Now().UnixMilli()
 		s.flushLocked(s.live)
 		v := s.view(s.liveRecLocked(s.live))
 		s.mu.Unlock()
@@ -870,7 +935,8 @@ func (s *Service) Rename(id, title string) (model.Recording, error) {
 	if err != nil {
 		return r, err
 	}
-	r.Title, r.UpdatedAt = t, s.o.Now().UnixMilli()
+	fn(&r)
+	r.UpdatedAt = s.o.Now().UnixMilli()
 	if err := s.o.Store.UpdateRecording(r); err != nil {
 		return r, err
 	}

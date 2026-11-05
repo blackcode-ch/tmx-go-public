@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package harness
 
 import (
@@ -60,7 +57,13 @@ func PrepareCodexGuard(spec runner.Spec) (runner.Spec, *codexguard.Lease, error)
 	if err != nil {
 		return spec, nil, err
 	}
+	// The agent's account's CODEX_HOME (spec.Env, the last one wins), else the daemon's.
 	sourceHome := os.Getenv("CODEX_HOME")
+	for _, kv := range spec.Env {
+		if v, ok := strings.CutPrefix(kv, "CODEX_HOME="); ok && v != "" {
+			sourceHome = v
+		}
+	}
 	if sourceHome == "" {
 		home, homeErr := os.UserHomeDir()
 		if homeErr != nil {

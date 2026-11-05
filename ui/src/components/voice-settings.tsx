@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Voice: local transcription with whisper.cpp. Set up downloads the engine and a model
 // (verified, on this machine only); then the model and the language. Dictation in the message
 // boxes and transcripts of recordings use it (Settings → Recordings: whether recordings are
@@ -189,7 +186,7 @@ export function VoiceSection() {
                   <Bar p={s.engine.downloading} />
                 ) : s.engine.installed ? (
                   <span>
-                    whisper.cpp <span className="font-mono text-[12.5px]">{s.engine.version}</span>
+                    whisper.cpp <span className="font-mono text-[0.7812rem]">{s.engine.version}</span>
                     {s.engine.size ? <span className="text-muted-foreground"> · {formatSize(s.engine.size)}</span> : null}
                   </span>
                 ) : (

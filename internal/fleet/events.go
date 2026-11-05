@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -106,7 +103,7 @@ func (f *Fleet) handleEvent(r *agentRec, proc runner.Process, ev runner.Event) (
 		f.fanOutLocked(r, ev.Output)
 	case runner.EvRateLimit:
 		if ev.RateLimit != nil && f.rateLimited != nil {
-			go f.rateLimited(r.a.Harness, *ev.RateLimit) // never under f.mu
+			go f.rateLimited(r.a.Harness, r.a.Account, *ev.RateLimit) // never under f.mu
 		}
 	}
 	return false
@@ -116,6 +113,11 @@ func (f *Fleet) handleExit(r *agentRec, proc runner.Process, code int, err error
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r.proc != proc {
+		return
+	}
+	if r.detaching { // the daemon is stopping; the agent runs on in its session host
+		r.detaching = false
+		r.proc = nil
 		return
 	}
 	f.processes.StopOwner(r.a.ID)

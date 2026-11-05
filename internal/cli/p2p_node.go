@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -29,10 +26,10 @@ func startP2P(paths config.Paths, cfg config.Config, log *slog.Logger) *p2p.Host
 	}
 	o := p2p.Options{
 		Key: key, StateFile: paths.P2PStateFile(), Name: defaultDisplayName(cfg), Version: config.Version,
-		DHT: pc.DHTOn(), MDNS: pc.MDNSOn(), NATPortMap: pc.NATPortMapOn(), Logger: log,
+		DHT: cfg.EffectiveDHT(), MDNS: pc.MDNSOn(), NATPortMap: pc.NATPortMapOn(), Logger: log,
 	}
 	if pc != nil {
-		o.Port, o.Relays, o.Bootstrap, o.AllowLoopback = pc.Port, pc.Relays, pc.Bootstrap, pc.Loopback
+		o.Port, o.Relays, o.Bootstrap, o.AllowLoopback, o.ListenAddrs = pc.Port, pc.Relays, pc.Bootstrap, pc.Loopback, pc.ListenAddrs
 	}
 	h, err := p2p.New(o)
 	if err != nil {

@@ -1,11 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Mirror of internal/model/model.go. JSON names are the contract (see ARCHITECTURE.md); keep in sync.
+// Mirror of internal/model/model.go. JSON names are the contract (see DESIGN.md); keep in sync.
 // Times are Unix milliseconds.
 
 export type Level = "head" | "lead" | "worker";
-export type Harness = "claude" | "codex" | "opencode" | "agy" | "antigravity" | "pi" | "shell";
+export type Harness = "claude" | "codex" | "opencode" | "agy" | "antigravity" | "gemini" | "pi" | "shell";
 export type Mode = "chat" | "terminal";
 export type AgentState = "starting" | "working" | "idle" | "waiting" | "stopped" | "exited" | "error" | "queued" | "paused";
 
@@ -15,6 +12,8 @@ export const OWNER = "owner";
 export interface Agent {
 	/** Owner opt-in for this daemon run; never a profile default. */
 	agy_full_access?: boolean;
+	/** the harness account it runs as ("default" = the harness's usual one); absent before accounts */
+	account?: string;
   id: string;
   name: string;
   project_id?: string;
@@ -41,13 +40,13 @@ export interface Agent {
   turns: number;
   error: string;
   queued: number;
-  // Resource control (ARCHITECTURE.md "Resources"): state queued / paused.
+  // Resource control (DESIGN.md "Resources"): state queued / paused.
   queue_pos?: number;
   queue_reason?: string;
   paused_reason?: "write_budget" | "memory" | "disk" | string;
   paused_detail?: string;
   paused_at?: number;
-  // Live mode switch (ARCHITECTURE.md "Switching live"): chat ⇄ the harness's own screen.
+  // Live mode switch (DESIGN.md "Switching live"): chat ⇄ the harness's own screen.
   /** set while switched: the mode it was launched in (a daemon restart brings it back) */
   home_mode?: Mode;
   /** it switches to this mode when its current turn ends */
@@ -94,6 +93,13 @@ export interface Approval {
   answer_id?: string;
   version?: number;
   card?: {
+    project_id?: string;
+    priority?: number;
+    urgent?: boolean;
+    batchable?: boolean;
+    owner_only?: boolean;
+    close_when?: string;
+    close_reason?: string;
     type: "decision" | "human_action";
     context?: string;
     category?: string;
@@ -139,7 +145,7 @@ export interface TimelineEntry {
   input?: unknown;
   is_error?: boolean;
   meta?: Record<string, unknown>;
-  /** the head's entries: the board thread (ARCHITECTURE.md "Board") */
+  /** the head's entries: the board thread (DESIGN.md "Board") */
   thread_id?: string;
 }
 
@@ -155,7 +161,7 @@ export interface Policy {
   levels: Partial<Record<Level, LevelPolicy>>;
 }
 
-/** An agent type (ARCHITECTURE.md "Profiles"). Built-ins (head, lead, worker) keep their level and can only be reset. */
+/** An agent type (DESIGN.md "Profiles"). Built-ins (head, lead, worker) keep their level and can only be reset. */
 export interface Profile {
   slug: string;
   name: string;
@@ -230,7 +236,7 @@ export interface Health {
   machine: string;
 }
 
-// Request bodies (ARCHITECTURE.md API table).
+// Request bodies (DESIGN.md API table).
 export interface CreateProjectBody {
   name: string;
   /** harness used to start the project lead; omitted defaults to Claude */
@@ -247,6 +253,8 @@ export interface PatchProjectBody {
 }
 export interface CreateAgentBody {
   agy_full_access?: boolean;
+  /** the harness account; absent = the harness's default for new agents */
+  account?: string;
   name: string;
   project_id?: string;
   parent_id?: string;
@@ -283,7 +291,9 @@ export interface AgentUpdate {
   note: string;
 }
 export interface DecideBody {
-  decision: "allow" | "deny" | "answer" | "resume" | "raise" | "defer" | "reask";
+  decision: "allow" | "allow_always" | "deny" | "answer" | "resume" | "raise" | "defer" | "reask";
+  /** allow_always on a guard hold: this kind of agent (its profile) or any agent */
+  scope?: "agent" | "any";
   version?: number;
   answer_id?: string;
   free_text?: boolean;
@@ -291,7 +301,7 @@ export interface DecideBody {
   answer?: string;
 }
 
-// ---- Safety (ARCHITECTURE.md "Safety") ------------------------------------------------------------
+// ---- Safety (DESIGN.md "Safety") ------------------------------------------------------------
 
 /** Input of an Approval of kind "guard"; also meta.guard of the guard's timeline entries. */
 export interface GuardHold {
@@ -309,9 +319,21 @@ export interface GuardHold {
   cwd?: string;
 }
 
+export type RuleState = "block" | "hold" | "allow";
+
 export interface GuardRule {
   id: string;
+  /** the strict built-in outcome: which list the rule is in */
   outcome: "hold" | "block";
+  /** the state before the owner flips it */
+  default?: RuleState;
+  /** the state now (owner's switch, else the default) */
+  state?: RuleState;
+  /** false for a fixed carve-out: shown only as its parent's always_on line */
+  switchable?: boolean;
+  fixed?: boolean;
+  /** what stays enforced whatever the switch says */
+  always_on?: string;
   name: string;
   summary: string;
   why: string;
@@ -322,6 +344,25 @@ export interface GuardSettings {
   enabled: boolean;
   /** kinds of agents the guard is off for: levels today, agent profiles later */
   off_for: string[];
+  /** every flip of a rule switch, newest last */
+  rule_log?: { rule: string; old: RuleState; new: RuleState; at: string; by: "owner" | "tmx" }[];
+  /** the owner's standing "Allow always" answers; changed only through allow_always and revoke */
+  always_allow?: GuardAlwaysAllow[];
+}
+
+export interface GuardAlwaysAllow {
+  id: string;
+  rule: string;
+  rule_name: string;
+  tool: string;
+  /** the exact command (or file path) that runs without asking */
+  command: string;
+  /** the agent profile (or "level:<level>"); "" = any agent */
+  profile: string;
+  /** the folder it is allowed in (relative paths mean the same files only there) */
+  cwd?: string;
+  from?: string;
+  created: string;
 }
 
 export interface GateStatus {
@@ -341,6 +382,10 @@ export interface GateStatus {
   grace_until?: number;
   /** the lengths the dial offers, in minutes */
   grace_steps?: number[];
+  /** the owner PIN is set: it answers every confirmation, on every device */
+  pin_set?: boolean;
+  /** the OS prompt is also offered at this machine (off by default on new installs) */
+  hello_shortcut?: boolean;
 }
 
 export interface SafetyInfo {
@@ -348,6 +393,32 @@ export interface SafetyInfo {
   rules: GuardRule[];
   gate: GateStatus;
   levels: Level[];
+}
+
+/** direct = LAN, a public address or hole-punched; relayed = only through a circuit relay
+ * (small messages only); offline = no usable address yet. */
+export type P2PReachability = "direct" | "relayed" | "offline";
+
+/** GET /api/p2p. enabled/addrs/reachability/peers describe the RUNNING node (nothing if P2P is
+ * off right now); saved_enabled is config.json's current setting, which only takes effect at
+ * the next daemon start - restart_to_apply is true exactly while the two differ. */
+export interface P2PStatus {
+  enabled: boolean;
+  peer_id: string;
+  addrs: string[];
+  reachability: P2PReachability;
+  peers: number;
+  name: string;
+  saved_enabled: boolean;
+  restart_to_apply: boolean;
+  /** false in the trial profile: peer-to-peer stays off there however "enabled" is set */
+  production: boolean;
+}
+
+/** GET /api/p2p/net/peers: one row per paired peer. */
+export interface P2PPeerRow {
+  peer_id: string;
+  reachability: P2PReachability;
 }
 
 /** GET /api/gate/pin: never the PIN or its hash. */
@@ -369,11 +440,15 @@ export interface Confirmation {
   error?: string;
   method: string;
   method_label: string;
+  /** the owner PIN answers it at this machine (POST /api/gate/confirmations/{id}/pin) */
+  pin?: boolean;
+  /** the OS prompt (Windows Hello / Touch ID) is open for it too */
+  hello?: boolean;
   created_at: number;
   expires_at?: number;
 }
 
-// ---- Harnesses, discover and adopt (ARCHITECTURE.md "Harnesses") ---------------------------------
+// ---- Harnesses, discover and adopt (DESIGN.md "Harnesses") ---------------------------------
 
 /** GET/PUT /api/config: the part of config.json Settings edits. */
 export interface ConfigView {
@@ -437,7 +512,7 @@ export interface AdoptBody {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The board (ARCHITECTURE.md "Board"): the head's turns as cards on threads (topics).
+// The board (DESIGN.md "Board"): the head's turns as cards on threads (topics).
 
 export type ThreadKind = "general" | "project" | "topic" | "chat" | "intent";
 
@@ -453,7 +528,7 @@ export interface Thread {
   position?: number;
   created_at: number;
   updated_at: number;
-  // The Matrix (ARCHITECTURE.md "Matrix")
+  // The Matrix (DESIGN.md "Matrix")
   parent_id?: string;
   /** absent = active */
   status?: ThreadStatus;
@@ -556,7 +631,7 @@ export interface Board {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Voice transcripts (ARCHITECTURE.md "Voice"): what whisper made of a recording's audio, on this machine.
+// Voice transcripts (DESIGN.md "Voice"): what whisper made of a recording's audio, on this machine.
 
 export type TranscriptState = "queued" | "running" | "done" | "failed";
 

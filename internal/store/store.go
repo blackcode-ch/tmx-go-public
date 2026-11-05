@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package store persists the fleet in SQLite (modernc.org/sqlite, pure Go; WAL; busy
 // timeout). Schema changes are forward-only migrations in migrations.go.
 package store

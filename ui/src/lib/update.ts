@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Updates from GitHub releases (ARCHITECTURE.md "Updates"): the daemon checks, downloads, verifies and
+// Updates from GitHub releases (DESIGN.md "Updates"): the daemon checks, downloads, verifies and
 // installs; the UI shows the state ("update.status" events) and lets the owner steer it.
 import { create } from "zustand";
 import { ownerAction, withConfirmation } from "./owner-gate";

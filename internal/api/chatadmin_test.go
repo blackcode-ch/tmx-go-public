@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -76,10 +73,19 @@ func TestChatAdminHandoverRoutes(t *testing.T) {
 	if err := alexTC.Get(context.Background(), "/api/gate/confirmations/"+conf.ID+"?wait=3000", &done); err != nil || done.State != gate.StateConfirmed {
 		t.Fatalf("confirmation: %+v %v", done, err)
 	}
-	if s := alex.do("POST", path+"?"+api.ConfirmParam+"="+done.ID, map[string]any{"peer_id": boNode.ID(), "then_leave": true}, nil); s != http.StatusPreconditionRequired {
+	// A different body needs its own confirmation (a different gate.Action.Key), which this
+	// call leaves pending with an ID the test never otherwise learns. waitIdle's probe cannot
+	// cancel it directly (gate.Require only hands back a *NeedConfirmation for a MATCHING key;
+	// for any other pending one it just returns ErrBusy, so waitIdle can only poll and wait for
+	// it to resolve by itself - a real CI flake, 3 Nov, run 41692174665: on a loaded runner the
+	// fake auth's confirm goroutine can lose the race against waitIdle's 3s deadline, and the
+	// next ask below then hits gate.ErrBusy -> 409 instead of a fresh 428). Cancel it by its own
+	// ID instead of waiting it out, so the next ask is deterministic.
+	s, wrongBodyConf := call(t, alexTC, "POST", path+"?"+api.ConfirmParam+"="+done.ID, map[string]any{"peer_id": boNode.ID(), "then_leave": true}, nil)
+	if s != http.StatusPreconditionRequired {
 		t.Fatalf("a proof for another body: %d", s)
 	}
-	waitIdle(t, a.Gate, alexTC)
+	a.Gate.Cancel(wrongBodyConf.ID)
 	s, conf = call(t, alexTC, "POST", path, toBo, nil)
 	if s != http.StatusPreconditionRequired {
 		t.Fatalf("second ask: %d", s)

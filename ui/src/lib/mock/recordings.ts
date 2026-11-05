@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Mock recordings for ?mock=…: a few finished recordings with transcripts, and a working
 // recorder API (begin, chunks, frames, pause, stop) so the capture flow runs without a daemon.
 // There is no media: the player shows a placeholder, and frames only their times.
@@ -11,7 +8,7 @@ import { HOME } from "./data";
 type Emit = (type: string, data: unknown) => void;
 
 const DIR = `${HOME}/Library/Application Support/tmx-go/recordings`;
-const SETTINGS = { video_kbps: 1500, fps: 15, max_minutes: 0, segment_mb: 20, segment_minutes: 10 };
+const SETTINGS = { video_kbps: 1500, fps: 15, max_minutes: 0, segment_mb: 20, segment_minutes: 5 };
 
 function segs(id: string, ext: string, mic: boolean, parts: [number, number][], t0: number): RecordingSegment[] {
   let t = t0;

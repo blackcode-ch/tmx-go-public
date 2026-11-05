@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -70,5 +68,54 @@ func TestMigrationGivesAgentsTheirLevelProfile(t *testing.T) {
 	}
 	if list[0].Profile != "head" || list[1].Profile != "worker" {
 		t.Fatalf("profiles %q %q", list[0].Profile, list[1].Profile)
+	}
+}
+
+func TestModelDefaultsUpgradeOnceAndPreserveCustomProfiles(t *testing.T) {
+	for _, customized := range []bool{false, true} {
+		t.Run(fmt.Sprint(customized), func(t *testing.T) {
+			s := openTest(t)
+			for _, slug := range []string{"lead", "worker", "reviewer"} {
+				old, _ := model.DefaultProfile(slug)
+				old.Model, old.AllowedModels = "claude-sonnet-5-5", []string{"claude-sonnet-5-5"}
+				old.CreatedAt = 123
+				if customized {
+					old.Description = "owner customized"
+				}
+				if err := s.PutProfile(old); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.UpgradeModelDefaults(); err != nil {
+				t.Fatal(err)
+			}
+			profiles, err := s.ListProfiles()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, p := range profiles {
+				want, _ := model.DefaultProfile(p.Slug)
+				if customized {
+					want.Model, want.AllowedModels, want.Description = "claude-sonnet-5-5", []string{"claude-sonnet-5-5"}, "owner customized"
+				}
+				if !p.SameSettings(want) || p.CreatedAt != 123 {
+					t.Fatalf("unexpected upgrade: %+v", p)
+				}
+				// An owner deliberately selecting the old settings after migration keeps them.
+				p.Model, p.AllowedModels = "claude-sonnet-5-5", []string{"claude-sonnet-5-5"}
+				if err := s.PutProfile(p); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := s.UpgradeModelDefaults(); err != nil {
+				t.Fatal(err)
+			}
+			profiles, _ = s.ListProfiles()
+			for _, p := range profiles {
+				if len(p.AllowedModels) != 1 || p.Model != "claude-sonnet-5-5" {
+					t.Fatalf("owner edit overwritten: %+v", p)
+				}
+			}
+		})
 	}
 }

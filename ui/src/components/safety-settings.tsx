@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Safety: the dangerous-command guard (on/off, per level), its rules, and the owner
-// gate with its grace window (ARCHITECTURE.md "Safety"). Changes that protect less go through the owner gate.
+// gate with its grace window (DESIGN.md "Safety"). Changes that protect less go through the owner gate.
 import { useEffect, useState } from "react";
 import { AlertTriangle, Ban, ChevronRight, Fingerprint, KeyRound, LifeBuoy, Lock, LockOpen, ShieldAlert, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
@@ -17,7 +14,7 @@ import { Section } from "@/components/page";
 import { api } from "@/lib/api";
 import { displayPath, LEVEL_LABEL } from "@/lib/format";
 import { GRACE_STEPS, graceLabel, graceTick, graceUntilLabel, loadSafety, setGateStatus, useGate, useGraceUntil } from "@/lib/owner-gate";
-import type { GateStatus, GuardRule, GuardSettings, Level, PinStatus } from "@/lib/types";
+import type { GateStatus, GuardAlwaysAllow, GuardRule, GuardSettings, Level, PinStatus, RuleState } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const LEVELS: Level[] = ["head", "lead", "worker"];
@@ -112,26 +109,87 @@ function GuardCard({ g }: { g: GuardSettings }) {
   );
 }
 
-function RuleRow({ r }: { r: GuardRule }) {
+const STATE_LABEL: Record<RuleState, string> = { block: "Blocked", hold: "Held for me", allow: "Allowed" };
+
+/**
+ * A rule's switch (the owner, 3 Nov): three ways on the Blocked list, Held for me / Allowed on the
+ * Held list. Each flip asks for your PIN (or Windows Hello at the machine) and is logged.
+ */
+function RuleSwitch({ r, onSaved }: { r: GuardRule; onSaved: (g: GuardSettings, rules: GuardRule[]) => void }) {
+  const [busy, setBusy] = useState(false);
+  const states: RuleState[] = r.outcome === "block" ? ["block", "hold", "allow"] : ["hold", "allow"];
+  const cur = r.state ?? r.default ?? r.outcome;
+  async function flip(next: RuleState) {
+    if (next === cur || busy) return;
+    setBusy(true);
+    try {
+      const out = await api.putRuleState(r.id, next);
+      if (out) onSaved(out.guard, out.rules);
+      toast.success(`${r.name}: ${STATE_LABEL[next]}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div role="radiogroup" aria-label={`${r.name}: what agents get`} className="inline-flex shrink-0 overflow-hidden rounded-md border text-2xs" onClick={(e) => e.stopPropagation()}>
+      {states.map((st) => (
+        <button
+          key={st}
+          type="button"
+          role="radio"
+          aria-checked={cur === st}
+          disabled={busy}
+          onClick={() => void flip(st)}
+          className={cn(
+            "px-2 py-1 font-medium transition-colors not-first:border-l disabled:opacity-60",
+            cur === st
+              ? st === "block"
+                ? "bg-state-error/15 text-foreground"
+                : st === "hold"
+                  ? "bg-state-waiting/20 text-foreground"
+                  : "bg-state-ok/15 text-foreground"
+              : "text-muted-foreground hover:bg-accent/50",
+          )}
+        >
+          {STATE_LABEL[st]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RuleRow({ r, onSaved }: { r: GuardRule; onSaved: (g: GuardSettings, rules: GuardRule[]) => void }) {
   const [open, setOpen] = useState(false);
-  const block = r.outcome === "block";
+  const cur = r.state ?? r.outcome;
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex w-full items-start gap-3 px-4 py-2.5 text-left outline-none hover:bg-accent/40 focus-visible:bg-accent/40">
-        {block ? <Ban className="mt-0.5 size-3.5 shrink-0 text-state-error" /> : <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-[color-mix(in_oklch,var(--state-waiting)_80%,var(--foreground))]" />}
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-medium">{r.name}</span>
-          <span className="block text-xs text-muted-foreground">{r.summary}</span>
-        </span>
-        <ChevronRight className={cn("mt-0.5 size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150", open && "rotate-90")} />
-      </CollapsibleTrigger>
+      <div className="flex w-full items-start gap-3 px-4 py-2.5">
+        <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-3 text-left outline-none hover:opacity-90 focus-visible:underline">
+          {cur === "block" ? (
+            <Ban className="mt-0.5 size-3.5 shrink-0 text-state-error" />
+          ) : cur === "hold" ? (
+            <ShieldAlert className="mt-0.5 size-3.5 shrink-0 text-[color-mix(in_oklch,var(--state-waiting)_80%,var(--foreground))]" />
+          ) : (
+            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-state-ok" />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block text-[0.8125rem] font-medium">{r.name}</span>
+            <span className="block text-xs text-muted-foreground">{r.summary}</span>
+            {r.always_on && <span className="mt-0.5 block text-2xs text-foreground/75">Always on: {r.always_on}</span>}
+          </span>
+          <ChevronRight className={cn("mt-0.5 size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150", open && "rotate-90")} />
+        </CollapsibleTrigger>
+        {r.switchable !== false && r.state && <RuleSwitch r={r} onSaved={onSaved} />}
+      </div>
       <CollapsibleContent>
         <div className="space-y-2 px-4 pb-3 pl-10.5">
           <p className="text-xs leading-relaxed text-foreground/85">{r.why}</p>
           {r.examples?.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {r.examples.map((x) => (
-                <code key={x} className="rounded-md border bg-code px-1.5 py-0.5 font-mono text-[11.5px] text-foreground/80">
+                <code key={x} className="rounded-md border bg-code px-1.5 py-0.5 font-mono text-[0.7188rem] text-foreground/80">
                   {x}
                 </code>
               ))}
@@ -143,27 +201,89 @@ function RuleRow({ r }: { r: GuardRule }) {
   );
 }
 
-function RulesCard({ rules }: { rules: GuardRule[] }) {
+/** The standing "Allow always" answers: what runs without asking, for whom; Revoke asks for a proof. */
+function AlwaysCard({ items }: { items: GuardAlwaysAllow[] }) {
+  const [busy, setBusy] = useState("");
+  async function revoke(al: GuardAlwaysAllow) {
+    setBusy(al.id);
+    try {
+      const saved = await api.revokeAlways(al.id);
+      useGate.setState((s) => (s.safety && saved ? { safety: { ...s.safety, guard: saved } } : {}));
+      toast.success("Revoked; it asks you again");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy("");
+    }
+  }
+  if (!items.length) {
+    return <Card className="px-4 py-3 text-xs text-muted-foreground">None. Answer a held command with Allow always to stop being asked for exactly that command.</Card>;
+  }
+  return (
+    <Card className="divide-y">
+      {items.map((al) => (
+        <div key={al.id} className="flex items-start gap-3 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <pre className="font-mono text-[0.75rem] whitespace-pre-wrap text-foreground/90 [overflow-wrap:anywhere]">{al.command}</pre>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {al.rule_name} · {al.tool} · {al.profile ? `agents like ${al.from || al.profile} (${al.profile})` : "any agent"}
+              {al.cwd ? ` · in ${displayPath(al.cwd)}` : ""}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" disabled={busy !== ""} onClick={() => void revoke(al)} title="Needs your confirmation on this machine">
+            <Fingerprint />
+            Revoke
+          </Button>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+function RulesCard({ rules, log }: { rules: GuardRule[]; log?: GuardSettings["rule_log"] }) {
+  const onSaved = (g: GuardSettings, next: GuardRule[]) =>
+    useGate.setState((s) => (s.safety ? { safety: { ...s.safety, guard: g, rules: next } } : {}));
+  // Fixed carve-outs have no switch: their parent row says "Always on: ...".
+  const shown = rules.filter((r) => r.switchable !== false);
   const groups: { title: string; hint: string; items: GuardRule[] }[] = [
-    { title: "Blocked", hint: "Never runs; the agent is told why.", items: rules.filter((r) => r.outcome === "block") },
-    { title: "Held for you", hint: "Waits in Needs you for Allow once or Deny; no answer in 10 minutes means no.", items: rules.filter((r) => r.outcome === "hold") },
+    { title: "Blocked", hint: "Blocked never runs; Held waits for you; Allowed runs. Every change asks for your PIN.", items: shown.filter((r) => r.outcome === "block") },
+    { title: "Held for you", hint: "Held waits in Needs you (Allow once, Allow always or Deny; no answer in 10 minutes means no); Allowed runs.", items: shown.filter((r) => r.outcome === "hold") },
   ];
   return (
     <div className="space-y-3">
       {groups.map((gr) => (
         <Card key={gr.title} className="overflow-hidden">
           <div className="flex items-baseline gap-2 border-b px-4 py-2.5">
-            <h3 className="text-[13px] font-semibold">{gr.title}</h3>
+            <h3 className="text-[0.8125rem] font-semibold">{gr.title}</h3>
             <p className="text-xs text-muted-foreground">{gr.hint}</p>
           </div>
           <div className="divide-y">
             {gr.items.map((r) => (
-              <RuleRow key={r.id} r={r} />
+              <RuleRow key={r.id} r={r} onSaved={onSaved} />
             ))}
           </div>
         </Card>
       ))}
       <p className="text-xs text-muted-foreground">Everything else runs as usual; the agent's permission mode still applies.</p>
+      {log && log.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="border-b px-4 py-2.5 text-[0.8125rem] font-semibold">Changes</div>
+          <ul className="max-h-56 divide-y overflow-auto text-xs">
+            {[...log].reverse().slice(0, 50).map((ch, i) => (
+              <li key={i} className="flex items-baseline gap-2 px-4 py-1.5">
+                <span className="min-w-0 flex-1 truncate">{rules.find((r) => r.id === ch.rule)?.name ?? ch.rule}</span>
+                <span className="text-muted-foreground">
+                  {STATE_LABEL[ch.old] ?? ch.old} → <span className="text-foreground">{STATE_LABEL[ch.new] ?? ch.new}</span>
+                </span>
+                <span className="tabular w-36 shrink-0 text-right text-2xs text-subtle-foreground">
+                  {ch.by === "tmx" ? "tmx defaults · " : ""}
+                  {new Date(ch.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 }
@@ -286,6 +406,41 @@ function GraceRow({ gate }: { gate: GateStatus }) {
   );
 }
 
+/**
+ * Windows Hello / Touch ID at this machine: an optional shortcut beside the owner PIN, which
+ * works on every device (#187). Off is refused while no PIN is set: it would be the last way in.
+ */
+function HelloRow({ gate }: { gate: GateStatus }) {
+  const [busy, setBusy] = useState(false);
+  const on = !!gate.hello_shortcut;
+  async function toggle(next: boolean) {
+    setBusy(true);
+    try {
+      const st = await api.putHello(next);
+      if (st) setGateStatus(st);
+      toast.success(next ? "Windows Hello is offered too" : "Only your owner PIN now");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ToggleRow
+      id="gate-hello"
+      label="Also accept Windows Hello on this machine"
+      hint={
+        gate.pin_set
+          ? "Your owner PIN always works, here and on your paired devices. This only adds a shortcut at this machine."
+          : "Set your owner PIN first: until then Windows Hello is the only way to confirm here."
+      }
+      checked={on}
+      disabled={busy || (on && !gate.pin_set)}
+      onChange={(v) => void toggle(v)}
+    />
+  );
+}
+
 function GateCard() {
   const gate = useGate((s) => s.safety?.gate);
   const [busy, setBusy] = useState(false);
@@ -339,12 +494,13 @@ function GateCard() {
         </Button>
       </div>
       {!remote && gate.grace_steps && <GraceRow gate={gate} />}
+      {!remote && gate.pin_set !== undefined && <HelloRow gate={gate} />}
       <div className="px-4 py-3">
         <div className="mb-1.5 text-xs font-medium text-muted-foreground">{gate.enabled ? "Asks before" : "Will ask before"}</div>
-        <ul className="grid gap-1 text-[13px] sm:grid-cols-2">
+        <ul className="grid gap-1 text-[0.8125rem] sm:grid-cols-2">
           {gate.gated.map((x) => (
             <li key={x} className="flex items-start gap-1.5">
-              <span className="mt-[7px] size-1 shrink-0 rounded-full bg-subtle-foreground" />
+              <span className="mt-[0.4375rem] size-1 shrink-0 rounded-full bg-subtle-foreground" />
               {x}
             </li>
           ))}
@@ -358,7 +514,7 @@ function GateCard() {
           </p>
           {gate.file && (
             <div className="flex min-w-0 items-center gap-1">
-              <code className="truncate font-mono text-[11.5px] text-foreground/85" title={gate.file}>
+              <code className="truncate font-mono text-[0.7188rem] text-foreground/85" title={gate.file}>
                 {displayPath(gate.file)}
               </code>
               <CopyButton text={gate.file} label="Copy path" />
@@ -483,8 +639,12 @@ export function SafetySection() {
         <div className="space-y-6">
           <GuardCard g={safety.guard} />
           <div>
+            <h3 className="mb-2 text-xs font-medium text-muted-foreground">Allowed always</h3>
+            <AlwaysCard items={safety.guard.always_allow ?? []} />
+          </div>
+          <div>
             <h3 className="mb-2 text-xs font-medium text-muted-foreground">Rules</h3>
-            <RulesCard rules={safety.rules} />
+            <RulesCard rules={safety.rules} log={safety.guard.rule_log} />
           </div>
           <div>
             <h3 className="mb-2 text-xs font-medium text-muted-foreground">Confirmation</h3>

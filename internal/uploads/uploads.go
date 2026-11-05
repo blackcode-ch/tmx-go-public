@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package uploads keeps the files the owner attaches to messages. Each file lives at
 // <state>/uploads/<agent id>/<upload id>/<name> next to a meta.json, so an agent reads it from a
 // plain path (any harness can) and the folder goes away with the agent. Claude agents get
@@ -60,6 +57,36 @@ func New(p config.Paths) *Store { return &Store{root: p.UploadsDir()} }
 // AgentDir is the folder an agent's uploads live in (and the one claude gets --add-dir for).
 func (s *Store) AgentDir(agentID string) string { return filepath.Join(s.root, agentID) }
 
+// OpenAgentRoot refuses a redirected per-agent directory, even a link to another
+// agent within the uploads root. The returned handle stays on the checked inode.
+func (s *Store) OpenAgentRoot(agentID string) (*os.Root, error) {
+	if !validID(agentID) {
+		return nil, ErrNotFound
+	}
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	info, err := root.Lstat(agentID)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, os.ErrPermission
+	}
+	agent, err := root.OpenRoot(agentID)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := agent.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		agent.Close()
+		return nil, os.ErrPermission
+	}
+	return agent, nil
+}
+
 // Save stores data for agentID under a cleaned version of name. The type is taken from the
 // content when the client sent none (or a generic one).
 func (s *Store) Save(agentID, name, typ string, data []byte) (File, error) {
@@ -75,18 +102,37 @@ func (s *Store) Save(agentID, name, typ string, data []byte) (File, error) {
 	name = CleanName(name)
 	typ = fileType(name, typ, data)
 	f := File{ID: model.NewID(), AgentID: agentID, Name: name, Type: typ, Size: int64(len(data)), CreatedAt: model.Now()}
-	dir := filepath.Join(s.AgentDir(agentID), f.ID)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := os.MkdirAll(s.root, 0o700); err != nil {
 		return File{}, err
 	}
-	f.Path = filepath.Join(dir, name)
-	if err := os.WriteFile(f.Path, data, 0o600); err != nil {
-		_ = os.RemoveAll(dir)
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return File{}, err
+	}
+	if err := root.MkdirAll(agentID, 0o700); err != nil {
+		root.Close()
+		return File{}, err
+	}
+	root.Close()
+	root, err = s.OpenAgentRoot(agentID)
+	if err != nil {
+		return File{}, err
+	}
+	defer root.Close()
+	dir := f.ID
+	if err := root.Mkdir(dir, 0700); err != nil {
+		return File{}, err
+	}
+	f.Path = filepath.Join(s.AgentDir(agentID), dir, name)
+	if err := root.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+		_ = root.RemoveAll(dir)
 		return File{}, err
 	}
 	b, _ := json.Marshal(f)
-	if err := config.WriteFileAtomic(filepath.Join(dir, metaFile), b, 0o600); err != nil {
-		_ = os.RemoveAll(dir)
+	// This is a new random directory; no reader receives its ID before metadata
+	// is complete. Root-relative writes refuse a replaced agent-folder symlink.
+	if err := root.WriteFile(filepath.Join(dir, metaFile), b, 0o600); err != nil {
+		_ = root.RemoveAll(dir)
 		return File{}, err
 	}
 	return f, nil

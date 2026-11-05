@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package client is a small HTTP client for the daemon API, used by the CLI (owner token)
 // and the MCP server (agent token).
 package client

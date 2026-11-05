@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -16,7 +13,7 @@ const (
 )
 
 // Resources is config.json "resources": launch limits, priority, sampling, brakes and slots
-// (ARCHITECTURE.md "Resources"). Zero fields take their defaults (see Normalize); limits that can
+// (DESIGN.md "Resources"). Zero fields take their defaults (see Normalize); limits that can
 // be switched off use 0 for off only where the default is off too, else a negative value.
 type Resources struct {
 	// Launch queue: a start over a limit waits (state queued) instead of failing.

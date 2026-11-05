@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -15,6 +12,7 @@ import (
 
 	pty "github.com/aymanbagabas/go-pty"
 
+	"github.com/blackcode-ch/tmx-go/internal/harness"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/runner/claude"
 	"github.com/blackcode-ch/tmx-go/internal/runner/term"
@@ -32,10 +30,20 @@ const (
 	maxTermCols, maxTermRs = 1000, 500
 )
 
+// signedInPoll is how often a sign-in that stays open (def.signedIn) is checked.
+var signedInPoll = 2 * time.Second
+
+// ErrNoSignOut: the harness has no sign-out command (Gemini CLI: /signout inside it).
+var ErrNoSignOut = errors.New("this harness has no sign-out command")
+
+// ExitDisabled is the exit code of a production start's disabled stub (harness.ExitDisabled).
+const ExitDisabled = harness.ExitDisabled
+
 // loginSession is one sign-in in a pty.
 type loginSession struct {
 	id   string
 	h    model.Harness
+	path string // the executable
 	pt   pty.Pty
 	cmd  *pty.Cmd
 	ring *term.Ring
@@ -47,6 +55,7 @@ type loginSession struct {
 
 	cancelled atomic.Bool
 	timedOut  atomic.Bool
+	finished  atomic.Bool // stopped by tmx because the account shows the sign-in (def.signedIn)
 	exitCode  int
 	done      chan struct{}
 }
@@ -89,7 +98,7 @@ func startLogin(h model.Harness, dir, path string, args, env []string) (*loginSe
 		sysinfo.RegisterChild(cmd.Process.Pid, false)
 	}
 	term.AfterStart(pt)
-	ls := &loginSession{id: model.NewID(), h: h, pt: pt, cmd: cmd, ring: term.NewRing(loginReplay),
+	ls := &loginSession{id: model.NewID(), h: h, path: path, pt: pt, cmd: cmd, ring: term.NewRing(loginReplay),
 		subs: map[*LoginSub]struct{}{}, done: make(chan struct{}), exitCode: -1}
 	readDone := make(chan struct{})
 	go ls.read(readDone)
@@ -200,10 +209,10 @@ func (ls *loginSession) stop(grace time.Duration) {
 // and the stop's grace (watchLogin normally releases the turn well before).
 const loginHoldSlack = time.Minute
 
-// Login starts h's sign-in in a terminal, or returns the one running. ErrNotInstalled when h
-// is not installed.
-func (s *Service) Login(h string) (string, error) {
-	e := s.entry(h)
+// Login starts the sign-in of h's account name ("" = "default") in a terminal, or returns the
+// one running. ErrNotInstalled when h is not installed.
+func (s *Service) Login(h, name string) (string, error) {
+	e := s.entry(h, name)
 	if e == nil || h == "" {
 		return "", ErrUnknown
 	}
@@ -224,7 +233,8 @@ func (s *Service) Login(h string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%s is %w", e.def.label, ErrNotInstalled)
 	}
-	args := e.def.login(s.ctx, s, path)
+	sc := s.scope(e)
+	args := e.def.login(s.ctx, sc, path)
 	// `claude auth login` may write .claude.json until it ends, so it holds the daemon's claude
 	// start-queue turn from the moment it is taken until its process exited: watchLogin
 	// releases it (after LoginTimeout it stops the sign-in first). The queue's backstop, a
@@ -238,11 +248,11 @@ func (s *Service) Login(h string) (string, error) {
 				ls.stop(s.o.StopGrace)
 			}
 		}
-		if ticket, err = claude.BeginStartHeld(s.ctx, s.env(), claude.HolderSignIn, s.o.LoginTimeout+s.o.StopGrace+loginHoldSlack, backstop); err != nil {
+		if ticket, err = claude.BeginStartHeld(s.ctx, sc.env(), claude.HolderSignIn, s.o.LoginTimeout+s.o.StopGrace+loginHoldSlack, backstop); err != nil {
 			return "", err
 		}
 	}
-	ls, err := startLogin(e.def.h, s.workDir(), path, args, s.env("TERM=xterm-256color"))
+	ls, err := startLogin(e.def.h, s.workDir(), path, args, sc.env(append([]string{"TERM=xterm-256color"}, e.def.loginEnv...)...))
 	if err != nil {
 		if ticket != nil {
 			ticket.Release() // nothing started
@@ -267,13 +277,33 @@ func (s *Service) Login(h string) (string, error) {
 func (s *Service) watchLogin(e *entry, ls *loginSession, ticket *claude.StartTicket) {
 	defer s.wg.Done()
 	t := time.NewTimer(s.o.LoginTimeout)
-	select {
-	case <-ls.done:
-		t.Stop()
-	case <-t.C:
-		ls.timedOut.Store(true)
-		s.log.Warn("sign-in took too long; stopping it", "harness", e.def.h, "timeout", s.o.LoginTimeout)
-		ls.stop(s.o.StopGrace) // returns once the process has exited (killed after StopGrace)
+	// A harness whose sign-in runs inside its app (Gemini CLI) stays open after it: it is
+	// stopped once its account shows the sign-in.
+	var poll <-chan time.Time
+	if e.def.signedIn != nil {
+		tick := time.NewTicker(signedInPoll)
+		defer tick.Stop()
+		poll = tick.C
+	}
+wait:
+	for {
+		select {
+		case <-ls.done:
+			t.Stop()
+			break wait
+		case <-t.C:
+			ls.timedOut.Store(true)
+			s.log.Warn("sign-in took too long; stopping it", "harness", e.def.h, "timeout", s.o.LoginTimeout)
+			ls.stop(s.o.StopGrace) // returns once the process has exited (killed after StopGrace)
+			break wait
+		case <-poll:
+			if e.def.signedIn(s.scope(e)) {
+				t.Stop()
+				ls.finished.Store(true)
+				ls.stop(s.o.StopGrace)
+				break wait
+			}
+		}
 	}
 	if ticket != nil {
 		ticket.Release() // before checkAndApply, which starts claude through the same queue
@@ -304,6 +334,19 @@ func loginOutcome(ls *loginSession, a Account) Login {
 		return Login{State: LoginIdle, Message: "Sign-in cancelled"}
 	case ls.timedOut.Load():
 		return Login{State: LoginFailed, Message: "The sign-in took longer than 10 minutes and was stopped"}
+	case ls.finished.Load():
+		// stopped by tmx once signed in: its exit code says nothing (the account below does)
+		if !a.Connected {
+			return Login{State: LoginFailed, Message: "The sign-in ended, but " + a.Label + " is not signed in"}
+		}
+		if a.Account.Email != "" {
+			return Login{State: LoginSucceeded, Message: "Signed in as " + a.Account.Email}
+		}
+		return Login{State: LoginSucceeded, Message: "Signed in"}
+	case ls.exitCode == ExitDisabled:
+		// The sign-in looks past such stubs (harness.SignInPath): this one was all there was.
+		return Login{State: LoginFailed, Message: fmt.Sprintf("%s is disabled on this machine by tmx's start script (%s "+
+			"exits %d), and no other %s was found: install %s", a.Label, ls.path, ExitDisabled, a.Label, a.Label)}
 	case ls.exitCode != 0:
 		return Login{State: LoginFailed, Message: fmt.Sprintf("The sign-in ended with exit code %d", ls.exitCode)}
 	case !a.Connected:
@@ -315,8 +358,8 @@ func loginOutcome(ls *loginSession, a Account) Login {
 }
 
 // CancelLogin stops h's running sign-in (none running: nothing to do).
-func (s *Service) CancelLogin(h string) error {
-	e := s.entry(h)
+func (s *Service) CancelLogin(h, name string) error {
+	e := s.entry(h, name)
 	if e == nil || h == "" {
 		return ErrUnknown
 	}
@@ -331,8 +374,8 @@ func (s *Service) CancelLogin(h string) error {
 	return nil
 }
 
-func (s *Service) session(h string) (*loginSession, error) {
-	e := s.entry(h)
+func (s *Service) session(h, name string) (*loginSession, error) {
+	e := s.entry(h, name)
 	if e == nil || h == "" {
 		return nil, ErrUnknown
 	}
@@ -346,8 +389,8 @@ func (s *Service) session(h string) (*loginSession, error) {
 
 // AttachLogin watches h's sign-in terminal: the running one, or the last one's replay (C is
 // then closed at once). ErrNoLogin when there was none since tmx started.
-func (s *Service) AttachLogin(h string) (*LoginSub, error) {
-	ls, err := s.session(h)
+func (s *Service) AttachLogin(h, name string) (*LoginSub, error) {
+	ls, err := s.session(h, name)
 	if err != nil {
 		return nil, err
 	}
@@ -362,8 +405,8 @@ func (s *Service) DetachLogin(sub *LoginSub) {
 }
 
 // LoginInput types into h's running sign-in.
-func (s *Service) LoginInput(h string, b []byte) error {
-	ls, err := s.session(h)
+func (s *Service) LoginInput(h, name string, b []byte) error {
+	ls, err := s.session(h, name)
 	if err != nil {
 		return err
 	}
@@ -371,8 +414,8 @@ func (s *Service) LoginInput(h string, b []byte) error {
 }
 
 // LoginResize sizes h's sign-in terminal.
-func (s *Service) LoginResize(h string, cols, rows int) error {
-	ls, err := s.session(h)
+func (s *Service) LoginResize(h, name string, cols, rows int) error {
+	ls, err := s.session(h, name)
 	if err != nil {
 		return err
 	}
@@ -381,23 +424,28 @@ func (s *Service) LoginResize(h string, cols, rows int) error {
 
 // Logout signs h out with its own command, then checks the account again. A running sign-in
 // is cancelled first.
-func (s *Service) Logout(ctx context.Context, h string) (Payload, error) {
-	e := s.entry(h)
+func (s *Service) Logout(ctx context.Context, h, name string) (Payload, error) {
+	e := s.entry(h, name)
 	if e == nil || h == "" {
 		return Payload{}, ErrUnknown
 	}
-	_ = s.CancelLogin(h)
+	_ = s.CancelLogin(h, name)
 	e.loginMu.Lock()
 	defer e.loginMu.Unlock()
 	path, err := s.lookPath(e.def.h)
 	if err != nil {
 		return Payload{}, fmt.Errorf("%s is %w", e.def.label, ErrNotInstalled)
 	}
-	run := s.run
+	sc := s.scope(e)
+	run := sc.run
 	if e.def.h == model.HarnessClaude {
-		run = s.claudeRun
+		run = sc.claudeRun
 	}
-	r := run(ctx, s.o.CheckTimeout, path, e.def.logout(ctx, s, path)...)
+	args := e.def.logout(ctx, sc, path)
+	if args == nil {
+		return Payload{}, fmt.Errorf("%s: %w: run it and type /signout", e.def.label, ErrNoSignOut)
+	}
+	r := run(ctx, s.o.CheckTimeout, path, args...)
 	if r.err != nil {
 		return Payload{}, fmt.Errorf("%s's sign-out: %w", e.def.label, r.err)
 	}

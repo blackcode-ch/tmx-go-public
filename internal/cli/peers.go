@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -12,7 +9,7 @@ import (
 )
 
 // cmdPeers: `tmx peers import-python [--json]` moves this machine's Python tmx pair
-// tokens into this daemon's secrets (production profile with "peers"; ARCHITECTURE.md
+// tokens into this daemon's secrets (production profile with "peers"; DESIGN.md
 // "Python fleet interop"). It prints fingerprints only, never a secret, and never overwrites a
 // secret this daemon already holds with another value.
 func cmdPeers(e *env, args []string) error {

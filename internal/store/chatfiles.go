@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -11,7 +8,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// ---- chat files (ARCHITECTURE.md "Chats": files)
+// ---- chat files (DESIGN.md "Chats": files)
 
 const chatFileCols = `chat_id, id, message_id, sender, name, type, size, sha256, state, error, tries, next_at, created_at`
 

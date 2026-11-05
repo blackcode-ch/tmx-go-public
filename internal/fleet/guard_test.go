@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -190,7 +187,7 @@ func TestGuardBlockTimelineAndRecovery(t *testing.T) {
 	f := e.started()
 	head := mustAgent(t, f, "head")
 	me := callerFor(t, f, e.chat, head.ID)
-	if err := f.ReportBlock(me, HoldRequest{Tool: "Bash", Command: "pkill node", Rule: guard.RuleKillByName,
+	if err := f.ReportBlock(me, HoldRequest{Tool: "Bash", Command: "pkill node", Rule: guard.RuleKillTmx, // node is a tmx runtime name: the fixed carve-out
 		Detail: "pkill kills every process with that name", Match: "pkill node"}); err != nil {
 		t.Fatal(err)
 	}
@@ -301,5 +298,33 @@ func TestHooksDisabledRefusesLaunch(t *testing.T) {
 	_, err = f.LaunchAgent(OwnerCaller, LaunchRequest{Name: "w1", ProjectID: "alpha", Level: model.LevelWorker})
 	if err == nil || !strings.Contains(err.Error(), "the command guard is disabled in") {
 		t.Fatalf("launch error: %v", err)
+	}
+}
+
+// The agents' own CLAUDE_CONFIG_DIR (<state>/claude-config) counts too: Claude reads its user
+// settings there, not in ~/.claude (o4, 3 Nov).
+func TestHooksDisabledInClaudeConfigRefusesLaunch(t *testing.T) {
+	e := newEnv(t)
+	f := e.started()
+	if _, err := f.CreateProject(OwnerCaller, ProjectRequest{Name: "alpha"}); err != nil {
+		t.Fatal(err)
+	}
+	dir := f.opts.Paths.ClaudeConfigDir()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(cfg, []byte(`{"disableAllHooks": true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := f.LaunchAgent(OwnerCaller, LaunchRequest{Name: "w1", ProjectID: "alpha", Level: model.LevelWorker})
+	if err == nil || !strings.Contains(err.Error(), "claude-config") {
+		t.Fatalf("launch with hooks off in claude-config: %v", err)
+	}
+	if err := os.WriteFile(cfg, []byte(`{"model": "opus"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.LaunchAgent(OwnerCaller, LaunchRequest{Name: "w2", ProjectID: "alpha", Level: model.LevelWorker}); err != nil {
+		t.Fatalf("launch with hooks on: %v", err)
 	}
 }

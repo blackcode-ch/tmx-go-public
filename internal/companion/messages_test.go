@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package companion_test
 
 import (
@@ -21,7 +18,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Head ↔ Companion messages (ARCHITECTURE.md "Head ↔ Companion: messages"), against a real daemon
+// Head ↔ Companion messages (DESIGN.md "Head ↔ Companion: messages"), against a real daemon
 // (apitest) and the fake Companion.
 
 // connected starts a daemon whose Companion service talks to a fake Companion.

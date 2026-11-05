@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -24,7 +21,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Chat boards (ARCHITECTURE.md "Chat boards"). Every chat has a board its members share: topics
+// Chat boards (DESIGN.md "Chat boards"). Every chat has a board its members share: topics
 // (strings), which message hangs on which topic, and a short log per topic. Any member may
 // open, rename, recolour and archive topics, move messages between them and add log lines;
 // each change goes as a chat.topic envelope from its author to every other member through
@@ -464,7 +461,7 @@ const (
 // agentBoardChangeLocked counts one board change by c; it refuses when an agent's budget is
 // spent. The owner is never limited.
 func (s *Service) agentBoardChangeLocked(c fleet.Caller) error {
-	if c.Owner || c.AgentID == "" {
+	if c.Owner {
 		return nil
 	}
 	if s.boardChanges == nil {

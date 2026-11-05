@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -10,7 +7,7 @@ import (
 )
 
 func TestPeerURL(t *testing.T) {
-	for _, bad := range []string{"http://hosta.example.ts.net", "https://192.0.2.77", "https://192.168.1.3:8777",
+	for _, bad := range []string{"http://hosta.example.ts.net", "https://100.64.1.2", "https://192.168.1.3:8777",
 		"https://u:p@hosta.example.ts.net", "https://hosta.example.ts.net/api", "https://hosta.example.ts.net?x=1",
 		"https://hosta", "hosta.example.ts.net", ""} {
 		if _, err := PeerURL(bad); err == nil {

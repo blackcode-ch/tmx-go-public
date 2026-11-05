@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The Matrix (ARCHITECTURE.md "Matrix"): the owner's threads with everything on them. The same
+// The Matrix (DESIGN.md "Matrix"): the owner's threads with everything on them. The same
 // /api/matrix calls serve this page and the agents' matrix tool.
 import { useStore } from "./store";
 import type { LinkAxis, Thread, ThreadEntry, ThreadLink } from "./types";

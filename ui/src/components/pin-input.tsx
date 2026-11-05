@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The owner PIN field: digits only, 6 to 12, the phone's number pad, one-time-code autofill off.
 import { Input } from "@/components/ui/input";
 

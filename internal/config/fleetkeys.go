@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -16,7 +13,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-// The pinned release key set (ARCHITECTURE.md "Updates"): update.fleet_keys plus update.require.
+// The pinned release key set (DESIGN.md "Updates"): update.fleet_keys plus update.require.
 
 // Fleet key types.
 const (

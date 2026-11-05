@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -18,9 +15,9 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/update"
 )
 
-// Updates (ARCHITECTURE.md "Updates"): owner only. Without an updater every route answers 501.
+// Updates (DESIGN.md "Updates"): owner only. Without an updater every route answers 501.
 // Changing the settings or the token and installing by hand are behind the owner gate once it
-// is on (ARCHITECTURE.md "Safety"); reading and checking are not. The background updater installs
+// is on (DESIGN.md "Safety"); reading and checking are not. The background updater installs
 // without any request, so automatic updates never wait for a confirmation.
 func (s *Server) updateRoutes(mux *http.ServeMux) {
 	o := func(h http.HandlerFunc) http.HandlerFunc { return s.ownerOnly(s.withUpdater(h)) }
@@ -199,7 +196,7 @@ func (s *Server) getUpdateKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.updater.Keys())
 }
 
-// PUT /api/update/keys {fleet_keys, require}: the owner's re-pin (ARCHITECTURE.md "Updates", lost or
+// PUT /api/update/keys {fleet_keys, require}: the owner's re-pin (DESIGN.md "Updates", lost or
 // compromised key), replacing the whole set. It always needs a fresh proof of the owner on this
 // machine: also while the gate is off and inside the grace window, and a daemon without a gate
 // refuses it, since whoever can pin a key can install any binary. An invalid set is refused
