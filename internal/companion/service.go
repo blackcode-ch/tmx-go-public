@@ -66,6 +66,10 @@ type Service struct {
 	log  *slog.Logger
 	mu   sync.Mutex // serializes task changes
 	kick chan struct{}
+	// An answer must be recorded before polling can apply its remote outcome.
+	// The generation also invalidates polls already in flight when an answer starts.
+	answerGeneration uint64
+	answering        map[string]bool // guarded by mu
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -598,6 +602,28 @@ func (s *Service) answer(t model.CompanionTask, text, raw, by string) error {
 	if t.State != model.CompanionInputRequired || t.RemoteID == "" {
 		return reqErr(http.StatusConflict, "Companion is not waiting for an answer on this %s (it is %s)", noun(t), t.State)
 	}
+	s.mu.Lock()
+	cur, err := s.o.Store.GetCompanionTask(t.ID)
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	if cur.State != model.CompanionInputRequired || s.answering[t.ID] {
+		s.mu.Unlock()
+		return reqErr(http.StatusConflict, "Companion is no longer waiting for this answer")
+	}
+	if s.answering == nil {
+		s.answering = make(map[string]bool)
+	}
+	s.answering[t.ID] = true
+	s.answerGeneration++
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.answering, t.ID)
+		s.answerGeneration++
+		s.mu.Unlock()
+	}()
 	cl, _, err := s.client(s.settings())
 	if err != nil {
 		return reqErr(http.StatusBadGateway, "%s", err.Error())
@@ -613,7 +639,7 @@ func (s *Service) answer(t model.CompanionTask, text, raw, by string) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cur, err := s.o.Store.GetCompanionTask(t.ID)
+	cur, err = s.o.Store.GetCompanionTask(t.ID)
 	if err != nil {
 		return err
 	}
@@ -915,6 +941,13 @@ func (s *Service) recoverUnconfirmed() bool {
 
 // poll reads the task Companion is on and applies what changed.
 func (s *Service) poll(t model.CompanionTask) {
+	s.mu.Lock()
+	if s.answering[t.ID] {
+		s.mu.Unlock()
+		return
+	}
+	generation := s.answerGeneration
+	s.mu.Unlock()
 	cl, _, err := s.client(s.settings())
 	if err != nil {
 		return
@@ -924,6 +957,9 @@ func (s *Service) poll(t model.CompanionTask) {
 	cancel()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.answering[t.ID] || generation != s.answerGeneration {
+		return // the answer handler records the exchange before applying its outcome
+	}
 	cur, gerr := s.o.Store.GetCompanionTask(t.ID)
 	if gerr != nil || cur.State != t.State {
 		return // changed meanwhile (answered, cancelled)

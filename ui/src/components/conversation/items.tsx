@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { TimelinePin } from "@/components/message-pins";
 import { AlertTriangle, Brain, ChevronRight, CornerDownRight, Loader2, Mail } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { absoluteTime, clockTime, duration, firstLine, modelName, plural, relativeTime } from "@/lib/format";
@@ -28,6 +29,7 @@ export const UserBubble = memo(function UserBubble({ e }: { e: TimelineEntry }) 
   const { text, files } = splitAttachments(e.text);
   return (
     <div className="flex flex-col items-end gap-1.5 pl-[12%]">
+      <TimelinePin e={e} />
       {files.length > 0 && <AttachmentList files={files} />}
       {text && (
         <TimeHint at={e.at}>
@@ -41,7 +43,7 @@ export const UserBubble = memo(function UserBubble({ e }: { e: TimelineEntry }) 
 });
 
 export const AssistantText = memo(function AssistantText({ e }: { e: TimelineEntry }) {
-  return <Markdown text={e.text} />;
+  return <div><Markdown text={e.text} /><TimelinePin e={e} /></div>;
 });
 
 export function Thinking({ e }: { e: TimelineEntry }) {
@@ -212,6 +214,7 @@ export function MailChip({ e }: { e: TimelineEntry }) {
   const { text, files } = splitAttachments(e.text);
   return (
     <div className="rounded-xl border bg-muted/35">
+      <TimelinePin e={e} />
       <div className="flex items-center gap-2 px-3 pt-2 text-xs">
         <Mail className="size-3.5 text-muted-foreground" />
         <span className="text-muted-foreground">

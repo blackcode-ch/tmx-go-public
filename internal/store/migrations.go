@@ -587,6 +587,14 @@ ALTER TABLE agents ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;`,
 	`ALTER TABLE recordings ADD COLUMN sensitivity TEXT NOT NULL DEFAULT '';`,
 	`CREATE TABLE profile_default_upgrades (name TEXT PRIMARY KEY);`,
 	`CREATE TABLE project_imports (project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, source TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(project_id,source,id));`,
+	// Owner-selected message snapshots survive timeline trimming and daemon restarts.
+	`CREATE TABLE message_pins (
+		id TEXT PRIMARY KEY, source TEXT NOT NULL UNIQUE, label TEXT NOT NULL,
+		href TEXT NOT NULL, agent_id TEXT NOT NULL DEFAULT '', text TEXT NOT NULL,
+		message_at INTEGER NOT NULL, pinned_at INTEGER NOT NULL,
+		state TEXT NOT NULL CHECK(state IN ('active','done','unpinned'))
+	);
+	CREATE INDEX message_pins_agent ON message_pins(agent_id, state, pinned_at);`,
 }
 
 func (s *Store) migrate() error {

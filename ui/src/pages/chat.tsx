@@ -2,6 +2,7 @@
 // agent; delivery state; time), the composer, the agent taking part, and the members /
 // contact panel.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PinMessageButton } from "@/components/message-pins";
 import { ArrowUp, AtSign, Bot, Clock3, Ellipsis, Info, Loader2, LogOut, MessagesSquare, PanelRight, QrCode, Trash2, Users, Waypoints } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ function MessageRow({ chat, m, first }: { chat: Chat; m: ChatMessage; first: boo
         {first && <PersonAvatar name={mine ? "You" : m.sender_name || "?"} className={cn(m.sender_agent && "ring-2 ring-brand/40 ring-offset-1 ring-offset-background")} />}
       </div>
       <div className="min-w-0 flex-1">
+        <PinMessageButton selection={{ source: `chat:${chat.id}:${m.id}`, label: chat.name, href: href(paths.chat(chat.id)), agent_id: chat.agent_id, text: m.body || m.files?.map((f) => f.name).join(", ") || "Attached files", message_at: m.at }} />
         {first && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
             <span className="text-[0.8125rem] font-semibold">{name}</span>

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { MessagePinsStrip } from "@/components/message-pins";
 import { Inbox, KeyRound, Menu, PlugZap, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -229,6 +230,7 @@ export default function App() {
             <DictationBar />
             <WindowUpdateBanner />
             <MobileBar />
+            <MessagePinsStrip />
             <Routes />
           </main>
           <MobileNav />

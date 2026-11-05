@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/page";
 import { Markdown } from "@/components/markdown";
+import { PinMessageButton } from "@/components/message-pins";
 import { AttachmentList } from "@/components/conversation/attachments";
 import { after, Canvas, ColourSubmenu, ComposeKnot, EarlierKnot, Knot, LaneFrame, LaneHeader, laneShift, SHOWN, useLaneOrder, type Drag, type Dragging } from "@/components/board/canvas";
 import { NewTopicDialog, RenameDialog } from "@/components/board/dialogs";
@@ -23,7 +24,7 @@ import { CHAT_GENERAL_TOPIC } from "@/lib/chat-types";
 import { chatApi, senderName } from "@/lib/chats";
 import { absoluteTime, clockTime, relativeTime } from "@/lib/format";
 import { withMentionLinks } from "@/lib/mentions";
-import { navigate, paths } from "@/lib/router";
+import { href, navigate, paths } from "@/lib/router";
 import { cn } from "@/lib/utils";
 import { DeliveryState, PersonAvatar, SenderBadge } from "./chat-bits";
 
@@ -526,6 +527,7 @@ function PanelMessage({ chat, m, first }: { chat: Chat; m: ChatMessage; first: b
           {m.sender === "me" && <DeliveryState m={m} />}
         </div>
         {m.body.trim() && <Markdown text={withMentionLinks(chat, m)} className="text-[0.8438rem] leading-relaxed [overflow-wrap:anywhere]" />}
+        <PinMessageButton selection={{ source: `chat:${chat.id}:${m.id}`, label: chat.name, href: href(paths.chat(chat.id)), agent_id: chat.agent_id, text: m.body || m.files?.map((f) => f.name).join(", ") || "Attached files", message_at: m.at }} />
         {m.files && m.files.length > 0 && <AttachmentList files={m.files.map(asAttached)} loadImage={loaderFor(chat.id)} className="justify-start pt-1.5" />}
       </div>
     </div>
