@@ -1,3 +1,0 @@
-# Signed checksum fixtures must retain their exact bytes on every platform.
-internal/update/testdata/v0.1.10/SHA256SUMS -text
-internal/update/testdata/whisper-engine-v1.9.5/SHA256SUMS -text

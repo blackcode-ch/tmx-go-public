@@ -9,17 +9,14 @@ import (
 // Cards stored before the rename say "owner_only"; they still read as owner-only, and are
 // written with "owner_only" (plus the legacy key, for peers on older versions).
 func TestOwnerCardReadsLegacyOwnerOnly(t *testing.T) {
-	for _, tc := range []struct {
-		in   string
-		want bool
-	}{
-		{`{"type":"decision","owner_only":true}`, true},
-		{`{"type":"decision","owner_only":true}`, true},
-		{`{"type":"decision"}`, false},
+	for in, want := range map[string]bool{
+		`{"type":"decision","owner_only":true}`: true,
+		`{"type":"decision","owner_only":true}`:  true,
+		`{"type":"decision"}`:                    false,
 	} {
 		var c OwnerCard
-		if err := json.Unmarshal([]byte(tc.in), &c); err != nil || c.OwnerOnly != tc.want || c.Type != "decision" {
-			t.Fatalf("%s: %+v %v", tc.in, c, err)
+		if err := json.Unmarshal([]byte(in), &c); err != nil || c.OwnerOnly != want || c.Type != "decision" {
+			t.Fatalf("%s: %+v %v", in, c, err)
 		}
 	}
 	var a Approval
