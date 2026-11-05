@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// tmx: one binary for the daemon, the CLI, the MCP server and the desktop app. See ARCHITECTURE.md.
+// tmx: one binary for the daemon, the CLI, the MCP server and the desktop app. See DESIGN.md.
 package main
 
 import (

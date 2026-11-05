@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import "fmt"
@@ -102,7 +99,7 @@ CREATE TABLE profiles (
 	updated_at INTEGER NOT NULL
 );
 `,
-	// 3: chats between tmx installs (ARCHITECTURE.md "Chats"): contacts, chats, members, messages,
+	// 3: chats between tmx installs (DESIGN.md "Chats"): contacts, chats, members, messages,
 	// delivery receipts and the outbox of envelopes waiting for an offline peer.
 	`
 CREATE TABLE contacts (
@@ -176,7 +173,7 @@ CREATE TABLE chat_outbox (
 );
 CREATE INDEX chat_outbox_peer ON chat_outbox(peer_id, seq);
 `,
-	// 4: tasks handed to Companion (ARCHITECTURE.md "Companion"); the task is JSON, state and times
+	// 4: tasks handed to Companion (DESIGN.md "Companion"); the task is JSON, state and times
 	// are columns for listing.
 	`
 CREATE TABLE companion_tasks (
@@ -188,7 +185,7 @@ CREATE TABLE companion_tasks (
 );
 CREATE INDEX companion_tasks_state ON companion_tasks(state);
 `,
-	// 5: chat files and @mentions (ARCHITECTURE.md "Chats"): files attached to messages (downloaded
+	// 5: chat files and @mentions (DESIGN.md "Chats"): files attached to messages (downloaded
 	// separately), mentions per message, and each member install's chat agent (for @mentions).
 	`
 ALTER TABLE chat_messages ADD COLUMN mentions TEXT NOT NULL DEFAULT '';
@@ -221,7 +218,7 @@ CREATE TABLE chat_agents (
 	PRIMARY KEY (chat_id, peer_id)
 ) WITHOUT ROWID;
 `,
-	// 6: the board (ARCHITECTURE.md "Board"): threads, and the thread of head timeline entries and
+	// 6: the board (DESIGN.md "Board"): threads, and the thread of head timeline entries and
 	// of mail and questions to and from the head. Every existing project gets its thread.
 	`
 CREATE TABLE threads (
@@ -242,7 +239,7 @@ ALTER TABLE timeline ADD COLUMN thread_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE messages ADD COLUMN thread_id TEXT NOT NULL DEFAULT '';
 ALTER TABLE approvals ADD COLUMN thread_id TEXT NOT NULL DEFAULT '';
 `,
-	// 7: the board's logs and order (ARCHITECTURE.md "Board"): append-only entries per thread, and
+	// 7: the board's logs and order (DESIGN.md "Board"): append-only entries per thread, and
 	// the owner's urgency order of the threads.
 	`
 ALTER TABLE threads ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
@@ -260,7 +257,7 @@ CREATE TABLE thread_entries (
 );
 CREATE INDEX thread_entries_thread ON thread_entries(thread_id, at);
 `,
-	// 8: handing a group's admin role over (ARCHITECTURE.md "Chats", Groups): the signed certificate
+	// 8: handing a group's admin role over (DESIGN.md "Chats", Groups): the signed certificate
 	// chain that proves who the admin is (JSON, at most 8), our open offer to a member (JSON),
 	// and the capabilities other installs advertise (e.g. "admin1": they understand handovers).
 	`
@@ -272,7 +269,7 @@ CREATE TABLE peer_caps (
 	updated_at INTEGER NOT NULL
 ) WITHOUT ROWID;
 `,
-	// 9: chat boards (ARCHITECTURE.md "Chat boards"): each chat's topics (every field a
+	// 9: chat boards (DESIGN.md "Chat boards"): each chat's topics (every field a
 	// last-writer-wins register: value, time, peer), which topic each message hangs on (a
 	// register too; a move may arrive before its message), the topics' logs, and this owner's
 	// own order of a board's strings.
@@ -325,7 +322,7 @@ CREATE TABLE chat_boards (
 	updated_at INTEGER NOT NULL
 );
 `,
-	// 10: voice transcripts (ARCHITECTURE.md "Voice"): one per source, searchable through an FTS5 index on
+	// 10: voice transcripts (DESIGN.md "Voice"): one per source, searchable through an FTS5 index on
 	// the text. n is an explicit row number, so the index survives a VACUUM; audio is the WAV a
 	// job left by a restart starts again from (never in the API).
 	`
@@ -356,7 +353,7 @@ CREATE TRIGGER transcripts_au AFTER UPDATE OF text ON transcripts BEGIN
 	INSERT INTO transcripts_fts(rowid, text) VALUES (new.n, new.text);
 END;
 `,
-	// 11: recordings of the owner's screen and microphone (ARCHITECTURE.md "Recorder"); the files
+	// 11: recordings of the owner's screen and microphone (DESIGN.md "Recorder"); the files
 	// live in recordings/<id>/, the rows name them.
 	`
 CREATE TABLE recordings (
@@ -388,17 +385,17 @@ CREATE TABLE recording_segments (
 	PRIMARY KEY (recording_id, n)
 ) WITHOUT ROWID;
 `,
-	// 12: the device's own sound in screen recordings (ARCHITECTURE.md "Recorder"); frames need no
+	// 12: the device's own sound in screen recordings (DESIGN.md "Recorder"); frames need no
 	// table (they are files in recordings/<id>/frames/).
 	`
 ALTER TABLE recordings ADD COLUMN system_audio INTEGER NOT NULL DEFAULT 0;
 `,
-	// 13: native recordings (ARCHITECTURE.md "Recorder"): who writes a recording's files (web: the
+	// 13: native recordings (DESIGN.md "Recorder"): who writes a recording's files (web: the
 	// window's chunks; native: the macOS app's ScreenCaptureKit).
 	`
 ALTER TABLE recordings ADD COLUMN source TEXT NOT NULL DEFAULT 'web';
 `,
-	// 14: summaries of recordings, written by Claude (ARCHITECTURE.md "Summaries"): one per recording; the
+	// 14: summaries of recordings, written by Claude (DESIGN.md "Summaries"): one per recording; the
 	// lists are JSON arrays.
 	`
 CREATE TABLE recording_summaries (
@@ -423,7 +420,7 @@ CREATE TABLE recording_summaries (
 ) WITHOUT ROWID;
 CREATE INDEX recording_summaries_state ON recording_summaries(state, updated_at);
 `,
-	// 15: WhatsApp (ARCHITECTURE.md "WhatsApp"): the linked account's chats, messages, reactions and
+	// 15: WhatsApp (DESIGN.md "WhatsApp"): the linked account's chats, messages, reactions and
 	// contacts, filled from the history sync and live events; wa_meta: the linked account and
 	// when it was linked. media_ref says how to fetch an
 	// attachment from WhatsApp (its keys; never in the API), media_file is the file once
@@ -512,7 +509,7 @@ ALTER TABLE approvals ADD COLUMN card TEXT NOT NULL DEFAULT 'null';`,
 	`ALTER TABLE approvals ADD COLUMN deferred INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE approvals ADD COLUMN answer_id TEXT NOT NULL DEFAULT '';
 CREATE TABLE card_answers (approval_id TEXT NOT NULL, request_id TEXT NOT NULL, request TEXT NOT NULL, result TEXT NOT NULL, message_id TEXT NOT NULL, PRIMARY KEY (approval_id, request_id));`,
-	// Checklist progress, optimistic versions and a conservative ETA (ARCHITECTURE.md "Progress"):
+	// Checklist progress, optimistic versions and a conservative ETA (DESIGN.md "Progress"):
 	// the latest checklist lives on the project row itself; progress_samples is bounded
 	// history (100 per project, pruned after 30 days) used only to derive an ETA.
 	`
@@ -539,7 +536,7 @@ CREATE INDEX progress_samples_at ON progress_samples(at);
 	data TEXT NOT NULL,
 	PRIMARY KEY(project_id, agent_id)
 );`,
-	// Peer mail (ARCHITECTURE.md "Python fleet interop"): each local message to or from an agent on
+	// Peer mail (DESIGN.md "Python fleet interop"): each local message to or from an agent on
 	// another machine, with its wire ID on that machine; outbound rows carry the send retry
 	// (next_attempt_at > 0: still to be sent).
 	`CREATE TABLE peer_messages (
@@ -554,7 +551,7 @@ CREATE INDEX progress_samples_at ON progress_samples(at);
 	UNIQUE(peer, wire_id)
 );
 CREATE INDEX peer_messages_due ON peer_messages(next_attempt_at) WHERE next_attempt_at > 0;`,
-	// The Matrix (ARCHITECTURE.md "Matrix"): a thread's owner, status and lifecycle, the owner's words and the story
+	// The Matrix (DESIGN.md "Matrix"): a thread's owner, status and lifecycle, the owner's words and the story
 	// it serves, its parent and its place on the canvas; and its links to everything working on it
 	// (never deleted: detaching sets ended_at; at most one open link per thread, axis, ref and role).
 	`
@@ -586,6 +583,12 @@ CREATE INDEX thread_links_ref ON thread_links(axis, ref);
 	`ALTER TABLE agents ADD COLUMN shelved_at INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agents ADD COLUMN done_at INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agents ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;`,
+	// recordings' sensitivity (G5, the owner 3 Nov): "clinic" = patient data of the clinics, summarized on our own
+	// machines only; "" = anything may write the report.
+	`ALTER TABLE recordings ADD COLUMN sensitivity TEXT NOT NULL DEFAULT '';`,
+	`CREATE TABLE profile_default_upgrades (name TEXT PRIMARY KEY);`,
+	`CREATE TABLE project_imports (project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, source TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(project_id,source,id));`,
+	`CREATE TABLE agent_project_views (agent_id TEXT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE, data TEXT NOT NULL);`,
 }
 
 func (s *Store) migrate() error {

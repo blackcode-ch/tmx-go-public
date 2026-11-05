@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useMemo } from "react";
 import qrcode from "qrcode-generator";
 import { cn } from "@/lib/utils";

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package harness
 
 import (
@@ -15,7 +12,7 @@ import (
 )
 
 // Screens from v2's tests/test_detect.py (real captures, words neutralised) and the live
-// calibration against Claude Code (see ARCHITECTURE.md "Screen detection").
+// calibration against Claude Code (see DESIGN.md "Screen detection").
 
 var claudeTrust = strings.Split(` Accessing workspace:
 

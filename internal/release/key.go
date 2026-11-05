@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package release
 
 import (
@@ -96,4 +93,15 @@ func LoadKey(home, id string) (ed25519.PrivateKey, error) {
 		return nil, errors.New("release key file is corrupt") // never echo its content
 	}
 	return ed25519.NewKeyFromSeed(seed), nil
+}
+
+// PublicOf is the public half of key id in home (`tmx release pubkey`): it lets the owner check a
+// key file, e.g. one restored from its backup, against the pinned key without printing a secret.
+func PublicOf(home, id string) (Public, error) {
+	key, err := LoadKey(home, id)
+	if err != nil {
+		return Public{}, err
+	}
+	pub := key.Public().(ed25519.PublicKey)
+	return Public{ID: id, Key: base64.StdEncoding.EncodeToString(pub), Fingerprint: Fingerprint(pub)}, nil
 }

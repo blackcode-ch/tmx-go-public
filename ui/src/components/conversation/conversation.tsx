@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
 import { ArrowDown, MessageSquareDashed, MessagesSquare, Play, SquareTerminal } from "lucide-react";
 import { toast } from "sonner";
@@ -55,7 +52,7 @@ export function spacing(prev: Item | undefined, cur: Item): string {
 }
 
 /** Above the composer while a Claude or Codex agent is in its own screen, or about to switch
- * (ARCHITECTURE.md "Switching live"): the conversation goes on there, tmx shows what it reads. */
+ * (DESIGN.md "Switching live"): the conversation goes on there, tmx shows what it reads. */
 function ScreenNotice({ agent }: { agent: Agent }) {
   if (!hasChatMode(agent.harness)) return null;
   const label = harnessLabel(agent.harness);
@@ -172,7 +169,7 @@ export function Conversation({ agent, composerRef }: { agent: Agent; composerRef
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scroller} onScroll={onScroll} className="scroll-thin min-h-0 flex-1 overflow-y-auto" data-testid="conversation-scroll">
-        <div ref={content} className="mx-auto w-full max-w-[780px] px-5 pt-6 pb-6 md:px-6">
+        <div ref={content} className="mx-auto w-full max-w-[48.75rem] px-5 pt-6 pb-6 md:px-6">
           {(hiddenLocal > 0 || tl?.maybeMore) && (
             <div className="mb-4 flex justify-center">
               <Button
@@ -252,7 +249,7 @@ export function Conversation({ agent, composerRef }: { agent: Agent; composerRef
         </div>
       )}
 
-        <div className="mx-auto w-full max-w-[756px]">
+        <div className="mx-auto w-full max-w-[47.25rem]">
           {stopped && agent.mode === "chat" && (
             <div className={cn("mb-2 flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground")}>
               <span className="min-w-0 flex-1 truncate">

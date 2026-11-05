@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The owner's recordings as every client sees them (ARCHITECTURE.md "Recorder"): the live one (the
+// The owner's recordings as every client sees them (DESIGN.md "Recorder"): the live one (the
 // indicator in every window, also on another browser or the phone) and the list for the
 // Recordings page, kept current by recording.* events and reloaded on every (re)connect.
 // The capture itself lives in recorder.ts and runs only in the window that records.
@@ -49,9 +46,11 @@ export const recApi = {
   list: (limit = 0) => t().request<Recording[] | null>("GET", `/api/recordings${limit ? `?limit=${limit}` : ""}`),
   get: (id: string) => t().request<Recording>("GET", `/api/recordings/${enc(id)}`),
   /** only the window that captures calls it, once capture is running */
-  begin: (b: { kind: RecordingKind; mic: boolean; system_audio?: boolean; mime: string; title?: string }) => t().request<Recording>("POST", "/api/recordings", b),
+  begin: (b: { kind: RecordingKind; mic: boolean; system_audio?: boolean; mime: string; title?: string; sensitivity?: "clinic" | "" }) => t().request<Recording>("POST", "/api/recordings", b),
   setState: (id: string, state: "paused" | "recording" | "stopped" | "heartbeat") => t().request<Recording>("POST", `/api/recordings/${enc(id)}/state`, { state }),
   rename: (id: string, title: string) => t().request<Recording>("PATCH", `/api/recordings/${enc(id)}`, { title }),
+  /** "clinic": local models only for its report; "": any model (owner only) */
+  setSensitivity: (id: string, sensitivity: "clinic" | "") => t().request<Recording>("PATCH", `/api/recordings/${enc(id)}`, { sensitivity }),
   remove: (id: string) => t().request<void>("DELETE", `/api/recordings/${enc(id)}`),
   ticket: (id: string) => t().request<{ ticket: string; expires_at: number }>("POST", `/api/recordings/${enc(id)}/ticket`),
   /** one segment as base64 (the desktop bridge, or when the window cannot load the daemon's URL) */

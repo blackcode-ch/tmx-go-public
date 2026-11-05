@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
 import "slices"
@@ -13,7 +10,7 @@ type Profile struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Level       Level  `json:"level"`
-	// Instructions is a template ({{name}}, {{project}}, ...; see ARCHITECTURE.md "Profiles").
+	// Instructions is a template ({{name}}, {{project}}, ...; see DESIGN.md "Profiles").
 	// tmx appends the role, the brief, the read-only note and the mail rules; those are not editable.
 	Instructions      string   `json:"instructions"`
 	Model             string   `json:"model"`
@@ -86,10 +83,10 @@ You review; you never change anything. Read the code and the changes you are ask
 Report to {{parent}} with report: a verdict first (approve, or changes needed), then concrete findings with file and line, most important first.`
 )
 
-// DefaultProfiles are the profiles of a new install: the three built-ins (head on Opus, everyone
-// below on Sonnet; owner's rule, 21 Oct 2026) and one example custom profile, "reviewer".
+// DefaultProfiles use Opus for leads and Sonnet for ordinary workers. Workers may
+// select Opus for senior work or Haiku for intern work; reviewer stays read-only.
 func DefaultProfiles() []Profile {
-	const opus, sonnet = "claude-opus-5-5", "claude-sonnet-5-5"
+	const opus, sonnet, haiku = "claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"
 	return []Profile{
 		{Slug: "head", Name: "Head", Level: LevelHead,
 			Description:  "Talks with you, creates projects and briefs their leads.",
@@ -97,11 +94,11 @@ func DefaultProfiles() []Profile {
 			CanCreateProjects: true, CanLaunch: []string{"lead", "worker", "reviewer"}},
 		{Slug: "lead", Name: "Lead", Level: LevelLead,
 			Description:  "Owns one project and launches its workers.",
-			Instructions: leadInstructions, Model: sonnet, AllowedModels: []string{sonnet}, PermissionMode: "auto",
+			Instructions: leadInstructions, Model: opus, AllowedModels: []string{opus, sonnet}, PermissionMode: "auto",
 			CanLaunch: []string{"worker", "reviewer"}},
 		{Slug: "worker", Name: "Worker", Level: LevelWorker,
 			Description:  "Does the work and reports to its lead.",
-			Instructions: workerInstructions, Model: sonnet, AllowedModels: []string{sonnet}, PermissionMode: "auto"},
+			Instructions: workerInstructions, Model: sonnet, AllowedModels: []string{sonnet, opus, haiku}, PermissionMode: "auto"},
 		{Slug: "reviewer", Name: "Reviewer", Level: LevelWorker,
 			Description:  "Reviews code and changes without editing anything: no shell, no file edits.",
 			Instructions: reviewerInstructions, Model: sonnet, AllowedModels: []string{sonnet}, PermissionMode: "auto",

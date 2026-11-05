@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -10,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { remScale } from "@/lib/text-size";
 
 function themeFor(dark: boolean) {
   return dark
@@ -67,7 +65,7 @@ export function TerminalView({ path, focusTick, ended, className }: { path: stri
     if (!host.current || !transport) return;
     const t = new Terminal({
       fontFamily: '"Geist Mono Variable", ui-monospace, Menlo, monospace',
-      fontSize: 12.5,
+      fontSize: 12.5 * remScale(), // grows with the text size (lib/text-size.ts)
       lineHeight: 1.25,
       cursorBlink: true,
       scrollback: 10000,

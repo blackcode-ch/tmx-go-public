@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package uploads keeps the files the owner attaches to messages. Each file lives at
 // <state>/uploads/<agent id>/<upload id>/<name> next to a meta.json, so an agent reads it from a
 // plain path (any harness can) and the folder goes away with the agent. Claude agents get

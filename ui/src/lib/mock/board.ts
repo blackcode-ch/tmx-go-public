@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The board in the mock daemon: threads, and cards built from the head's timeline the way
 // internal/fleet/board.go does (splitTurns, summarize).
 import { ApiError } from "../transport";

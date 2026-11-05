@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -20,6 +17,7 @@ type LaunchRequest struct {
 	Level     model.Level   `json:"level"`
 	Profile   string        `json:"profile,omitempty"` // "" = the built-in profile of the level
 	Harness   model.Harness `json:"harness,omitempty"`
+	Account   string        `json:"account,omitempty"` // the harness account; "" = the harness's default
 	Mode      model.Mode    `json:"mode,omitempty"`
 	Model     string        `json:"model,omitempty"`
 	Cwd       string        `json:"cwd,omitempty"`
@@ -120,14 +118,16 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 			return model.Agent{}, errf(KindForbidden, "%s (profile %s) cannot launch %s agents", me.a.Name, mp.Slug, prof.Slug)
 		}
 		if me.a.Level == model.LevelLead {
-			// Leads launch only into their own project, below themselves.
-			if me.a.ProjectID == "" {
-				return model.Agent{}, errf(KindForbidden, "a lead without a project cannot launch agents")
+			// An explicitly assigned lead can serve several projects without moving.
+			if proj == nil {
+				if me.a.ProjectID == "" {
+					return model.Agent{}, errf(KindForbidden, "a lead without a project cannot launch agents: ask the owner, the head or a project's lead to add you to a project (project_member_add), then launch there")
+				}
+				proj = f.projects[me.a.ProjectID]
 			}
-			if proj != nil && proj.ID != me.a.ProjectID {
-				return model.Agent{}, errf(KindForbidden, "a lead can launch agents only in its own project")
+			if proj == nil || (proj.ID != me.a.ProjectID && proj.LeadID != me.a.ID) {
+				return model.Agent{}, errf(KindForbidden, "a lead can launch agents only in its own project or one it leads")
 			}
-			proj = f.projects[me.a.ProjectID]
 		}
 		if parent == nil {
 			parent = me
@@ -144,7 +144,7 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 		}
 	}
 	if level == model.LevelLead && proj != nil && proj.LeadID != "" {
-		if _, ok := f.agents[proj.LeadID]; ok {
+		if _, ok := f.agents[proj.LeadID]; ok || IsPeer(proj.LeadID) {
 			return model.Agent{}, errf(KindConflict, "project %s already has a lead", proj.Name)
 		}
 	}
@@ -158,7 +158,7 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 	}
 	// A shell runs whatever is typed into it, with no model, no guard and no approvals: it is
 	// the owner's own terminal. An agent has no use for one (mail is never typed into a shell)
-	// and must not get one to type commands into (ARCHITECTURE.md "Fleet control").
+	// and must not get one to type commands into (DESIGN.md "Fleet control").
 	if harness == model.HarnessShell && !c.Owner {
 		return model.Agent{}, errf(KindForbidden, "only the owner can launch a shell")
 	}
@@ -183,8 +183,12 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 	}
 
 	now := model.Now()
+	account, err := f.launchAccountLocked(harness, req.Account)
+	if err != nil {
+		return model.Agent{}, err
+	}
 	a := model.Agent{
-		ID: model.NewID(), Name: req.Name, Level: level, Profile: prof.Slug, Harness: harness, Mode: mode, Model: mdl,
+		ID: model.NewID(), Name: req.Name, Level: level, Profile: prof.Slug, Harness: harness, Account: account, Mode: mode, Model: mdl,
 		Cwd: filepath.Clean(cwd), Role: req.Role, Brief: req.Brief,
 		CodexFullAccess: req.CodexFullAccess,
 		AgyFullAccess:   req.AgyFullAccess,
@@ -211,15 +215,15 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 		if proj != nil {
 			lead = f.agents[proj.LeadID]
 		}
-		headLead := lead != nil && lead == f.headLocked() && lead.a.Level == model.LevelHead
-		if lead == nil || (!headLead && (lead.a.Level != model.LevelLead || lead.a.ProjectID != proj.ID)) {
+		headLead := lead != nil && lead.a.Level == model.LevelHead
+		if lead == nil || (!headLead && lead.a.Level != model.LevelLead) {
 			return model.Agent{}, errf(KindInvalid, "a worker needs a project with a lead; select or create a project, or launch from its lead")
 		}
 		if parent == nil || parent.a.Level == model.LevelHead {
 			parent = lead
 			a.ParentID = parent.a.ID
 		}
-		if parent.a.ProjectID != proj.ID && !(headLead && parent == lead) {
+		if parent.a.ProjectID != proj.ID && parent != lead {
 			return model.Agent{}, errf(KindInvalid, "a worker and its parent must belong to the same project")
 		}
 	}

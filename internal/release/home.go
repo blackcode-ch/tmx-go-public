@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package release is the fleet release signer (`tmx release keygen|sign`, ARCHITECTURE.md "Updates",
+// Package release is the fleet release signer (`tmx release keygen|sign`, DESIGN.md "Updates",
 // "Signing a release"): the Ed25519 fleet release key on the release machine, the gates a tag
 // must pass before it is signed, the signing and the local release log.
 package release

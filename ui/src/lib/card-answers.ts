@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { create } from "zustand";
 import type { Approval, DecideBody } from "./types";
 
-export interface PendingCardAnswer { scope: string; card: Approval; request: DecideBody }
+export interface PendingCardAnswer {
+  scope: string; card: Approval; request: DecideBody;
+  blocked?: boolean; retryAt?: number; retries?: number; error?: string;
+}
 const storageKey = "tmx.pending-card-answers.v1";
 function load(): Record<string, PendingCardAnswer> {
   try {
@@ -33,6 +33,30 @@ export function clearCardAnswer(key: string) {
   useCardAnswers.setState({ items });
 }
 
+export const useCardSends = create<{ items: Record<string, boolean> }>(() => ({ items: {} }));
+export function beginCardSend(key: string): boolean {
+  if (useCardSends.getState().items[key]) return false;
+  useCardSends.setState((s) => ({ items: { ...s.items, [key]: true } }));
+  return true;
+}
+export function endCardSend(key: string) {
+  const items = { ...useCardSends.getState().items };
+  delete items[key];
+  useCardSends.setState({ items });
+}
+
+export function cardSendFailed(key: string, error: unknown, now = Date.now()) {
+  const pending = useCardAnswers.getState().items[key];
+  if (!pending) return;
+  const status = (error as { status?: number })?.status;
+  const retries = (pending.retries || 0) + 1;
+  saveCardAnswer(key, { ...pending, retries,
+    blocked: status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429,
+    retryAt: now + Math.min(60_000, 5_000 * 2 ** Math.min(retries - 1, 4)),
+    error: (error as Error)?.message || "Delivery is not confirmed. Your answer is saved.",
+  });
+}
+
 export interface CardDraft { scope: string; card: Approval; text: string }
 const draftStorageKey = "tmx.card-drafts.v1";
 function loadDrafts(): Record<string, CardDraft> {
@@ -56,6 +80,12 @@ export function saveCardDraft(scope: string, card: Approval, text: string, revie
   // Keep words visible even when browser storage is unavailable; report the failure.
   useCardDrafts.setState({ items });
   sessionStorage.setItem(draftStorageKey, JSON.stringify(items));
+}
+
+/** A slow clipboard/POST must not erase dictation arriving while it was awaiting. */
+export function clearUnchangedCardWords(key: string, pending: PendingCardAnswer | undefined, draft: CardDraft | undefined) {
+  if (pending && useCardAnswers.getState().items[key] === pending) clearCardAnswer(key);
+  if (draft && useCardDrafts.getState().items[key] === draft) saveCardDraft(draft.scope, draft.card, "");
 }
 
 /** The app dictation session writes here even after the original card unmounts. */

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -21,6 +18,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/fleet"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/peers"
+	"github.com/blackcode-ch/tmx-go/internal/summarize"
 )
 
 // retiredFleetToken stands for the fleet token retired on 1 Nov 2026: never accepted.
@@ -70,6 +68,7 @@ type peerSetup struct {
 	url  string // the daemon, with peer routes
 	py   *pyPeer
 	pair string // the hosta pair token, as tmx peers import-python brought it
+	pc   *peers.Client
 }
 
 func newPeerSetup(t *testing.T) *peerSetup {
@@ -87,7 +86,7 @@ func newPeerSetup(t *testing.T) *peerSetup {
 	if _, err := pc.Tokens().Store("hosta", pair, "python-import"); err != nil {
 		t.Fatal(err)
 	}
-	return &peerSetup{d: d, url: d.WithPeers(t, pc), py: py, pair: pair}
+	return &peerSetup{d: d, url: d.WithPeers(t, pc), py: py, pair: pair, pc: pc}
 }
 
 // peerDo calls the daemon as a peer machine.
@@ -143,7 +142,11 @@ func TestPeerAuthBoundaries(t *testing.T) {
 		{"unknown machine", "GET", "/api/sessions", "mallory", s.pair, nil, nil, 401},
 		{"owner token is not a peer token", "GET", "/api/sessions", "hosta", s.d.OwnerToken, nil, nil, 401},
 		{"a browser", "GET", "/api/sessions", "hosta", s.pair, map[string]string{"Origin": "https://evil.example"}, nil, 403},
-		{"an agent relayed by a peer", "GET", "/api/sessions", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "agent:x@hosta"}, nil, 403},
+		// on-behalf names whom the peer acts for on ITS OWN machine; it never changes the
+		// caller here (always fleet.PeerCaller, never Owner) - tmx-lead, 3 Nov P1: Hosta's
+		// real traffic relays on-behalf of its own agents too (agent:<name>), not just
+		// daemon/operator, and that must keep working.
+		{"a peer relaying for one of its own agents", "GET", "/api/sessions", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "agent:x@hosta"}, nil, 200},
 		// The fleet token is retired fleet-wide: refused everywhere, also for an unpaired peer.
 		{"retired fleet token reads", "GET", "/api/sessions", "hosta", retiredFleetToken, nil, nil, 401},
 		{"retired fleet token, unpaired peer", "GET", "/api/sessions", "hostc", retiredFleetToken, nil, nil, 401},
@@ -172,6 +175,69 @@ func TestPeerAuthBoundaries(t *testing.T) {
 	req.Header.Set(peers.HeaderFrom, "hosta")
 	if res, err := http.DefaultClient.Do(req); err != nil || res.StatusCode != 403 {
 		t.Errorf("remote host: %v %v", res.StatusCode, err)
+	}
+}
+
+// A peer forwarding a read for its OWN local operator (Python's relay-invites/autonomy
+// polling: on_behalf "operator") reaches the ordinary mux like any other peer call, and gets a
+// clean 404 for a route Go does not implement yet - not an on-behalf 403 (tmx-lead's #103:
+// "answer 404, not 401, or work").
+//
+// Hard condition (rule 1, tmx-lead): on-behalf is purely informational (whom the peer acts for
+// on ITS OWN machine) and never changes the caller here - it is always fleet.PeerCaller, never
+// Owner, whatever on-behalf says. So (a) the owner driving Hostb's agents from Hosta's
+// dashboard (relayed with on_behalf=operator) gets agent operations only (launch/screen work),
+// never owner-only settings (gate/PIN/devices still 403); (b) Hosta relaying its OWN agents'
+// or devices' reads (on_behalf=agent:<name> or device:<id>, tmx-lead's 3 Nov P1: this broke
+// /api/health, /api/sessions, relay-invites polling) keeps working the same way.
+func TestPeerOnBehalfOperatorReachesMuxAgentRelayStillRefused(t *testing.T) {
+	s := newPeerSetup(t)
+	operator := map[string]string{peers.HeaderOnBehalf: "operator"}
+
+	if code := peerDo(t, s.url, "GET", "/api/pending", "hosta", s.pair, operator, nil, nil); code != 404 {
+		t.Errorf("on-behalf operator, unimplemented route /api/pending: %d, want 404", code)
+	}
+	if code := peerDo(t, s.url, "GET", "/api/autonomy", "hosta", s.pair, operator, nil, nil); code != 404 {
+		t.Errorf("on-behalf operator, unimplemented route /api/autonomy: %d, want 404", code)
+	}
+
+	// on_behalf=operator never becomes Owner: owner-only routes still 403.
+	for _, tc := range []struct{ method, path string }{
+		{"GET", "/api/gate/pin"}, {"GET", "/api/devices"}, {"PUT", "/api/safety/guard"}, {"GET", "/api/config"},
+	} {
+		if code := peerDo(t, s.url, tc.method, tc.path, "hosta", s.pair, operator, nil, nil); code != 403 {
+			t.Errorf("on-behalf operator on owner-only %s %s: %d, want 403", tc.method, tc.path, code)
+		}
+	}
+
+	// on_behalf=operator still gets agent operations, like any full peer.
+	var launched model.Agent
+	if code := peerDo(t, s.url, "POST", "/api/agents", "hosta", s.pair, operator,
+		map[string]string{"name": "via-operator", "mode": "terminal"}, &launched); code != 201 {
+		t.Fatalf("on-behalf operator launch: %d", code)
+	}
+	if p := s.d.Term.Last(launched.ID); p != nil {
+		p.SetReplay([]byte("hello from the terminal"))
+	}
+	if code := peerDo(t, s.url, "GET", "/api/agents/"+launched.ID+"/screen", "hosta", s.pair, operator, nil, nil); code != 200 {
+		t.Errorf("on-behalf operator screen: %d, want 200", code)
+	}
+
+	// on_behalf=agent:<name> and device:<id> are peer calls too (tmx-lead's P1): 404 on an
+	// unimplemented route, never the on-behalf 403 that broke Hosta's relayed reads.
+	if code := peerDo(t, s.url, "GET", "/api/pending", "hosta", s.pair,
+		map[string]string{peers.HeaderOnBehalf: "agent:x@hosta"}, nil, nil); code != 404 {
+		t.Errorf("on-behalf agent relay: %d, want 404", code)
+	}
+	if code := peerDo(t, s.url, "GET", "/api/pending", "hosta", s.pair,
+		map[string]string{peers.HeaderOnBehalf: "device:x"}, nil, nil); code != 404 {
+		t.Errorf("on-behalf device relay: %d, want 404", code)
+	}
+
+	// Never Owner, whatever on-behalf says: still 403 on an owner-only route.
+	if code := peerDo(t, s.url, "GET", "/api/gate/pin", "hosta", s.pair,
+		map[string]string{peers.HeaderOnBehalf: "agent:x@hosta"}, nil, nil); code != 403 {
+		t.Errorf("on-behalf agent relay on owner-only route: %d, want 403", code)
 	}
 }
 
@@ -300,6 +366,14 @@ func TestPeerPairTokenRotation(t *testing.T) {
 	if code := peerDo(t, s.url, "POST", "/api/peers/pair-token", "hostc", vt, nil, map[string]string{"token": peers.NewPairToken()}, nil); code != 403 {
 		t.Fatalf("hostc rotated the token hostb generates: %d", code)
 	}
+	// Owner material (go-reviewer-o/tmx-lead, 3 Nov): rotating the pair token is the peer
+	// machine's own act, never a relayed agent, device or operator.
+	for _, ob := range []string{"agent:x@hosta", "device:x", "operator"} {
+		if code := peerDo(t, s.url, "POST", "/api/peers/pair-token", "hosta", s.pair,
+			map[string]string{peers.HeaderOnBehalf: ob}, map[string]string{"token": peers.NewPairToken()}, nil); code != 403 {
+			t.Errorf("pair-token rotation on-behalf %q: %d, want 403", ob, code)
+		}
+	}
 }
 
 // The owner PIN between machines (Python's Ship 1 protocol): a peer pushes its newer record,
@@ -312,6 +386,13 @@ func TestPeerOwnerPINSync(t *testing.T) {
 	if code := peerDo(t, s.url, "GET", "/api/gate/pin/record", "hosta", s.pair, nil, nil, &got); code != 200 || got.Record != nil {
 		t.Fatalf("empty record: %d %v", code, got.Record)
 	}
+	// GET also reveals owner material (the scrypt hash): machine-only too, same as POST.
+	for _, ob := range []string{"agent:x@hosta", "device:x", "operator"} {
+		if code := peerDo(t, s.url, "GET", "/api/gate/pin/record", "hosta", s.pair,
+			map[string]string{peers.HeaderOnBehalf: ob}, nil, nil); code != 403 {
+			t.Errorf("GET pin/record on-behalf %q: %d, want 403", ob, code)
+		}
+	}
 	// Vector 1 (confirmed against Python): PIN 123456.
 	rec := map[string]any{"salt": "000102030405060708090a0b0c0d0e0f", "hash": "53e59f1f9f56c2317d99f7a1e76fd1d43677ccb19c2c125e054f9a81281e0aec", "set": float64(time.Now().Unix())}
 	for _, tc := range []struct {
@@ -323,7 +404,14 @@ func TestPeerOwnerPINSync(t *testing.T) {
 		{"no token", "hosta", "", nil, map[string]any{"record": rec}, 401},
 		{"owner token", "hosta", s.d.OwnerToken, nil, map[string]any{"record": rec}, 401},
 		{"a browser", "hosta", s.pair, map[string]string{"Origin": "https://evil.example"}, map[string]any{"record": rec}, 403},
-		{"an agent relayed by a peer", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "agent:x@hosta"}, map[string]any{"record": rec}, 403},
+		// Owner material (go-reviewer-o/tmx-lead, 3 Nov): this route pushes the owner's PIN
+		// record, so unlike an ordinary relayed read, only the peer machine itself may call
+		// it (no on-behalf, or "daemon") - never a relayed agent, device or operator, however
+		// that peer authenticated.
+		{"a peer relaying for one of its own agents", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "agent:x@hosta"}, map[string]any{"record": rec}, 403},
+		{"a peer relaying for one of its own devices", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "device:x"}, map[string]any{"record": rec}, 403},
+		{"a peer relaying for its operator", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "operator"}, map[string]any{"record": rec}, 403},
+		{"the machine itself, on-behalf daemon", "hosta", s.pair, map[string]string{peers.HeaderOnBehalf: "daemon"}, map[string]any{"record": rec}, 200},
 		{"malformed", "hosta", s.pair, nil, map[string]any{"record": map[string]any{"salt": "00", "hash": "11", "set": 1}}, 400},
 		{"the peer", "hosta", s.pair, nil, map[string]any{"record": rec}, 200},
 	} {
@@ -367,5 +455,94 @@ func TestPeerOwnerPINSync(t *testing.T) {
 	s.py.mu.Unlock()
 	if len(pushed) != 3 || len(pushed["salt"].(string)) != 32 || len(pushed["hash"].(string)) != 64 || pushed["set"].(float64) <= rec["set"].(float64)-1 {
 		t.Fatalf("pushed %v", pushed)
+	}
+}
+
+// The summary route between our own machines (summaries.via_peer / serve_peers). Serving: only with the peer's pair
+// token, only the peers this daemon serves, and the generate goes to its own loopback Ollama. Asking: a peer still
+// on the Python daemon has no such route, and the reason says so.
+func TestPeerSummarizeLocal(t *testing.T) {
+	s := newPeerSetup(t)
+	var gens int
+	ollama := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gens++
+		_, _ = w.Write([]byte(`{"response":"{\"summary\":\"ok\"}"}`))
+	}))
+	t.Cleanup(ollama.Close)
+	in := summarize.PeerGenerate{Model: summarize.DefaultLocalModel, Prompt: "Transcript: hi"}
+	path := "/api/peer/summarize-local"
+
+	s.d.SetSummaries(config.SummaryConfig{LocalURL: ollama.URL})
+	if c := peerDo(t, s.url, "POST", path, "hosta", s.pair, nil, in, nil); c != 403 {
+		t.Fatalf("a peer this daemon does not serve: %d", c)
+	}
+	s.d.SetSummaries(config.SummaryConfig{LocalURL: ollama.URL, ServePeers: []string{"hosta"}})
+	if c := peerDo(t, s.url, "POST", path, "hosta", "", nil, in, nil); c != 401 {
+		t.Fatalf("without the pair token: %d", c)
+	}
+	if c := peerDo(t, s.url, "POST", path, "hosta", s.d.OwnerToken, nil, in, nil); c != 401 {
+		t.Fatalf("the owner token is not a peer token: %d", c)
+	}
+	if c := peerDo(t, s.url, "POST", path, "hosta", s.pair, nil, summarize.PeerGenerate{Model: "llama3:70b", Prompt: "p"}, nil); c != 400 {
+		t.Fatalf("another model: %d", c)
+	}
+	if gens != 0 {
+		t.Fatalf("a refused request reached Ollama")
+	}
+	var out summarize.PeerAnswer
+	if c := peerDo(t, s.url, "POST", path, "hosta", s.pair, nil, in, &out); c != 200 || !strings.Contains(out.Response, "ok") || gens != 1 {
+		t.Fatalf("served: %d %+v (%d generates)", c, out, gens)
+	}
+
+	// asking: hosta is still the Python daemon (pyPeer answers 404 to anything it does not know)
+	if _, err := s.pc.SummarizeLocal(t.Context(), "hosta", in); err == nil || !strings.Contains(err.Error(), "no summary route yet") {
+		t.Fatalf("a Python peer: %v", err)
+	}
+}
+
+// A full peer reaches the ordinary agent-operation routes, same standing as the owner there
+// (tmx-lead, 3 Nov interop P0: launch/screen/type/keys/restart), but the hard boundary holds:
+// it is NEVER owner for an owner-only route (gate/PIN, devices, pairing/invites, safety,
+// secrets/accounts, update, config - every one gated on the literal Owner bool, untouched by
+// this change). go-reviewer-o's block criterion for this PR.
+func TestPeerReachesAgentOpsButNeverOwnerOnlyRoutes(t *testing.T) {
+	s := newPeerSetup(t)
+
+	var launched model.Agent
+	if code := peerDo(t, s.url, "POST", "/api/agents", "hosta", s.pair, nil,
+		map[string]string{"name": "peer-launched", "mode": "terminal"}, &launched); code != 201 {
+		t.Fatalf("peer launch: %d", code)
+	}
+	if p := s.d.Term.Last(launched.ID); p != nil {
+		p.SetReplay([]byte("hello from the terminal"))
+	}
+	if code := peerDo(t, s.url, "GET", "/api/agents/"+launched.ID+"/screen", "hosta", s.pair, nil, nil, nil); code != 200 {
+		t.Fatalf("peer screen: %d", code)
+	}
+	if code := peerDo(t, s.url, "POST", "/api/agents/"+launched.ID+"/restart", "hosta", s.pair, nil, nil, nil); code != 200 {
+		t.Fatalf("peer restart: %d", code)
+	}
+
+	// Owner-only routes: gate/PIN, devices, pairing/invites, safety, secrets/accounts, update,
+	// config. A full peer gets 403 on every one of them, exactly like an agent would.
+	ownerOnly := []struct{ method, path string }{
+		{"GET", "/api/gate/pin"},
+		{"POST", "/api/gate/pin"},
+		{"GET", "/api/devices"},
+		{"POST", "/api/devices/approve"},
+		{"GET", "/api/safety"},
+		{"PUT", "/api/safety/guard"},
+		{"GET", "/api/gate"},
+		{"PUT", "/api/gate"},
+		{"DELETE", "/api/agents/" + launched.ID},
+		{"GET", "/api/config"},
+		{"PUT", "/api/config"},
+		{"GET", "/api/p2p"},
+		{"GET", "/api/system/tools"},
+	}
+	for _, tc := range ownerOnly {
+		if code := peerDo(t, s.url, tc.method, tc.path, "hosta", s.pair, nil, nil, nil); code != 403 {
+			t.Errorf("peer on owner-only %s %s: %d, want 403", tc.method, tc.path, code)
+		}
 	}
 }

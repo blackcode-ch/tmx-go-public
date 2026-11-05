@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package summarizetest installs a fake claude for summaries into a throwaway tmx home, for tests
 // of the API, the CLI and MCP, and for trying the UI on a throwaway daemon (config.json
 // claude_command = Path(home)). It is a shell script that reads the prompt, appends its arguments

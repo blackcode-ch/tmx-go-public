@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -93,7 +90,7 @@ export function NewProjectDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && ui.openNewProject(v)}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[32.5rem]">
         <form onSubmit={create} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
@@ -121,7 +118,7 @@ export function NewProjectDialog() {
                   disabled={!h.installed || busy || harnessesLoading}
                   title={h.installed ? h.path : `Not installed here${h.install ? `: ${h.install}` : ""}`}
                   onClick={() => setHarness(h.name)}
-                  className={`flex min-w-0 flex-col items-start gap-1 rounded-lg border px-3 py-2 text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${h.name === harness ? "border-brand/50 bg-brand-soft" : "border-border hover:bg-muted/50"}`}
+                  className={`flex min-w-0 flex-col items-start gap-1 rounded-lg border px-3 py-2 text-left text-[0.8125rem] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${h.name === harness ? "border-brand/50 bg-brand-soft" : "border-border hover:bg-muted/50"}`}
                 >
                   <span className="font-medium">{h.label}</span>
                   <span className="text-2xs text-muted-foreground">{h.installed ? "Installed" : "Not installed"}</span>
@@ -140,7 +137,7 @@ export function NewProjectDialog() {
                 setFolder(e.target.value);
               }}
               placeholder={workspace ? `${displayPath(workspace)}/…` : "/path/to/project"}
-              className="font-mono text-[12.5px]"
+              className="font-mono text-[0.7812rem]"
               spellCheck={false}
             />
             <p className="text-2xs text-muted-foreground">Created if it doesn't exist. Deleting the project later never deletes the folder.</p>

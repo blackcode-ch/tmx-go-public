@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The dangerous-command guard in the UI: held calls (Approvals of kind "guard") and the rows the
 // guard writes into a conversation (held, decided, blocked).
 import { Ban, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
@@ -33,7 +30,7 @@ export function GuardCommand({ g, tone, cwd, className }: { g: GuardHold; tone: 
         <span className="font-mono text-2xs text-subtle-foreground">{file ? `${g.tool} · file` : g.tool === "PowerShell" ? "PowerShell" : "shell"}</span>
         <CopyButton text={g.command} label="Copy command" />
       </div>
-      <pre className="scroll-thin max-h-48 overflow-auto px-3 py-2.5 font-mono text-[12.5px] leading-[1.65] whitespace-pre-wrap text-foreground/80 [overflow-wrap:anywhere]">
+      <pre className="scroll-thin max-h-48 overflow-auto px-3 py-2.5 font-mono text-[0.7812rem] leading-[1.65] whitespace-pre-wrap text-foreground/80 [overflow-wrap:anywhere]">
         {at >= 0 ? (
           <>
             {text.slice(0, at)}
@@ -54,7 +51,7 @@ export function GuardHoldBody({ a, agent, compact }: { a: Approval; agent?: Agen
   if (!g) return null;
   return (
     <div className="space-y-2.5">
-      <GuardCommand g={g} tone="hold" cwd={agent?.cwd} className={compact ? "text-[12px]" : undefined} />
+      <GuardCommand g={g} tone="hold" cwd={agent?.cwd} className={compact ? "text-[0.75rem]" : undefined} />
       <div className="space-y-1 text-xs leading-relaxed">
         {g.detail && (
           <p className="text-foreground/90">

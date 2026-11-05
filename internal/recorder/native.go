@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package recorder
 
-// Native recordings (ARCHITECTURE.md "Recorder", native capture). The macOS app captures with
+// Native recordings (DESIGN.md "Recorder", native capture). The macOS app captures with
 // ScreenCaptureKit in its own window process and writes the files into the recording's folder
 // itself: seg-NNNN.mp4 (H.264 + AAC, finished part by part), seg-NNNN.wav (16 kHz mono PCM16 of
 // the microphone and device audio, mixed) and frames/f-<ms>.jpg. It tells the daemon what it

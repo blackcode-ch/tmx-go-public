@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// Chat boards (ARCHITECTURE.md "Chat boards"): every chat has a board shared by its members. Its
+// Chat boards (DESIGN.md "Chat boards"): every chat has a board shared by its members. Its
 // strings are topics; a message hangs on its topic's string (no topic: General). Topics,
 // which message is on which topic, and the topics' logs travel to every member over p2p
 // (chat.topic envelopes); the order of the strings is each person's own.

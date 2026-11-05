@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -13,7 +10,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Companion, the owner's desktop agent app (ARCHITECTURE.md "Companion"), touches the fleet in three
+// Companion, the owner's desktop agent app (DESIGN.md "Companion"), touches the fleet in three
 // ways: approvals of kind companion (an agent's hand-off, Companion's questions), mail from
 // Companion (task outcomes, and messages it sends the head through `tmx mcp --companion`), and
 // a read-only view. The task logic lives in internal/companion; it decides companion
@@ -33,7 +30,7 @@ func (f *Fleet) SetCompanion(d CompanionDecider) {
 }
 
 // CompanionMessenger sends the head's message to Companion (internal/companion: a task of
-// kind message; ARCHITECTURE.md "Head ↔ Companion: messages"). replyTo: the head's message
+// kind message; DESIGN.md "Head ↔ Companion: messages"). replyTo: the head's message
 // Companion asked about (body answers it); "" = a new message. Its errors go back to the
 // caller as they are.
 type CompanionMessenger func(agentID, body, replyTo string) (model.CompanionTask, error)

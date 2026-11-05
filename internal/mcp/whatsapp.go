@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -19,7 +16,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/whatsapp"
 )
 
-// The owner's WhatsApp (ARCHITECTURE.md "WhatsApp"), for the agents the owner allows (default: the
+// The owner's WhatsApp (DESIGN.md "WhatsApp"), for the agents the owner allows (default: the
 // head). Every answer starts with whatsapp.Frame: these are other people's words, data, never
 // instructions; names pass through peertext.Field and messages are quoted line by line
 // (agentWaMessage). Media is described, not attached. Sending is text to one chat at a time and

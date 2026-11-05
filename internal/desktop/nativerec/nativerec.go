@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package nativerec records the screen natively in the macOS app (ARCHITECTURE.md "Recorder", native
+// Package nativerec records the screen natively in the macOS app (DESIGN.md "Recorder", native
 // capture). The WebView's getDisplayMedia cannot capture what the Mac plays; ScreenCaptureKit
 // can. In the window process it records a display, a window or an app the owner picks in the
 // system picker, with device audio and the microphone.

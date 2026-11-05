@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Companion, the owner's desktop agent app (ARCHITECTURE.md "Companion"): the links' status
+// Companion, the owner's desktop agent app (DESIGN.md "Companion"): the links' status
 // (GET /api/companion), the tasks tmx handed to it (GET /api/companion/tasks, then
 // companion.task events), the 1:1 conversation (GET /api/companion/conversation, logic in
 // companion-chat.ts), and the owner's calls. Kept apart from the fleet store.

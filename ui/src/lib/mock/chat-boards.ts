@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Chat boards in the mock daemon (ARCHITECTURE.md "Chat boards"): the "Weekend trip" group has
+// Chat boards in the mock daemon (DESIGN.md "Chat boards"): the "Weekend trip" group has
 // topics with messages on them and logs (one line corrected, one topic archived); the DM has
 // an empty board. Routes and events as internal/chat/topics.go answers them.
 import { ApiError } from "../transport";

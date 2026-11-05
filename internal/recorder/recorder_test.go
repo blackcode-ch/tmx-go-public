@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package recorder
 
 import (
@@ -418,6 +415,54 @@ func (f *fakeTranscriber) Enqueue(source, wav, lang string) error {
 	return nil
 }
 func (f *fakeTranscriber) AutoTranscribe() bool { return f.auto }
+
+// A part is transcribed as soon as the window moves on to the next one, not only after Stop
+// (the owner: "chunks of 5 min"; the report is ready minutes after Stop).
+func TestClosedSegmentTranscribedWhileRecording(t *testing.T) {
+	r := newRig(t)
+	ft := &fakeTranscriber{auto: true}
+	r.s.SetTranscriber(ft)
+	rec := begin(t, r.s, model.RecordingScreen, true)
+	mustAppend(t, r.s, rec.ID, 1, TrackMedia, 0, []byte("a"))
+	mustAppend(t, r.s, rec.ID, 1, TrackPCM, 0, pcm(20))
+	if len(ft.jobs) != 0 {
+		t.Fatalf("the open part is not transcribed: %q", ft.jobs)
+	}
+	mustAppend(t, r.s, rec.ID, 2, TrackMedia, 0, []byte("b")) // the window rotated
+	mustAppend(t, r.s, rec.ID, 2, TrackPCM, 0, pcm(20))
+	mustAppend(t, r.s, rec.ID, 2, TrackMedia, 1, []byte("c"))
+	if strings.Join(ft.jobs, "|") != "recording:"+rec.ID+"/1 seg-0001.wav " {
+		t.Fatalf("part 1 queued once, while recording: %q", ft.jobs)
+	}
+	if x, _ := r.s.Get(rec.ID); x.State != model.RecordingActive {
+		t.Fatalf("still recording: %s", x.State)
+	}
+	// a part without sound yet is not queued; nor is anything when transcription is not automatic
+	ft.jobs = nil
+	mustAppend(t, r.s, rec.ID, 3, TrackMedia, 0, []byte("d"))
+	ft.auto = false
+	mustAppend(t, r.s, rec.ID, 3, TrackPCM, 0, pcm(20))
+	mustAppend(t, r.s, rec.ID, 4, TrackMedia, 0, []byte("e"))
+	if strings.Join(ft.jobs, "|") != "recording:"+rec.ID+"/2 seg-0002.wav " {
+		t.Fatalf("jobs: %q", ft.jobs)
+	}
+	// a refusal (voice not set up yet) never stops the recording
+	ft.auto, ft.err = true, errors.New("voice is not set up")
+	mustAppend(t, r.s, rec.ID, 4, TrackPCM, 0, pcm(20))
+	mustAppend(t, r.s, rec.ID, 5, TrackMedia, 0, []byte("f"))
+	if x, _ := r.s.Get(rec.ID); x.State != model.RecordingActive || len(x.Segments) != 5 {
+		t.Fatalf("after a refusal: %s, %d parts", x.State, len(x.Segments))
+	}
+	// no microphone: nothing to queue
+	r.s.SetState(rec.ID, "stopped")
+	ft.err, ft.jobs = nil, nil
+	rec2 := begin(t, r.s, model.RecordingWindow, false)
+	mustAppend(t, r.s, rec2.ID, 1, TrackMedia, 0, []byte("a"))
+	mustAppend(t, r.s, rec2.ID, 2, TrackMedia, 0, []byte("b"))
+	if len(ft.jobs) != 0 {
+		t.Fatalf("no sound, no jobs: %q", ft.jobs)
+	}
+}
 
 func TestTranscription(t *testing.T) {
 	r := newRig(t)

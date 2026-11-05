@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -12,7 +9,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Chat boards (schema 8; ARCHITECTURE.md "Chat boards"): topics, the topic of each message, the
+// Chat boards (schema 8; DESIGN.md "Chat boards"): topics, the topic of each message, the
 // topics' logs and this owner's order of a board's strings. The chat layer merges changes
 // (last writer wins); this file only stores them.
 

@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Typed calls for the API table in ARCHITECTURE.md.
+// Typed calls for the API table in DESIGN.md.
 import type { Upload } from "./attachments";
 import { ownerAction, withConfirmation } from "./owner-gate";
 import { useStore } from "./store";
@@ -18,6 +15,8 @@ import type {
   GateStatus,
   HarnessInfo,
   GuardSettings,
+  GuardRule,
+  RuleState,
   Mode,
   ModeChange,
   PatchAgentBody,
@@ -27,6 +26,8 @@ import type {
   Project,
   SafetyInfo,
   PinStatus,
+  P2PStatus,
+  P2PPeerRow,
 } from "./types";
 
 function t() {
@@ -94,12 +95,30 @@ export const api = {
 
   getSafety: () => t().request<SafetyInfo>("GET", "/api/safety"),
   putGuard: (g: GuardSettings) => ownerAction((c) => t().request<GuardSettings>("PUT", withConfirmation("/api/safety/guard", c), g)),
+  /** Flips one guard rule (block | hold | allow); always asks for a fresh proof (the PIN on a phone). */
+  putRuleState: (id: string, state: RuleState) =>
+    ownerAction((c) =>
+      t().request<{ guard: GuardSettings; rules: GuardRule[] }>("PUT", withConfirmation(`/api/safety/guard/rules/${enc(id)}`, c), { state }),
+    ),
+  /** Ends one standing "Allow always"; always asks for a fresh proof. */
+  revokeAlways: (id: string) =>
+    ownerAction((c) => t().request<GuardSettings>("DELETE", withConfirmation(`/api/safety/guard/always/${enc(id)}`, c))),
   putGate: (enabled: boolean) => ownerAction((c) => t().request<GateStatus>("PUT", withConfirmation("/api/gate", c), { enabled })),
   /** The grace window's length (0 = off); longer asks for a fresh proof. */
   putGrace: (minutes: number) =>
     ownerAction((c) => t().request<GateStatus>("PUT", withConfirmation("/api/gate/grace", c), { grace_minutes: minutes })),
+  /** Also offer Windows Hello / Touch ID at this machine (the PIN always works); asks every time. */
+  putHello: (enabled: boolean) =>
+    ownerAction((c) => t().request<GateStatus>("PUT", withConfirmation("/api/gate/hello", c), { enabled })),
   /** Ends the grace window now; never asks. */
   lockGate: () => t().request<GateStatus>("POST", "/api/gate/lock"),
+
+  getP2P: () => t().request<P2PStatus>("GET", "/api/p2p"),
+  getP2PPeers: () => t().request<P2PPeerRow[]>("GET", "/api/p2p/net/peers"),
+  /** Saves config.json's p2p.enabled; takes effect at the next daemon start (see restartP2P). */
+  putP2PConfig: (enabled: boolean) => ownerAction((c) => t().request<P2PStatus>("PUT", withConfirmation("/api/p2p/config", c), { enabled })),
+  /** A graceful self-restart (agents keep running) so the saved setting above applies now. */
+  restartP2P: () => ownerAction((c) => t().request<{ restarting: boolean; back_in: string }>("POST", withConfirmation("/api/p2p/restart", c))),
 };
 
 export interface ProcessInfo {

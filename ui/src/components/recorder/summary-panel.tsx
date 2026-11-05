@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The Summary panel on a recording's page: the summary of the recording (written from its
 // transcripts and still frames, after it stopped), its key points, decisions, action items and
 // chapters (a click seeks the player), where it is while it is being made, and Regenerate.
@@ -159,7 +156,7 @@ export function SummaryPanel({ rec, onSeek }: { rec: Recording; onSeek: (n: numb
     <section aria-label="Summary" className="rounded-xl border bg-card" data-summary-state={x?.state ?? (loading ? "loading" : "none")}>
       <div className="flex h-10 items-center gap-2 border-b px-3.5">
         <Sparkles className="size-4 text-muted-foreground" />
-        <h3 className="text-[13px] font-medium">Summary</h3>
+        <h3 className="text-[0.8125rem] font-medium">Summary</h3>
         {canRun && (
           <Button variant="ghost" size="xs" className="ml-auto" onClick={() => void regenerate()} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
@@ -167,7 +164,7 @@ export function SummaryPanel({ rec, onSeek }: { rec: Recording; onSeek: (n: numb
           </Button>
         )}
       </div>
-      <div className="space-y-3 px-3.5 py-3 text-[13px]">
+      <div className="space-y-3 px-3.5 py-3 text-[0.8125rem]">
         {loading ? (
           <Skeleton className="h-16" />
         ) : missing ? (

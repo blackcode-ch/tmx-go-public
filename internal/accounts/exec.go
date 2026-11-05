@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -47,9 +44,20 @@ func (s *Service) workDir() string {
 	return s.o.Dir
 }
 
+// scope is one account's view of the service: its harness runs with the account's home.
+type scope struct {
+	*Service
+	home []string // the account's HomeEnv (nil = the harness's usual home)
+}
+
+// env is the account's harness environment: the service's, then the account's home.
+func (s *scope) env(extra ...string) []string {
+	return s.Service.env(append(append([]string{}, s.home...), extra...)...)
+}
+
 // run runs a harness command in the neutral folder, with no input, for at most timeout. Its
 // output is kept in memory only and never logged.
-func (s *Service) run(ctx context.Context, timeout time.Duration, path string, args ...string) ran {
+func (s *scope) run(ctx context.Context, timeout time.Duration, path string, args ...string) ran {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := hiddenexec.CommandContext(ctx, path, args...)

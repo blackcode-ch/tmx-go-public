@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package rollback
 
 import (
@@ -12,7 +9,7 @@ import (
 	"time"
 )
 
-// Probation (ARCHITECTURE.md "Updates", post-swap watchdog): an install by the updater puts the new
+// Probation (DESIGN.md "Updates", post-swap watchdog): an install by the updater puts the new
 // binary on probation. It must confirm itself healthy (serving its API, governor not degraded,
 // database migrated) within ProbationWindow, else the retained pair is restored. Each start
 // while on probation counts; the MaxProbationStarts-th start, or any start after the deadline,

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package p2p
 
 import (
@@ -31,7 +28,7 @@ const (
 
 const flagGroup = 1 << 0
 
-// payload is what an invite link carries (ARCHITECTURE.md "Peer-to-peer network"). Binary,
+// payload is what an invite link carries (DESIGN.md "Peer-to-peer network"). Binary,
 // length-prefixed, so a DM link with a few addresses stays around 200 characters: a QR code
 // of version ~10, easy to scan from a phone screen.
 type payload struct {

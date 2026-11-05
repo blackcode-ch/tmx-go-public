@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Starting a recording: the owner's own screen (whole, or one window: the OS picker decides)
 // with or without their microphone and the device's own sound, a clip from the camera (with a
 // live preview and the device pickers), or the microphone only. The click on Start is what
@@ -20,10 +17,11 @@ import { NativeSwitches, nativeChoice } from "@/components/recorder/native-choic
 import { startNativeRecording, useNativeAvailable } from "@/lib/native-recorder";
 import { recApi, useRecordings } from "@/lib/recordings";
 import type { RecorderSettings } from "@/lib/recording-types";
+import { DEFAULT_RECORDER_SETTINGS } from "@/lib/record-now";
 import { isLive } from "@/lib/recording-types";
 import { cn } from "@/lib/utils";
-
-const DEFAULTS: RecorderSettings = { video_kbps: 1500, fps: 15, max_minutes: 0, segment_mb: 20, segment_minutes: 10 };
+import { clinicDefault, setClinicDefault } from "@/lib/clinic";
+import { ClinicCheckbox } from "@/components/recorder/clinic-checkbox";
 
 export function StartRecordingDialog() {
   const open = useCapture((s) => s.dialog);
@@ -37,10 +35,11 @@ export function StartRecordingDialog() {
   const [mic, setMic] = useState(true);
   const [deviceAudio, setDeviceAudio] = useState(deviceLikely);
   const bubbleOK = canBubble() && cameraOK;
-  const [bubble, setBubble] = useState(false);
+  const [bubble, setBubble] = useState(bubbleOK); // on, as with the one-tap Record
   const [cameraId, setCameraId] = useState(DEFAULT_DEVICE);
   const [micId, setMicId] = useState(DEFAULT_DEVICE);
   const [title, setTitle] = useState("");
+  const [clinic, setClinic] = useState(clinicDefault);
   const [settings, setSettings] = useState<RecorderSettings | null>(null);
   const [error, setError] = useState("");
   const camOn = open && what === "camera" && cameraOK;
@@ -57,6 +56,7 @@ export function StartRecordingDialog() {
     if (!open) return;
     setTitle("");
     setError("");
+    setClinic(clinicDefault());
     setDeviceAudio(deviceLikely);
     setWhat(screenOK ? "screen" : "audio");
     let gone = false;
@@ -98,7 +98,7 @@ export function StartRecordingDialog() {
       micId: micId === DEFAULT_DEVICE ? undefined : micId,
       cameraStream,
       title: title.trim() || undefined,
-      settings: settings ?? DEFAULTS,
+      settings: settings ?? DEFAULT_RECORDER_SETTINGS,
     }).catch((e) => toast.error("The recording didn't start", { description: (e as Error).message, duration: 12000 }));
   }
 
@@ -110,9 +110,9 @@ export function StartRecordingDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => openRecordDialog(v)}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[30rem]">
         <DialogHeader>
-          <DialogTitle>New recording</DialogTitle>
+          <DialogTitle>Recording options</DialogTitle>
           <DialogDescription>Your screen, camera, microphone and device audio, saved on this machine. Agents can read your recordings.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-2" role="radiogroup" aria-label="What to record">
@@ -146,7 +146,7 @@ export function StartRecordingDialog() {
         {what === "camera" && (
           <div className="grid gap-2.5">
             <div className="relative overflow-hidden rounded-lg border bg-black">
-              <CameraPreview stream={preview.stream} className="aspect-video max-h-[220px] w-full" />
+              <CameraPreview stream={preview.stream} className="aspect-video max-h-[13.75rem] w-full" />
               {!preview.stream && (
                 <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-white/75">
                   {preview.error || "Opening the camera…"}
@@ -163,12 +163,12 @@ export function StartRecordingDialog() {
         )}
         {(what === "screen" || what === "camera") && (
           <div className="grid gap-2.5">
-            <label className="flex items-center gap-2.5 text-[13px]">
+            <label className="flex items-center gap-2.5 text-[0.8125rem]">
               <Switch checked={mic} onCheckedChange={setMic} disabled={!micOK} aria-label="Record my microphone too" />
               Record my microphone too
             </label>
             {what === "screen" && (
-              <label className="flex items-start gap-2.5 text-[13px]">
+              <label className="flex items-start gap-2.5 text-[0.8125rem]">
                 <Switch checked={deviceAudio} onCheckedChange={setDeviceAudio} aria-label="Device audio" className="mt-px" />
                 <span className="min-w-0">
                   <span className="block">Device audio</span>
@@ -181,7 +181,7 @@ export function StartRecordingDialog() {
               </label>
             )}
             {what === "screen" && bubbleOK && (
-              <label className="flex items-start gap-2.5 text-[13px]">
+              <label className="flex items-start gap-2.5 text-[0.8125rem]">
                 <Switch checked={bubble} onCheckedChange={setBubble} aria-label="Camera bubble" className="mt-px" />
                 <span className="min-w-0">
                   <span className="block">Camera bubble</span>
@@ -203,6 +203,7 @@ export function StartRecordingDialog() {
             onKeyDown={(e) => e.key === "Enter" && start()}
           />
         </div>
+        <ClinicCheckbox checked={clinic} onChange={(on) => (setClinic(on), setClinicDefault(on))} />
         <div className="grid gap-1 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <p className="font-medium text-foreground">Recording other people? Ask them first.</p>
           <p>Only what you pick here is recorded. A red bar shows on every page while it runs.</p>
@@ -254,7 +255,7 @@ function Choice({
         <Icon className="size-4 text-muted-foreground" />
       </span>
       <span className="min-w-0">
-        <span className="block text-[13px] font-medium">{title}</span>
+        <span className="block text-[0.8125rem] font-medium">{title}</span>
         <span className="block text-xs text-muted-foreground">{detail}</span>
       </span>
       <span className={cn("ml-auto size-3.5 shrink-0 rounded-full border", selected && "border-[4px] border-foreground")} aria-hidden />

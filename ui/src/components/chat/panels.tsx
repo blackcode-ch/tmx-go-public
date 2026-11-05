@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The chat page's side panel: contact details (with the safety code) for a DM, members for a
 // group (the admin can hand the group to another member); and the selector of the local
 // agent that takes part in a chat.
@@ -69,7 +66,7 @@ export function AgentPicker({ chat, className }: { chat: Chat; className?: strin
     <Select value={value} onValueChange={(v) => void pick(v)} disabled={over}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <SelectTrigger size="sm" className={cn("h-8 max-w-[200px] gap-1.5 text-[13px]", className)} aria-label="Agent taking part">
+          <SelectTrigger size="sm" className={cn("h-8 max-w-[12.5rem] gap-1.5 text-[0.8125rem]", className)} aria-label="Agent taking part">
             <Bot className="size-3.5 text-muted-foreground" />
             <SelectValue />
           </SelectTrigger>
@@ -79,7 +76,7 @@ export function AgentPicker({ chat, className }: { chat: Chat; className?: strin
       <SelectContent position="popper" align="end">
         {options.map((a: Agent) => (
           <SelectItem key={a.id} value={a.id}>
-            <AgentAvatar agent={a} className="size-4 rounded text-[9px]" />
+            <AgentAvatar agent={a} className="size-4 rounded text-[0.5625rem]" />
             {a.name}
             {a.id === headId && a.name !== "head" && <span className="text-2xs text-muted-foreground">head</span>}
           </SelectItem>
@@ -108,7 +105,7 @@ function PanelSection({ title, children, right }: { title: string; children: Rea
 export function SafetyCode({ code }: { code: string }) {
   if (!code) return <p className="text-xs text-muted-foreground">No safety code yet.</p>;
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[17px] font-medium tracking-[0.06em] tabular-nums" aria-label={`Safety code ${code}`}>
+    <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[1.0625rem] font-medium tracking-[0.06em] tabular-nums" aria-label={`Safety code ${code}`}>
       {code.split(/\s+/).map((g, i) => (
         <span key={i}>{g}</span>
       ))}
@@ -144,7 +141,7 @@ export function ContactPanel({ contact, chat }: { contact: Contact | undefined; 
     <div>
       <div className="flex flex-col items-center px-4 pt-6 pb-4 text-center">
         <PersonAvatar name={contact.name} size="lg" />
-        <p className="mt-2.5 text-[15px] font-semibold">{contact.name}</p>
+        <p className="mt-2.5 text-[0.9375rem] font-semibold">{contact.name}</p>
         {contact.remote_name && contact.remote_name !== contact.name && (
           <p className="text-xs text-muted-foreground">Calls themselves {contact.remote_name}</p>
         )}
@@ -179,7 +176,7 @@ export function ContactPanel({ contact, chat }: { contact: Contact | undefined; 
           onBlur={() => note !== contact.note && void save({ note })}
           placeholder="A note for yourself"
           aria-label="Note"
-          className="mt-2 min-h-16 resize-none text-[13px]"
+          className="mt-2 min-h-16 resize-none text-[0.8125rem]"
         />
       </PanelSection>
       <PanelSection title="Details">
@@ -191,7 +188,7 @@ export function ContactPanel({ contact, chat }: { contact: Contact | undefined; 
           <div className="flex items-start gap-2">
             <dt className="w-16 shrink-0 pt-0.5 text-muted-foreground">Peer ID</dt>
             <dd className="flex min-w-0 items-start gap-1">
-              <code className="min-w-0 font-mono text-[11px] break-all text-muted-foreground">{contact.peer_id}</code>
+              <code className="min-w-0 font-mono text-[0.6875rem] break-all text-muted-foreground">{contact.peer_id}</code>
               <CopyButton text={contact.peer_id} label="Copy peer ID" className="-mt-0.5" />
             </dd>
           </div>
@@ -251,18 +248,18 @@ function MemberRow({
   const offered = chat.admin_offer?.peer_id === m.peer_id;
   return (
     <li className="group/m flex h-9 items-center gap-2.5">
-      <PersonAvatar name={m.name || "?"} size="sm" className="size-6 text-[10px]" />
-      <span className="min-w-0 truncate text-[13px]">
+      <PersonAvatar name={m.name || "?"} size="sm" className="size-6 text-[0.625rem]" />
+      <span className="min-w-0 truncate text-[0.8125rem]">
         {m.me && (!m.name || m.name === "You") ? "You" : m.name || "Someone"}
         {m.me && m.name && m.name !== "You" && <span className="text-muted-foreground"> (you)</span>}
       </span>
       {m.role === "admin" && (
-        <span className="inline-flex h-[18px] items-center gap-1 rounded-[5px] border px-1.5 text-[10.5px] text-muted-foreground" title="Admin: invites, removes and renames">
+        <span className="inline-flex h-[1.125rem] items-center gap-1 rounded-[5px] border px-1.5 text-[0.6562rem] text-muted-foreground" title="Admin: invites, removes and renames">
           <Crown className="size-3" /> admin
         </span>
       )}
       {offered && (
-        <span className="inline-flex h-[18px] items-center gap-1 rounded-[5px] border border-dashed px-1.5 text-[10.5px] text-muted-foreground" title="You offered them the admin role">
+        <span className="inline-flex h-[1.125rem] items-center gap-1 rounded-[5px] border border-dashed px-1.5 text-[0.6562rem] text-muted-foreground" title="You offered them the admin role">
           <Crown className="size-3" /> offered
         </span>
       )}
@@ -306,7 +303,7 @@ function AdminOfferNote({ chat }: { chat: Chat }) {
   const slow = o.sent && now - o.at > 15_000;
   return (
     <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2.5" data-admin-offer>
-      <p className="flex items-center gap-1.5 text-[13px] font-medium">
+      <p className="flex items-center gap-1.5 text-[0.8125rem] font-medium">
         <Loader2 className="size-3.5 animate-spin text-muted-foreground" /> Waiting for {name}'s tmx…
       </p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -400,7 +397,7 @@ function MakeAdminDialog({
             <SelectContent position="popper">
               {others.map((m) => (
                 <SelectItem key={m.peer_id} value={m.peer_id}>
-                  <PersonAvatar name={m.name || "?"} size="sm" className="size-4 text-[8px]" />
+                  <PersonAvatar name={m.name || "?"} size="sm" className="size-4 text-[0.5rem]" />
                   {m.name || "Someone"}
                 </SelectItem>
               ))}
@@ -420,7 +417,7 @@ function MakeAdminDialog({
             </div>
           </div>
         )}
-        <label className="flex cursor-pointer items-center gap-2.5 text-[13px]">
+        <label className="flex cursor-pointer items-center gap-2.5 text-[0.8125rem]">
           <Checkbox checked={leave} onCheckedChange={(v) => setLeave(v === true)} />
           Leave the group afterwards
         </label>
@@ -456,7 +453,7 @@ export function MembersPanel({ chat }: { chat: Chat }) {
         <span className="flex size-10 items-center justify-center rounded-lg border bg-muted/60 text-muted-foreground">
           <Users className="size-5" />
         </span>
-        <p className="mt-2.5 text-[15px] font-semibold">{chat.name}</p>
+        <p className="mt-2.5 text-[0.9375rem] font-semibold">{chat.name}</p>
         <p className="text-xs text-muted-foreground">
           {members.length} {members.length === 1 ? "member" : "members"}
           {admin && !admin.me ? ` · run by ${admin.name}` : chat.admin ? " · you run it" : ""}
@@ -482,7 +479,7 @@ export function MembersPanel({ chat }: { chat: Chat }) {
       </PanelSection>
       {former.length > 0 && (
         <PanelSection title="Left">
-          <ul className="text-[13px] text-muted-foreground">
+          <ul className="text-[0.8125rem] text-muted-foreground">
             {former.map((m) => (
               <li key={m.peer_id} className="flex h-7 items-center gap-2">
                 <PersonAvatar name={m.name || "?"} size="sm" className="opacity-60" />

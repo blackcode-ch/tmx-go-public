@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { Eye, MessagesSquare, SquareTerminal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { agentModelLabel, LEVEL_LABEL } from "@/lib/format";
@@ -47,7 +44,7 @@ export function CountBadge({ n, tone = "default", className }: { n: number; tone
   return (
     <span
       className={cn(
-        "tabular inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-2xs font-semibold",
+        "tabular inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full px-1.5 text-2xs font-semibold",
         tone === "attention" ? "bg-state-waiting text-black/80" : "bg-muted text-muted-foreground",
         className,
       )}
