@@ -121,7 +121,7 @@ func TestShell(t *testing.T) {
 	}
 	p, err := New().Start(context.Background(), runner.Spec{
 		Harness: model.HarnessShell, Command: "/bin/sh", Cwd: t.TempDir(), Cols: 80, Rows: 24,
-		Env: []string{"PS1=$ ", "TMXG_TEST_VAR=from-spec"},
+		Env: []string{"PS1=tmx-test-ready> ", "TMXG_TEST_VAR=from-spec"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -130,10 +130,14 @@ func TestShell(t *testing.T) {
 	c.state(t, model.StateStarting)
 
 	var out bytes.Buffer
+	c.expect(t, &out, "tmx-test-ready> ")
 	if err := p.Send("echo hi-$((40+2)) $TERM $TMXG_TEST_VAR"); err != nil {
 		t.Fatal(err)
 	}
-	c.expect(t, &out, "hi-42 xterm-256color from-spec")
+	// Wait for the next prompt, not just echo's output: macOS's Bash 3.2
+	// Readline reads and writes back the window size while preparing input.
+	// Resizing between those ioctls can be overwritten with the old size.
+	c.expect(t, &out, "hi-42 xterm-256color from-spec\r\ntmx-test-ready> ")
 	c.state(t, model.StateWorking)
 	if !strings.Contains(string(p.Replay()), "hi-42") {
 		t.Fatalf("replay %q", p.Replay())
@@ -142,7 +146,9 @@ func TestShell(t *testing.T) {
 	if err := p.Resize(100, 40); err != nil {
 		t.Fatal(err)
 	}
-	_ = p.Send("stty size")
+	if err := p.Send("stty size"); err != nil {
+		t.Fatal(err)
+	}
 	c.expect(t, &out, "40 100")
 
 	c.state(t, model.StateIdle) // 2 s of quiet
