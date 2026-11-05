@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package p2p
 
 import (
@@ -90,29 +87,6 @@ func send(t *testing.T, from, to *testNode, chat, text string) Envelope {
 	id := fmt.Sprintf("%s-%d", from.name, time.Now().UnixNano())
 	if err := from.Send(ctxT(t), to.PeerID(), Envelope{ID: id, Type: "msg", ChatID: chat, Body: []byte(`"` + text + `"`)}); err != nil {
 		t.Fatalf("%s → %s: %v", from.name, to.name, err)
-	}
-	env := recv(t, to.Incoming(), to.name+" incoming")
-	if env.ID != id || env.From != from.PeerID() || env.ChatID != chat || string(env.Body) != `"`+text+`"` {
-		t.Fatalf("%s got %+v", to.name, env)
-	}
-	return env
-}
-
-// sendEventually is send for the first message after a peer reconnects: an ErrUnreachable from a
-// connection that was already dead is retried for up to 10 s; anything else fails at once.
-func sendEventually(t *testing.T, from, to *testNode, chat, text string) Envelope {
-	t.Helper()
-	id := fmt.Sprintf("%s-%d", from.name, time.Now().UnixNano())
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		err := from.Send(ctxT(t), to.PeerID(), Envelope{ID: id, Type: "msg", ChatID: chat, Body: []byte(`"` + text + `"`)})
-		if err == nil {
-			break
-		}
-		if !errors.Is(err, ErrUnreachable) || time.Now().After(deadline) {
-			t.Fatalf("%s → %s: %v", from.name, to.name, err)
-		}
-		time.Sleep(200 * time.Millisecond)
 	}
 	env := recv(t, to.Incoming(), to.name+" incoming")
 	if env.ID != id || env.From != from.PeerID() || env.ChatID != chat || string(env.Body) != `"`+text+`"` {
@@ -366,10 +340,7 @@ func TestUnreachableAndReconnect(t *testing.T) {
 	if ev.Reachability != Direct {
 		t.Fatalf("event %+v", ev)
 	}
-	// The online event can arrive while alice still holds the old bob's QUIC connection, so the
-	// first send may hit it ("received a stateless reset"); the chat layer queues and retries such a
-	// send, so the test retries the first one too, briefly (a flake under load: 1 in 5 runs with -cpu 1).
-	sendEventually(t, alice, bob2, "dm", "you're back")
+	send(t, alice, bob2, "dm", "you're back")
 	send(t, bob2, alice, "dm", "I am")
 }
 

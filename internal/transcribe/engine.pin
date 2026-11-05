@@ -1,4 +1,4 @@
-# The whisper.cpp release tmx's voice engine is built from (ARCHITECTURE.md "Voice").
+# The whisper.cpp release tmx's voice engine is built from (DESIGN.md "Voice").
 # .github/workflows/whisper-engine.yml builds whisper-cli from this tag, checks that the tag still
 # points at this commit, and publishes the binaries as the release whisper-engine-<tag>; the
 # daemon (catalog.go embeds this file) downloads them from there. Change both lines together.

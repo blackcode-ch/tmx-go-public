@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Mock summaries for ?mock=…: the sample recordings' summaries (one done with chapters across its
 // segments, one done, one skipped, one without), Regenerate that walks through transcribing →
 // queued → running → done, and the summary settings. ?summary=running|failed|transcribing shows

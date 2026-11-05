@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The board's canvas, shared by the head's board (pages/board.tsx) and the chat boards
 // (components/chat/board-view.tsx): strings of cards on a sheet you pan and zoom, a header
 // per string (title, menu, log preview) that you drag sideways to set the urgency order.
@@ -23,6 +20,7 @@ import { colorValue, liveEntries, THREAD_COLORS } from "@/lib/board";
 import type { LogKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EntryIcon } from "./log";
+import { remScale } from "@/lib/text-size";
 
 export const LANE_W = 296;
 export const SHOWN = 6; // cards per string before "N earlier"
@@ -85,7 +83,7 @@ export function useLaneOrder(ids: string[], save: (ids: string[]) => void) {
   }
   const dragging: Dragging = {
     move(id: string, from: number, dx: number) {
-      const to = Math.min(ids.length - 1, Math.max(0, from + Math.round(dx / STRIDE)));
+      const to = Math.min(ids.length - 1, Math.max(0, from + Math.round(dx / (STRIDE * remScale()))));
       dragRef.current = { id, from, to, dx };
       setDrag(dragRef.current);
     },
@@ -270,8 +268,8 @@ export function laneShift(drag: Drag | null, id: string, index: number): { lifte
   const lifted = drag?.id === id;
   let shift = 0;
   if (drag && lifted) shift = drag.dx;
-  else if (drag && drag.from < drag.to && index > drag.from && index <= drag.to) shift = -STRIDE;
-  else if (drag && drag.to < drag.from && index >= drag.to && index < drag.from) shift = STRIDE;
+  else if (drag && drag.from < drag.to && index > drag.from && index <= drag.to) shift = -STRIDE * remScale();
+  else if (drag && drag.to < drag.from && index >= drag.to && index < drag.from) shift = STRIDE * remScale();
   return { lifted, shift };
 }
 
@@ -279,7 +277,7 @@ export function laneShift(drag: Drag | null, id: string, index: number): { lifte
 export function LaneFrame({ title, color, lifted, shift, children }: { title: string; color: string; lifted: boolean; shift: number; children: ReactNode }) {
   const style = {
     "--lane": color,
-    width: LANE_W,
+    width: `${LANE_W / 16}rem`, // scales with the text size (lib/text-size.ts)
     transform: shift ? `translateX(${shift}px)` : undefined,
     transition: lifted ? "none" : "transform 160ms ease",
     zIndex: lifted ? 30 : undefined,
@@ -445,7 +443,7 @@ export function LaneHeader({
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-[14px] font-semibold tracking-tight" title={title}>
+          <h2 className="truncate text-[0.875rem] font-semibold tracking-tight" title={title}>
             {title}
           </h2>
           <p className="mt-0.5 truncate text-2xs text-muted-foreground">

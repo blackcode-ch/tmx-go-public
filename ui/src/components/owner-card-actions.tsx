@@ -1,19 +1,14 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DictateButton } from "@/components/dictate-button";
 import { api, dropApproval } from "@/lib/api";
-import { boundedCardRequest, cardAnswerKey, cardDictationDrafts, clearCardAnswer, saveCardAnswer, saveCardDraft, useCardAnswers, useCardDrafts } from "@/lib/card-answers";
+import { beginCardSend, endCardSend, cardSendFailed, clearUnchangedCardWords, boundedCardRequest, cardAnswerKey, cardDictationDrafts, clearCardAnswer, saveCardAnswer, saveCardDraft, useCardAnswers, useCardDrafts } from "@/lib/card-answers";
 import { useStore } from "@/lib/store";
 import { paths } from "@/lib/router";
 import type { Approval, DecideBody } from "@/lib/types";
 import type { ApprovalActionsHandle } from "./approval";
-
-const sending = new Set<string>();
 
 /** Owner questions only: never used for harness permissions, guard or access cards. */
 export const OwnerCardActions = forwardRef<ApprovalActionsHandle, { a: Approval; size?: "sm" | "default" }>(
@@ -38,8 +33,7 @@ export const OwnerCardActions = forwardRef<ApprovalActionsHandle, { a: Approval;
     }
 
     async function send(decision: DecideBody["decision"], answer?: string, freeText = false) {
-      if (sending.has(key)) return;
-      sending.add(key);
+      if (!beginCardSend(key)) return;
       setBusy(true);
       setFailure("");
       try {
@@ -47,27 +41,31 @@ export const OwnerCardActions = forwardRef<ApprovalActionsHandle, { a: Approval;
         const request = saved?.request || { decision, answer, free_text: freeText || undefined,
           version: original.version, answer_id: crypto.randomUUID() };
         if (!saved) saveCardAnswer(key, { scope, card: original, request });
+        const submittedDraft = useCardDrafts.getState().items[key];
         const result = await boundedCardRequest(api.decide(a.id, request));
-        clearCardAnswer(key);
+        if (useCardAnswers.getState().items[key]?.request.answer_id === request.answer_id) clearCardAnswer(key);
         // Dictation can finish during a send; only clear the words actually sent.
-        if (request.free_text && useCardDrafts.getState().items[key]?.text === request.answer) saveCardDraft(scope, original, "");
+        if (request.free_text && submittedDraft?.text === request.answer && useCardDrafts.getState().items[key] === submittedDraft) saveCardDraft(scope, original, "");
         if (useStore.getState().transport?.baseURL === scope) {
           if (result.state === "pending") useStore.setState((s) => ({ approvals: { ...s.approvals, [result.id]: result } }));
           else dropApproval(a.id);
         }
         toast(request.decision === "defer" ? "Saved for later" : request.decision === "reask" ? "Question reopened" : "Answer delivered to the agent's mailbox");
       } catch (error) {
+        try { cardSendFailed(key, error); } catch { /* Keep the saved request visible when storage fails. */ }
         setMissing((error as { status?: number }).status === 404);
         setFailure((error as Error).message || "That did not go through. Your words are saved.");
-      } finally { sending.delete(key); setBusy(false); }
+      } finally { endCardSend(key); setBusy(false); }
     }
 
     async function copyAndClose() {
       try {
-        const submitted = pending?.request.answer || "";
+        const capturedPending = useCardAnswers.getState().items[key];
+        const capturedDraft = useCardDrafts.getState().items[key];
+        const submitted = capturedPending?.request.answer || "";
+        const text = capturedDraft?.text || "";
         await navigator.clipboard.writeText(submitted && text && submitted !== text ? `${submitted}\n\nAdditional saved draft:\n${text}` : submitted || text);
-        clearCardAnswer(key);
-        saveCardDraft(scope, original, "");
+        clearUnchangedCardWords(key, capturedPending, capturedDraft);
         toast("Answer copied");
       } catch { toast.error("Could not copy. Your answer is still saved here."); }
     }
@@ -75,7 +73,7 @@ export const OwnerCardActions = forwardRef<ApprovalActionsHandle, { a: Approval;
     function reviewCurrent() {
       if (!current || current.state !== "pending") return;
       try {
-        saveCardDraft(scope, current, pending?.request.answer || text, true);
+        saveCardDraft(scope, current, text || pending?.request.answer || "", true);
         clearCardAnswer(key);
         setFailure("");
       } catch { toast.error("Could not save the reviewed draft. Copy your answer before leaving."); }
@@ -89,7 +87,7 @@ export const OwnerCardActions = forwardRef<ApprovalActionsHandle, { a: Approval;
       <p>{busy ? "Sending…" : missing ? "This card is no longer available. Your answer is saved." : changed ? "The question changed. Your original answer is saved." : "Saved answer — delivery is not confirmed."}</p>
       {pending.request.answer && <p className="whitespace-pre-wrap">{pending.request.answer}</p>}
       {text && text !== pending.request.answer && <p className="whitespace-pre-wrap">Additional saved draft: {text}</p>}
-      {failure && <p role="alert">{failure}</p>}
+      {(failure || pending.error) && <p role="alert">{failure || pending.error}</p>}
       {!missing && <Button size={size} disabled={busy} onClick={() => void send(pending.request.decision)}>Retry</Button>}
       {changed && !closed && <Button size={size} disabled={busy} onClick={reviewCurrent}>Review answer for this question</Button>}
       {(pending.request.answer || text) ? <Button size={size} variant="ghost" disabled={busy} onClick={() => void copyAndClose()}>Copy answer and close</Button>

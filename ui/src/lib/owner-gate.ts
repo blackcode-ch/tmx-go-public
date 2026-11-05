@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The owner gate in the UI (ARCHITECTURE.md "Safety"). A gated request answers 428 with a
+// The owner gate in the UI (DESIGN.md "Safety"). A gated request answers 428 with a
 // confirmation while the daemon itself asks the OS (Touch ID or the Mac password, Windows Hello); the UI only
 // shows "Confirm on this Mac", waits for the daemon's verdict and retries the same request
 // naming the confirmation. On a paired browser (method "pin") the owner types the owner PIN
@@ -31,14 +28,17 @@ interface GateState {
 export const useGate = create<GateState>(() => ({ confirming: null, safety: null, graceAsked: null, pinError: null }));
 
 // The PIN sheet's pending answer (method "pin"): submitPin resolves it once the daemon took the PIN.
-let pinWaiter: { id: string; resolve: (c: Confirmation) => void; reject: (e: unknown) => void } | null = null;
+// local: a gate confirmation at this machine (POST /api/gate/confirmations/{id}/pin); otherwise a
+// paired browser's (POST /api/gate/approvals/{id}/pin).
+let pinWaiter: { id: string; local: boolean; resolve: (c: Confirmation) => void; reject: (e: unknown) => void } | null = null;
 
 /** Sends the owner PIN for the confirmation on screen. A wrong PIN keeps the sheet open. */
 export async function submitPin(pin: string): Promise<void> {
   const w = pinWaiter;
   if (!w) return;
   try {
-    const c = await transport().request<Confirmation>("POST", `/api/gate/approvals/${encodeURIComponent(w.id)}/pin`, { pin });
+    const path = w.local ? `/api/gate/confirmations/${encodeURIComponent(w.id)}/pin` : `/api/gate/approvals/${encodeURIComponent(w.id)}/pin`;
+    const c = await transport().request<Confirmation>("POST", path, { pin });
     useGate.setState({ pinError: null });
     pinWaiter = null;
     w.resolve(c);
@@ -162,6 +162,15 @@ export async function cancelConfirmation() {
   }
 }
 
+/** Resolves once the daemon has a verdict on c that came some other way (the OS prompt). */
+async function settledElsewhere(c: Confirmation): Promise<Confirmation> {
+  for (;;) {
+    if (cancelled.has(c.id)) throw new ApiError(0, "Cancelled.");
+    const next: Confirmation = await transport().request("GET", `/api/gate/confirmations/${encodeURIComponent(c.id)}?wait=25000`);
+    if (next.state !== "pending") return next;
+  }
+}
+
 /**
  * Runs a request that the owner gate may guard. run gets the confirmation ID on the retry;
  * on a 428 the "Confirm on this Mac" sheet shows until the daemon has the owner's answer.
@@ -172,14 +181,18 @@ export async function ownerAction<T>(run: (confirmation?: string) => Promise<T>)
   } catch (e) {
     let c = confirmationOf(e);
     if (!c) throw e;
-    if (c.method !== "pin") allowForeground();
+    if (c.method !== "pin" || c.hello) allowForeground(); // the OS prompt may open
     useGate.setState({ confirming: c, pinError: null });
     try {
       if (c.method === "pin") {
         const id = c.id;
-        c = await new Promise<Confirmation>((resolve, reject) => {
-          pinWaiter = { id, resolve, reject };
+        const local = !!c.pin;
+        const byPin = new Promise<Confirmation>((resolve, reject) => {
+          pinWaiter = { id, local, resolve, reject };
         });
+        // At the machine with Windows Hello open too: whichever answers first.
+        c = c.hello ? await Promise.race([byPin, settledElsewhere(c)]) : await byPin;
+        if (pinWaiter?.id === id) pinWaiter = null;
       }
       while (c.state === "pending") {
         if (cancelled.has(c.id)) throw new ApiError(0, "Cancelled.");

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -10,7 +7,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/chat"
 )
 
-// chatBoardRoutes: each chat's board (ARCHITECTURE.md "Chat boards"): topics, messages moved
+// chatBoardRoutes: each chat's board (DESIGN.md "Chat boards"): topics, messages moved
 // between them, their logs (all shared with the chat's members) and this owner's order of
 // the strings. Reading, opening and changing topics and moving messages between them are for
 // the owner and the chat's participating agent (the chat service checks which chat an agent

@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { memo, useState } from "react";
+import { TimelinePin } from "@/components/message-pins";
 import { AlertTriangle, Brain, ChevronRight, CornerDownRight, Loader2, Mail } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { absoluteTime, clockTime, duration, firstLine, modelName, plural, relativeTime } from "@/lib/format";
@@ -31,6 +29,7 @@ export const UserBubble = memo(function UserBubble({ e }: { e: TimelineEntry }) 
   const { text, files } = splitAttachments(e.text);
   return (
     <div className="flex flex-col items-end gap-1.5 pl-[12%]">
+      <TimelinePin e={e} />
       {files.length > 0 && <AttachmentList files={files} />}
       {text && (
         <TimeHint at={e.at}>
@@ -44,7 +43,7 @@ export const UserBubble = memo(function UserBubble({ e }: { e: TimelineEntry }) 
 });
 
 export const AssistantText = memo(function AssistantText({ e }: { e: TimelineEntry }) {
-  return <Markdown text={e.text} />;
+  return <div><Markdown text={e.text} /><TimelinePin e={e} /></div>;
 });
 
 export function Thinking({ e }: { e: TimelineEntry }) {
@@ -63,7 +62,7 @@ export function Thinking({ e }: { e: TimelineEntry }) {
         <ChevronRight className={cn("ml-auto size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150", open && "rotate-90")} />
       </button>
       {open && (
-        <div className="mt-1 ml-[7px] border-l pl-3.5 text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground italic">
+        <div className="mt-1 ml-[0.4375rem] border-l pl-3.5 text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground italic">
           {e.text}
         </div>
       )}
@@ -78,7 +77,7 @@ function ResultText({ text, numbered }: { text: string; numbered?: boolean }) {
   if (lines) {
     const shown = all ? lines : lines.slice(0, MAX);
     return (
-      <div className="scroll-thin max-h-[360px] overflow-auto py-1.5 font-mono text-[12px] leading-[1.6]">
+      <div className="scroll-thin max-h-[22.5rem] overflow-auto py-1.5 font-mono text-[0.75rem] leading-[1.6]">
         <table className="border-collapse">
           <tbody>
             {shown.map((l, i) => (
@@ -104,7 +103,7 @@ function ResultText({ text, numbered }: { text: string; numbered?: boolean }) {
     <div className="relative">
       <pre
         className={cn(
-          "scroll-thin max-h-[360px] overflow-auto px-3 py-2 font-mono text-[12px] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]",
+          "scroll-thin max-h-[22.5rem] overflow-auto px-3 py-2 font-mono text-[0.75rem] leading-[1.6] whitespace-pre-wrap [overflow-wrap:anywhere]",
           "text-foreground/80",
         )}
       >
@@ -148,7 +147,7 @@ export function ToolRow({ pair, cwd }: { pair: ToolPair; cwd?: string }) {
       >
         <Icon className={cn("size-3.5 shrink-0", error ? "text-state-error" : "text-muted-foreground")} />
         {s.label && <span className="shrink-0 font-medium text-foreground/80">{s.label}</span>}
-        <span className={cn("min-w-0 truncate", s.mono ? "font-mono text-[11.5px] text-muted-foreground" : "text-foreground/80")}>
+        <span className={cn("min-w-0 truncate", s.mono ? "font-mono text-[0.7188rem] text-muted-foreground" : "text-foreground/80")}>
           {s.detail}
         </span>
         {desc && !open && <span className="hidden min-w-0 shrink truncate text-subtle-foreground lg:inline">· {desc}</span>}
@@ -215,6 +214,7 @@ export function MailChip({ e }: { e: TimelineEntry }) {
   const { text, files } = splitAttachments(e.text);
   return (
     <div className="rounded-xl border bg-muted/35">
+      <TimelinePin e={e} />
       <div className="flex items-center gap-2 px-3 pt-2 text-xs">
         <Mail className="size-3.5 text-muted-foreground" />
         <span className="text-muted-foreground">
@@ -227,7 +227,7 @@ export function MailChip({ e }: { e: TimelineEntry }) {
         </TimeHint>
       </div>
       <div className="px-3 pt-1 pb-2.5">
-        {text && <Markdown text={text} className="text-[13px] text-foreground/90" />}
+        {text && <Markdown text={text} className="text-[0.8125rem] text-foreground/90" />}
         {files.length > 0 && <AttachmentList files={files} className={cn("justify-start", text && "mt-2")} />}
       </div>
     </div>

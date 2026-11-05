@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -13,10 +10,12 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
+	s.messagePinRoutes(mux)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/peers", s.ownerOnly(s.peerStatus))
+	mux.HandleFunc("POST /api/peers/{name}/rotate", s.ownerOnly(s.peerRotate))
 	mux.HandleFunc("GET /api/snapshot", s.snapshot)
 	mux.HandleFunc("POST /api/shutdown", s.ownerOnly(s.shutdown))
 
@@ -25,6 +24,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects/{id}/artifacts", s.getProjectArtifacts)
 	mux.HandleFunc("POST /api/projects/{id}/contribution", s.setProjectContribution)
 	mux.HandleFunc("POST /api/projects/{id}/section", s.setProjectSection)
+	mux.HandleFunc("POST /api/projects/{id}/import", s.importProject)
+	mux.HandleFunc("POST /api/projects/{id}/members", s.addProjectMember)
 	mux.HandleFunc("POST /api/projects/{id}/feedback", s.ownerOnly(s.projectFeedback))
 	mux.HandleFunc("PATCH /api/projects/{id}", s.ownerOnly(s.patchProject))
 	mux.HandleFunc("DELETE /api/projects/{id}", s.ownerOnly(s.deleteProject))
@@ -63,6 +64,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/events", s.events)
 	s.resourceRoutes(mux)
 	s.safetyRoutes(mux)
+	s.gatePINRoutes(mux) // gatepin.go (#187)
 	s.chatRoutes(mux)
 	s.chatBoardRoutes(mux) // chatboards.go
 	s.p2pRoutes(mux)
@@ -152,6 +154,24 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, p)
+}
+
+// addProjectMember is POST /api/projects/{id}/members {agent}: the owner, the head or the
+// project's lead puts an existing agent into the project (fleet.AddProjectMember decides).
+func (s *Server) addProjectMember(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Agent string `json:"agent"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	c, _ := caller(r)
+	a, err := s.f.AddProjectMember(c, r.PathValue("id"), req.Agent)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
 }
 
 func (s *Server) patchProject(w http.ResponseWriter, r *http.Request) {

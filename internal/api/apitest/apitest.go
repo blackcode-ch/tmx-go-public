@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package apitest runs a real daemon (fleet + API) on fake runners behind httptest, in a
 // throwaway TMXG_HOME, for tests of the API and of its clients (CLI, MCP).
 package apitest
@@ -29,6 +26,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 	"github.com/blackcode-ch/tmx-go/internal/peers"
 	"github.com/blackcode-ch/tmx-go/internal/recorder"
+	"github.com/blackcode-ch/tmx-go/internal/recworker"
 	"github.com/blackcode-ch/tmx-go/internal/resources"
 	"github.com/blackcode-ch/tmx-go/internal/runner"
 	"github.com/blackcode-ch/tmx-go/internal/runner/fake"
@@ -115,6 +113,32 @@ func (d *Daemon) WithUpdater(t testing.TB) (string, *update.Updater) {
 		srv.Close()
 	})
 	return srv.URL, u
+}
+
+// WithRecWorker serves this daemon's API once more with the recorder's report worker (internal/recworker) as the
+// daemon wires it: the recorder's Finished hook launches the worker. It returns that server's URL and the service.
+func (d *Daemon) WithRecWorker(t testing.TB, o recworker.Options) (string, *recworker.Service) {
+	t.Helper()
+	o.Fleet, o.Summaries, o.Recordings = d.Fleet, d.Summaries, d.Recorder
+	if o.Exe == "" {
+		o.Exe = "tmx"
+	}
+	if o.Dir == "" {
+		o.Dir = filepath.Join(d.Home, "rec-workers")
+	}
+	w := recworker.New(o)
+	w.Start()
+	d.Recorder.SetFinished(w.Finished)
+	a := d.apiOpts
+	a.RecWorker = w
+	srv := httptest.NewServer(api.New(a).Handler())
+	t.Cleanup(func() {
+		w.Close()
+		d.Recorder.SetFinished(d.Summaries.Finished)
+		srv.CloseClientConnections()
+		srv.Close()
+	})
+	return srv.URL, w
 }
 
 // WithPeers serves this daemon's API once more with the Python fleet interop (peers.go), the
@@ -252,7 +276,7 @@ func NewWithNode(t testing.TB, node p2p.Node, opts ...func(*fleet.Options)) *Dae
 	d.AccountsBin = filepath.Join(home, "accounts-bin")
 	d.Accounts = accounts.New(accounts.Options{Dir: filepath.Join(home, "accounts"), Publish: f.Publish,
 		LookPath: accountstest.LookPathIn(d.AccountsBin), Every: -1, CheckTimeout: 5 * time.Second, UsageTimeout: 5 * time.Second,
-		StopGrace: 500 * time.Millisecond, Env: []string{"CODEX_HOME=" + filepath.Join(home, "codex"), "CLAUDE_CONFIG_DIR=" + filepath.Join(home, "claude-config")}})
+		StopGrace: 500 * time.Millisecond, Env: []string{"CODEX_HOME=" + filepath.Join(home, "codex"), "CLAUDE_CONFIG_DIR=" + filepath.Join(home, "claude-config"), "GEMINI_CLI_HOME=" + filepath.Join(home, "gemini")}})
 	port := srv.Listener.Addr().(*net.TCPAddr).Port
 	d.apiOpts = api.Options{Fleet: f, OwnerToken: token, Port: port, Gate: d.Gate,
 		Resources: d.Resources, Slots: d.Slots, Chats: d.Chats, Companion: d.Companion, Uploads: d.Uploads, P2P: node, Voice: d.Voice, Recorder: d.Recorder,

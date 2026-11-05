@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package rollback retains a consistent N-1 database and installation. Callers
 // must hold the daemon lock for restore and keep all database users closed.
 package rollback

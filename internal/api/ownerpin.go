@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 // The owner PIN (internal/ownerpin): ONE short code, the same on every machine and the same

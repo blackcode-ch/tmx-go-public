@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -10,7 +7,10 @@ import (
 	"testing"
 )
 
-func TestProductionProfileKeepsP2PAndUpdatesOff(t *testing.T) {
+// Peer-to-peer answers the owner's own config (3 Nov: the pair-token fleet transport doesn't cover
+// person-to-person contacts/chats, which is what this is for); automatic updates stay off
+// regardless (no signed release path yet - a separate concern).
+func TestProductionProfileHonoursP2PKeepsUpdatesOff(t *testing.T) {
 	var c Config
 	err := json.Unmarshal([]byte(`{"profile":"production","p2p":{"enabled":true,"dht":true,"mdns":true,"nat_port_map":true},"whatsapp":{"enabled":true},"companion":{"enabled":true},"update":{"auto":true}}`), &c)
 	if err != nil {
@@ -20,8 +20,11 @@ func TestProductionProfileKeepsP2PAndUpdatesOff(t *testing.T) {
 	if !c.Production() {
 		t.Fatal("profile lost")
 	}
-	if c.P2P.On() || c.P2P.DHTOn() || c.P2P.MDNSOn() || c.P2P.NATPortMapOn() || *c.Update.Resolved().Auto {
-		t.Fatal("production v1 enabled peer-to-peer or automatic updates")
+	if !c.P2P.On() || !c.P2P.DHTOn() || !c.P2P.MDNSOn() || !c.P2P.NATPortMapOn() {
+		t.Fatal("production ignored the owner's peer-to-peer config")
+	}
+	if *c.Update.Resolved().Auto {
+		t.Fatal("production enabled automatic updates")
 	}
 	if !c.WhatsApp.On() || !c.Companion.On() {
 		t.Fatal("production ignored the owner's WhatsApp/Companion switches")
@@ -35,6 +38,43 @@ func TestProductionProfileDefaultsOff(t *testing.T) {
 		t.Fatalf("production defaults: %+v", c)
 	}
 }
+
+// Hostb's exact config, 3 Nov: production, p2p.enabled true, an explicit on-disk "dht":false
+// left by older fillDefaults code (cfc7be0/PR #176, before production honoured the field at all)
+// - indistinguishable from a genuine owner choice by its bare presence, which is why
+// EffectiveDHT defaults it on anyway unless DHTExplicit says the owner really chose it.
+func TestEffectiveDHTOverridesPioneersStaleFalse(t *testing.T) {
+	off := false
+	c := Config{Profile: ProfileProduction, P2P: &P2PConfig{Enabled: boolPtr(true), DHT: &off, MDNS: &off, NATPortMap: &off}}
+	if c.EffectiveDHT() != true {
+		t.Fatal("EffectiveDHT did not override the stale on-disk dht:false")
+	}
+}
+
+func TestEffectiveDHTRespectsExplicitChoice(t *testing.T) {
+	off := false
+	c := Config{Profile: ProfileProduction, P2P: &P2PConfig{Enabled: boolPtr(true), DHT: &off, DHTExplicit: true}}
+	if c.EffectiveDHT() != false {
+		t.Fatal("EffectiveDHT overrode a genuine owner choice")
+	}
+}
+
+func TestEffectiveDHTStaysOffOutsideProduction(t *testing.T) {
+	c := Config{Profile: ProfileTrial, P2P: &P2PConfig{Enabled: boolPtr(true)}}
+	c.fillDefaults()
+	if c.EffectiveDHT() != false {
+		t.Fatal("EffectiveDHT defaulted DHT on in trial")
+	}
+}
+
+func TestEffectiveDHTStaysOffWhenP2PDisabled(t *testing.T) {
+	c := Config{Profile: ProfileProduction, P2P: &P2PConfig{}}
+	if c.EffectiveDHT() != false {
+		t.Fatal("EffectiveDHT defaulted DHT on while p2p itself is off")
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
 
 func TestLoadProfiles(t *testing.T) {
 	for _, tc := range []struct {

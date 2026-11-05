@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // In-memory daemon for ?mock=1: answers the API table and plays a live script (a worker gets a
 // task, streams tool calls, asks for approval, finishes) so the UI can be built and screenshotted
 // without a backend. ?mock=empty: no projects. ?mock=calm: nothing pending. ?mock=still: no script.
@@ -37,6 +34,7 @@ import { MockResources, NOT_MINE } from "./resources";
 import { MockChats } from "./chats";
 import { MockCompanion } from "./companion";
 import { MockBoard } from "./board";
+import { MockMatrix } from "./matrix";
 import { MockScreen } from "./screen";
 import { MockVoice } from "./voice";
 import { MockRecordings } from "./recordings";
@@ -44,6 +42,7 @@ import { MockSummaries } from "./summaries";
 import type { Recording } from "../recording-types";
 import { MockWhatsApp } from "./whatsapp";
 import { MockAccounts } from "./accounts";
+import type { MessagePin, MessageSelection } from "../message-pins";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The daemon's words for a window's length in its prompt ("1 hour", "15 minutes"). */
@@ -70,17 +69,20 @@ export class MockTransport implements Transport {
   private chats: MockChats;
   private companion: MockCompanion;
   private board: MockBoard;
+  private matrix: MockMatrix;
   private screen: MockScreen;
   private voice: MockVoice;
   private recs: MockRecordings;
   private sums: MockSummaries;
   private wa: MockWhatsApp;
   private accounts: MockAccounts;
+  private messagePins: MessagePin[] = [];
 
   constructor(opts: { scenario: string }) {
     this.scenario = opts.scenario;
     this.w = buildWorld(opts.scenario);
     this.board = new MockBoard(this.w, (t, d) => this.emit(t, d));
+    this.matrix = new MockMatrix(this.w, (t, d) => this.emit(t, d));
     this.voice = new MockVoice((t, d) => this.emit(t, d));
     this.recs = new MockRecordings((t, d) => this.emit(t, d));
     this.sums = new MockSummaries((t, d) => this.emit(t, d));
@@ -315,6 +317,25 @@ export class MockTransport implements Transport {
 
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     await sleep(80 + Math.random() * 160);
+    if (path === "/api/message-pins" && method === "GET") return structuredClone(this.messagePins) as T;
+    if (path === "/api/message-pins" && method === "POST") {
+      const selection = body as MessageSelection;
+      const old = this.messagePins.find((p) => p.source === selection.source);
+      if (old) old.state = "active";
+      else this.messagePins.unshift({ ...selection, id: rid(), pinned_at: Date.now(), state: "active" });
+      this.emit("message.pins.changed", {});
+      return { ok: true } as T;
+    }
+    if (path.startsWith("/api/message-pins/") && method === "PATCH") {
+      const id = decodeURIComponent(path.slice("/api/message-pins/".length));
+      const pin = this.messagePins.find((p) => p.id === id);
+      if (!pin) throw new ApiError(404, "Pin not found");
+      const state = (body as { state: string }).state;
+      if (state === "unpinned") this.messagePins = this.messagePins.filter((p) => p.id !== id);
+      else pin.state = state as MessagePin["state"];
+      this.emit("message.pins.changed", {});
+      return { ok: true } as T;
+    }
     const m = path.match(/^\/api\/gate\/confirmations\/([^/?]+)(?:\?(.*))?$/);
     if (m) return structuredClone(await this.confirmation(method, decodeURIComponent(m[1]), new URLSearchParams(m[2] ?? ""))) as T;
     this.gate(method, path, body);
@@ -512,11 +533,14 @@ export class MockTransport implements Transport {
     if (res === "health") return { ok: true, version: this.w.version, machine: this.w.machine };
     if (res === "chats" || res === "contacts" || res === "invites" || (res === "p2p" && !id)) return this.chats.route(method, parts, q, body);
     if (res === "p2p" && id === "name") return this.chats.route(method, ["p2p"], q, body);
+    if (res === "p2p" && (id === "config" || id === "restart")) return this.chats.route(method, ["p2p", id], q, body);
+    if (res === "p2p" && id === "net" && parts[2] === "peers") return this.chats.route(method, ["p2p", "net", "peers"], q, body);
     if (res === "companion") return this.companion.route(method, parts, body);
     if (res === "snapshot") return this.snapshot();
     if (res === "update") return this.updateRoute(method, id, body);
     if (res === "voice" || res === "transcribe" || res === "transcripts") return this.voice.route(method, parts, q, body);
     if (res === "board" || res === "threads") return this.board.route(method, parts, body);
+    if (res === "matrix") return this.matrix.route(method, parts, q, body);
     if (res === "uploads") {
       const u = this.uploads.get(id) ?? notFound();
       return q.get("data") === "1" ? u : { ...u, data: undefined };
@@ -527,6 +551,7 @@ export class MockTransport implements Transport {
     }
     if (res === "profiles") return this.profileRoute(method, id, action, body);
     if (res === "messages") return this.w.messages;
+    if ((res === "system" && (id === "tools" || id === "warnings")) || (res === "processes" && !id)) return [];
     if (res === "harnesses")
       return FALLBACK_HARNESSES.map((h) =>
         h.name === "claude"
@@ -602,6 +627,7 @@ export class MockTransport implements Transport {
     if (res === "agents") {
       if (!id && method === "POST") return this.createAgent(body as CreateAgentBody);
       const a = (this.w.agents.get(id) ?? notFound()) as Agent;
+      if (action === "processes" && method === "GET") return []; // none recorded in the mock
       if (action === "timeline") {
         const after = Number(q.get("after") ?? -1);
         const limit = Number(q.get("limit") ?? 200);

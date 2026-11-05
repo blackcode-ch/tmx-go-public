@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// Chats between tmx installs (ARCHITECTURE.md "Chats"). The p2p layer (internal/p2p) connects
+// Chats between tmx installs (DESIGN.md "Chats"). The p2p layer (internal/p2p) connects
 // installs; the chat layer (internal/chat) keeps contacts, chats and messages here.
 
 // Contact is another person's tmx install we paired with (by invite).
@@ -69,7 +66,7 @@ type Chat struct {
 	AdminOffer *ChatAdminOffer `json:"admin_offer,omitempty"`
 }
 
-// ChatAdminOffer is an open offer of a group's admin role (ARCHITECTURE.md "Chats", Groups). The
+// ChatAdminOffer is an open offer of a group's admin role (DESIGN.md "Chats", Groups). The
 // member's tmx takes the role over by itself as soon as the offer reaches it.
 type ChatAdminOffer struct {
 	PeerID    string `json:"peer_id"`

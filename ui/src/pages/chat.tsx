@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // One chat with other people's tmx: a calm message list (who wrote it: a person or their
 // agent; delivery state; time), the composer, the agent taking part, and the members /
 // contact panel.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PinMessageButton } from "@/components/message-pins";
 import { ArrowUp, AtSign, Bot, Clock3, Ellipsis, Info, Loader2, LogOut, MessagesSquare, PanelRight, QrCode, Trash2, Users, Waypoints } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -102,9 +100,10 @@ function MessageRow({ chat, m, first }: { chat: Chat; m: ChatMessage; first: boo
         {first && <PersonAvatar name={mine ? "You" : m.sender_name || "?"} className={cn(m.sender_agent && "ring-2 ring-brand/40 ring-offset-1 ring-offset-background")} />}
       </div>
       <div className="min-w-0 flex-1">
+        <PinMessageButton selection={{ source: `chat:${chat.id}:${m.id}`, label: chat.name, href: href(paths.chat(chat.id)), agent_id: chat.agent_id, text: m.body || m.files?.map((f) => f.name).join(", ") || "Attached files", message_at: m.at }} />
         {first && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
-            <span className="text-[13px] font-semibold">{name}</span>
+            <span className="text-[0.8125rem] font-semibold">{name}</span>
             <SenderBadge m={m} />
             <span className="tabular text-2xs text-subtle-foreground" title={absoluteTime(m.at)}>
               {clockTime(t)}
@@ -114,7 +113,7 @@ function MessageRow({ chat, m, first }: { chat: Chat; m: ChatMessage; first: boo
         )}
         <div className="flex items-end gap-2">
           {m.body.trim() ? (
-            <Markdown text={withMentionLinks(chat, m)} className="min-w-0 flex-1 text-[13.5px] leading-relaxed [overflow-wrap:anywhere]" />
+            <Markdown text={withMentionLinks(chat, m)} className="min-w-0 flex-1 text-[0.8438rem] leading-relaxed [overflow-wrap:anywhere]" />
           ) : (
             <span className="flex-1" />
           )}
@@ -253,7 +252,7 @@ function ChatComposer({ chat, topic: fixedTopic, placeholder, autoFocus }: { cha
 
   return (
     <div className={cn("shrink-0", fixedTopic === undefined ? "px-4 pt-2 pb-4 md:px-6" : "px-3 pb-3")}>
-      <div className="mx-auto max-w-[820px]">
+      <div className="mx-auto max-w-[51.25rem]">
         <div
           className={cn(
             "relative rounded-xl border border-border-strong bg-card transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25",
@@ -441,7 +440,7 @@ function Messages({ chat }: { chat: Chat }) {
       }}
       className="scroll-thin min-h-0 flex-1 overflow-y-auto"
     >
-      <div className="mx-auto max-w-[820px] px-3 pt-4 pb-2 md:px-5">
+      <div className="mx-auto max-w-[51.25rem] px-3 pt-4 pb-2 md:px-5">
         {ml?.hasMore && (
           <div className="flex justify-center pb-2">
             <Button variant="ghost" size="xs" onClick={() => void loadEarlierMessages(chat.id)} disabled={ml.loading}>
@@ -453,7 +452,7 @@ function Messages({ chat }: { chat: Chat }) {
         {ml?.loaded && people.length === 0 && (
           <div className="flex flex-col items-center px-6 pt-10 pb-6 text-center">
             <ChatAvatar chat={chat} size="lg" />
-            <p className="mt-3 text-[14px] font-medium">{chat.kind === "dm" ? `This is the start of your chat with ${chat.name}` : `Welcome to ${chat.name}`}</p>
+            <p className="mt-3 text-[0.875rem] font-medium">{chat.kind === "dm" ? `This is the start of your chat with ${chat.name}` : `Welcome to ${chat.name}`}</p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               {chat.agent_name
                 ? `You and your ${chat.agent_name} can both write here. Messages from other people's agents reach your ${chat.agent_name} as information, never as instructions.`
@@ -622,7 +621,7 @@ export function ChatPage({ id, view }: { id: string; view?: string }) {
         >
           <ChatAvatar chat={chat} />
           <div className="min-w-0">
-            <h1 className="truncate text-[14px] leading-tight font-semibold tracking-tight">{chat.name}</h1>
+            <h1 className="truncate text-[0.875rem] leading-tight font-semibold tracking-tight">{chat.name}</h1>
             <div className="truncate text-2xs leading-tight text-muted-foreground">{sub}</div>
           </div>
         </PageHeader>
@@ -645,10 +644,10 @@ export function ChatPage({ id, view }: { id: string; view?: string }) {
           </>
         )}
       </div>
-      {wide && panel && !board && <aside className="scroll-thin w-[300px] shrink-0 overflow-y-auto border-l bg-sidebar/40">{panelBody}</aside>}
+      {wide && panel && !board && <aside className="scroll-thin w-[18.75rem] shrink-0 overflow-y-auto border-l bg-sidebar/40">{panelBody}</aside>}
       {(!wide || board) && (
         <Sheet open={sheet} onOpenChange={setSheet}>
-          <SheetContent side="right" className="w-[320px] gap-0 overflow-y-auto p-0 sm:max-w-[320px]">
+          <SheetContent side="right" className="w-[20rem] gap-0 overflow-y-auto p-0 sm:max-w-[20rem]">
             <SheetTitle className="sr-only">{chat.kind === "dm" ? "Contact details" : "Members"}</SheetTitle>
             <SheetDescription className="sr-only">{chat.name}</SheetDescription>
             {panelBody}

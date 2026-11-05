@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Dictation: the microphone, captured in the page and turned into a 16 kHz mono PCM16 WAV (what
 // whisper reads best), sent to POST /api/transcribe; the text comes back for the composer.
 // Capture runs through an AudioWorklet (public/dictation-worklet.js), else the older

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package codex
 
 import (
@@ -8,7 +5,7 @@ import (
 )
 
 // JSON-RPC over stdio, one object per line, without the "jsonrpc" member (codex app-server
-// 0.163; schema from `codex app-server generate-ts`). See ARCHITECTURE.md "Codex app-server".
+// 0.163; schema from `codex app-server generate-ts`). See DESIGN.md "Codex app-server".
 
 type wireMsg struct {
 	ID     json.RawMessage `json:"id,omitempty"` // string or number; absent for notifications

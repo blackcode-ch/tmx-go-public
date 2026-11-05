@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Profiles → one profile: the editor (also "new").
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ChevronRight, Ellipsis, Info, Loader2, RotateCcw, Trash2, UserRoundCog } from "lucide-react";
@@ -86,7 +83,7 @@ function newDraft(base: Profile | undefined): Draft {
     instructions:
       base?.instructions ??
       'You are "{{name}}", a worker in project "{{project}}", run by tmx; your folder is {{folder}}. Your lead is {{parent}}.',
-    model: base?.model ?? "claude-sonnet-5-5",
+    model: base?.model ?? "claude-sonnet-5",
     allowed_models: base?.allowed_models ?? [],
     permission_mode: base?.permission_mode ?? "auto",
     allowed_tools: [],
@@ -296,11 +293,11 @@ export function ProfilePage({ slug }: { slug: string }) {
           </>
         }
       >
-        <a href={href(paths.settings())} className="hidden shrink-0 text-[13px] text-muted-foreground hover:text-foreground sm:block">
+        <a href={href(paths.settings())} className="hidden shrink-0 text-[0.8125rem] text-muted-foreground hover:text-foreground sm:block">
           Settings
         </a>
         <ChevronRight className="hidden size-3.5 shrink-0 text-subtle-foreground sm:block" />
-        <h1 className="min-w-0 truncate text-[14px] font-semibold tracking-tight">{title}</h1>
+        <h1 className="min-w-0 truncate text-[0.875rem] font-semibold tracking-tight">{title}</h1>
         <LevelBadge level={draft.level} />
         {profile?.built_in && (
           <span className="hidden h-5 items-center rounded-[5px] bg-muted px-1.5 text-2xs font-medium text-muted-foreground sm:inline-flex">
@@ -309,7 +306,7 @@ export function ProfilePage({ slug }: { slug: string }) {
         )}
       </PageHeader>
 
-      <PageBody width="max-w-[980px]" className="space-y-8">
+      <PageBody width="max-w-[61.25rem]" className="space-y-8">
         {!isNew && users.length > 0 && (
           <div className="flex items-start gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
             <Info className="mt-px size-3.5 shrink-0" />
@@ -342,12 +339,12 @@ export function ProfilePage({ slug }: { slug: string }) {
                     set("slug", e.target.value.trim());
                   }}
                   placeholder="reviewer"
-                  className="font-mono text-[12.5px] sm:w-72"
+                  className="font-mono text-[0.7812rem] sm:w-72"
                   spellCheck={false}
                   aria-invalid={!!effSlug && (!SLUG_RX.test(effSlug) || !!profiles[effSlug])}
                 />
               ) : (
-                <p className="pt-1.5 font-mono text-[12.5px]">{slug}</p>
+                <p className="pt-1.5 font-mono text-[0.7812rem]">{slug}</p>
               )}
             </Row>
             <Row label="Description" hint="Shown to the agents that may launch it.">
@@ -444,7 +441,7 @@ export function ProfilePage({ slug }: { slug: string }) {
                   Disallows{" "}
                   {READ_ONLY_TOOLS.map((t, i) => (
                     <span key={t}>
-                      <code className="rounded-[4px] bg-muted px-1 py-px font-mono text-[11px] text-foreground/80">{t}</code>
+                      <code className="rounded-[4px] bg-muted px-1 py-px font-mono text-[0.6875rem] text-foreground/80">{t}</code>
                       {i < READ_ONLY_TOOLS.length - 1 ? " " : ""}
                     </span>
                   ))}
@@ -529,7 +526,7 @@ export function ProfilePage({ slug }: { slug: string }) {
                   <span className="text-xs font-medium">Preview</span>
                   <span className="text-xs text-muted-foreground">as</span>
                   <Select value={previewAs} onValueChange={setPreviewAs}>
-                    <SelectTrigger size="sm" className="h-7 max-w-[220px] border-transparent px-2 text-xs shadow-none hover:bg-muted dark:bg-transparent">
+                    <SelectTrigger size="sm" className="h-7 max-w-[13.75rem] border-transparent px-2 text-xs shadow-none hover:bg-muted dark:bg-transparent">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

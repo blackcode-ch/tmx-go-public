@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package claude
 
 import (
@@ -18,6 +15,10 @@ import (
 // The test binary doubles as a fake `claude` speaking the stream-json protocol when
 // TMXG_FAKE_CLAUDE=1, so the process tests need neither the real CLI nor a shell script.
 func TestMain(m *testing.M) {
+	// The test binary is also `tmx host [--launch] DIR` (host_test.go).
+	if len(os.Args) > 1 && os.Args[1] == "host" {
+		os.Exit(testHostMain(os.Args[2:]))
+	}
 	if os.Getenv("TMXG_FAKE_CLAUDE") == "1" {
 		fakeClaude()
 		os.Exit(0)

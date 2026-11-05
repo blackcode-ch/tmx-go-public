@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // What the owner does with a finished recording: share it into a chat (each segment is one
 // file; a message carries at most 10 files of 25 MB), link it on a Board topic (a line in the
 // topic's log; no media goes into the board), delete it.
@@ -83,7 +80,7 @@ export function ShareRecordingDialog({ rec, open, onOpenChange }: { rec: Recordi
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[31.25rem]">
         <DialogHeader>
           <DialogTitle>Share to a chat</DialogTitle>
           <DialogDescription>
@@ -187,7 +184,7 @@ export function BoardLinkDialog({ rec, open, onOpenChange }: { rec: Recording; o
     try {
       await boardApi.addEntry({ thread, kind: "link", text: text.trim().slice(0, 400), link: `#/recordings/${rec.id}` });
       onOpenChange(false);
-      toast.success("Linked on the Board", { action: { label: "Open", onClick: () => navigate(paths.board()) } });
+      toast.success("Linked on the Matrix", { action: { label: "Open", onClick: () => navigate(paths.matrix()) } });
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -196,7 +193,7 @@ export function BoardLinkDialog({ rec, open, onOpenChange }: { rec: Recording; o
 
   return (
     <Dialog open={open} onOpenChange={(v) => !busy && onOpenChange(v)}>
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className="sm:max-w-[28.75rem]">
         <DialogHeader>
           <DialogTitle>Add to Board</DialogTitle>
           <DialogDescription>A link line in a topic's log. The recording itself stays here.</DialogDescription>

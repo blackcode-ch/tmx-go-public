@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -23,7 +20,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/recorder"
 )
 
-// Recordings (ARCHITECTURE.md "Recorder"). Everything that starts, feeds, changes or plays a
+// Recordings (DESIGN.md "Recorder"). Everything that starts, feeds, changes or plays a
 // recording is owner-only; agents may list and read recordings (the owner's decision) and
 // then read the files at the paths given. A <video src> plays with a ticket instead of the
 // owner token, which never goes in a URL.
@@ -45,6 +42,7 @@ func (s *Server) recordingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/recordings/{id}/frames/{ms}", o(on(s.putFrame)))
 	mux.HandleFunc("GET /api/recordings/{id}/frames/{ms}", on(s.frameFile))      // the owner, or a ticket
 	mux.HandleFunc("POST /api/recordings/{id}/native", o(on(s.nativeRecording))) // recordings_native.go
+	mux.HandleFunc("POST /api/recordings/{id}/process", on(s.processRecording))  // only the report worker launched for it (recworker)
 }
 
 // recOn answers 501 when this daemon has no recorder.
@@ -125,12 +123,24 @@ func (s *Server) activeRecording(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renameRecording(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title string `json:"title"`
+		Title       *string `json:"title"`
+		Sensitivity *string `json:"sensitivity"` // "clinic" | "" (recorder.SetSensitivity)
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	rec, err := s.rec.Rename(r.PathValue("id"), req.Title)
+	if req.Title == nil && req.Sensitivity == nil {
+		writeError(w, http.StatusBadRequest, "nothing to change: give title and/or sensitivity")
+		return
+	}
+	var rec model.Recording
+	var err error
+	if req.Title != nil {
+		rec, err = s.rec.Rename(r.PathValue("id"), *req.Title)
+	}
+	if err == nil && req.Sensitivity != nil {
+		rec, err = s.rec.SetSensitivity(r.PathValue("id"), *req.Sensitivity)
+	}
 	if err != nil {
 		writeRecErr(w, err)
 		return
@@ -401,7 +411,8 @@ func (s *Server) transcribeRecording(w http.ResponseWriter, r *http.Request) {
 // at ms of recorded time, for the summaries. The body is the JPEG itself (Content-Type
 // image/jpeg, the http transport) or JSON {data} with base64 (the desktop bridge). → 200
 // {ms, path, bytes}; 400 not a JPEG or larger than 1280 px; 413 over 600 KB; 409 once the
-// recording is finished or has 400 frames.
+// recording is finished or has 400 frames. ?key=1 (or JSON {key: true}) marks a key moment: the
+// window saw the picture change.
 func (s *Server) putFrame(w http.ResponseWriter, r *http.Request) {
 	ms, err := strconv.ParseInt(r.PathValue("ms"), 10, 64)
 	if err != nil {
@@ -421,15 +432,17 @@ func (s *Server) putFrame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("a frame is at most %d KB", recorder.MaxFrameBytes>>10))
 		return
 	}
-	data := body
+	data, key := body, r.URL.Query().Get("key") == "1"
 	if ct == "application/json" {
 		var req struct {
 			Data string `json:"data"`
+			Key  bool   `json:"key"`
 		}
 		if err := json.Unmarshal(body, &req); err != nil {
 			writeError(w, http.StatusBadRequest, "the request body is not valid JSON: "+err.Error())
 			return
 		}
+		key = key || req.Key
 		if data, err = base64.StdEncoding.DecodeString(req.Data); err != nil {
 			writeError(w, http.StatusBadRequest, "data is not valid base64")
 			return
@@ -439,7 +452,7 @@ func (s *Server) putFrame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("a frame is at most %d KB", recorder.MaxFrameBytes>>10))
 		return
 	}
-	f, err := s.rec.PutFrame(r.PathValue("id"), ms, data)
+	f, err := s.rec.PutKeyFrame(r.PathValue("id"), ms, data, key)
 	if err != nil {
 		writeRecErr(w, err)
 		return
@@ -482,4 +495,27 @@ func (s *Server) frameFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
 	_, _ = w.Write(b)
+}
+
+// ProcessResponse is POST /api/recordings/{id}/process: the report's state, and why when it failed. Never the
+// transcript or the summary: the caller is the report worker, a cloud model that must not see client content.
+type ProcessResponse struct {
+	State model.SummaryState `json:"state"`
+	Error string             `json:"error,omitempty"`
+}
+
+// POST /api/recordings/{id}/process → ProcessResponse: the report worker (internal/recworker) asks for the
+// report the first time and is told its state each time. Any other caller is refused (403).
+func (s *Server) processRecording(w http.ResponseWriter, r *http.Request) {
+	if s.recw == nil {
+		writeError(w, http.StatusNotImplemented, "the report worker is not available on this daemon")
+		return
+	}
+	c, _ := caller(r)
+	st, why, err := s.recw.Process(c, r.PathValue("id"))
+	if err != nil {
+		writeRecErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ProcessResponse{State: st, Error: why})
 }

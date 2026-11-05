@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -40,6 +37,7 @@ type startOpts struct {
 	deliberate         bool
 	StartOptions
 	fromQueue bool // the queue pump already admitted it
+	reattach  bool // daemon start: take over a session host an earlier daemon left running
 }
 
 // Brake reasons (Agent.PausedReason).
@@ -524,7 +522,7 @@ func (f *Fleet) decideBrake(ap model.Approval, d DecideRequest) (model.Approval,
 	return ap, nil
 }
 
-// slotRule tells agents to take turns for heavy work (ARCHITECTURE.md "Resources").
+// slotRule tells agents to take turns for heavy work (DESIGN.md "Resources").
 func (f *Fleet) slotRule() string {
 	return fmt.Sprintf("The machine is shared: run heavy builds, test suites, installs and big clones through "+
 		"`%[1]s slot -- <command>`, and anything that starts a browser through `%[1]s slot --kind browser -- <command>`; "+

@@ -1,11 +1,9 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Companion 1:1 (#/companion, ARCHITECTURE.md "Companion"): the owner's conversation with Companion.
+// Companion 1:1 (#/companion, DESIGN.md "Companion"): the owner's conversation with Companion.
 // tmx's side on the right (the owner's messages, the head's and agents' messages, tasks handed
 // over), Companion on the left (replies, questions, messages to the head), tmx's error notes in
 // the middle. "Answer" on a waiting question puts the composer into reply mode.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { PinMessageButton } from "@/components/message-pins";
 import { AlertCircle, ArrowDown, ArrowUp, Bot, Check, Clock3, CornerDownRight, ListTodo, Loader2, MessageCircleQuestion, RefreshCw, Settings, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -147,7 +145,7 @@ function OurMessage({ e, first, answer }: { e: CompanionEntry; first: boolean; a
           owner ? "bg-bubble whitespace-pre-wrap text-foreground" : "border bg-card",
         )}
       >
-        {owner ? e.text : <Markdown text={e.text} className="text-[13.5px] leading-relaxed" />}
+        {owner ? e.text : <Markdown text={e.text} className="text-[0.8438rem] leading-relaxed" />}
       </div>
       <div className="flex items-center gap-2">
         <MessageState state={e.state} />
@@ -162,7 +160,7 @@ function TaskCard({ e }: { e: CompanionEntry }) {
   const state = e.state && e.state !== "answered" ? e.state : undefined;
   return (
     <div className="flex justify-end pl-[12%]" data-entry="task">
-      <div className={cn("w-full max-w-[460px] rounded-xl border bg-card px-3 py-2.5", state && inFlight(e) && "border-border-strong")}>
+      <div className={cn("w-full max-w-[28.75rem] rounded-xl border bg-card px-3 py-2.5", state && inFlight(e) && "border-border-strong")}>
         <div className="flex items-center gap-2 text-2xs text-muted-foreground">
           <ListTodo className="size-3.5 shrink-0 text-subtle-foreground" />
           <span className="min-w-0 truncate">
@@ -170,7 +168,7 @@ function TaskCard({ e }: { e: CompanionEntry }) {
           </span>
           <Time at={e.at} className="ml-auto shrink-0" />
         </div>
-        <p className="mt-1.5 line-clamp-3 text-[13px] leading-snug [overflow-wrap:anywhere]">{e.text}</p>
+        <p className="mt-1.5 line-clamp-3 text-[0.8125rem] leading-snug [overflow-wrap:anywhere]">{e.text}</p>
         {state && (
           <div className="mt-2 flex items-center gap-3">
             <TaskState state={state} className="text-2xs" />
@@ -194,12 +192,12 @@ function CompanionMessage({ e, first, to }: { e: CompanionEntry; first: boolean;
       <div className="min-w-0 flex-1">
         {first && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
-            <span className="text-[13px] font-semibold">Companion</span>
+            <span className="text-[0.8125rem] font-semibold">Companion</span>
             {to && <span className="text-2xs text-muted-foreground">to {to}</span>}
             <Time at={e.at} />
           </div>
         )}
-        <Markdown text={e.text} className="text-[13.5px] leading-relaxed [overflow-wrap:anywhere]" />
+        <Markdown text={e.text} className="text-[0.8438rem] leading-relaxed [overflow-wrap:anywhere]" />
       </div>
     </div>
   );
@@ -222,11 +220,11 @@ function Question({ e, about, connected, answering }: { e: CompanionEntry; about
       >
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <MessageCircleQuestion className={cn("size-3.5 shrink-0", waiting ? "text-state-waiting" : "text-subtle-foreground")} />
-          <span className="text-[13px] font-semibold">Companion asks</span>
+          <span className="text-[0.8125rem] font-semibold">Companion asks</span>
           {about && about.from !== "owner" && <span className="text-2xs text-muted-foreground">for {party(about)}</span>}
           <Time at={e.at} />
         </div>
-        <Markdown text={e.text} className="mt-1 text-[13.5px] leading-relaxed [overflow-wrap:anywhere]" />
+        <Markdown text={e.text} className="mt-1 text-[0.8438rem] leading-relaxed [overflow-wrap:anywhere]" />
         {about && <p className="mt-1 truncate text-2xs text-muted-foreground">About: {about.text}</p>}
         <div className="mt-2 flex items-center gap-2">
           {waiting ? (
@@ -352,7 +350,7 @@ function Timeline({ connected }: { connected: boolean }) {
     body = (
       <div className="flex flex-col items-center px-6 pt-14 pb-6 text-center" data-companion-empty>
         <CompanionAvatar size="lg" />
-        <p className="mt-3 text-[14px] font-medium">Talk with Companion</p>
+        <p className="mt-3 text-[0.875rem] font-medium">Talk with Companion</p>
         <p className="mt-1 max-w-sm text-sm text-muted-foreground">
           {connected
             ? "Write to Companion here. You also see what the head and Companion say to each other, and the tasks tmx hands it."
@@ -387,6 +385,7 @@ function Timeline({ connected }: { connected: boolean }) {
             </div>
           )}
           {row}
+          <PinMessageButton selection={{ source: `companion:${e.id}`, label: "Companion", href: "#/companion", agent_id: Object.values(useStore.getState().agents).find((a) => a.name === e.agent_name)?.id ?? useStore.getState().headId ?? undefined, text: e.text, message_at: e.at }} />
         </div>
       );
     });
@@ -395,7 +394,7 @@ function Timeline({ connected }: { connected: boolean }) {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scroller} onScroll={onScroll} data-testid="companion-scroll" className="scroll-thin min-h-0 flex-1 overflow-y-auto">
-        <div ref={content} className="mx-auto max-w-[820px] px-4 pt-4 pb-3 md:px-6">
+        <div ref={content} className="mx-auto max-w-[51.25rem] px-4 pt-4 pb-3 md:px-6">
           {body}
         </div>
       </div>
@@ -480,7 +479,7 @@ function Composer({ connected, loaded }: { connected: boolean; loaded: boolean }
 
   return (
     <div className="shrink-0 px-4 pt-2 pb-4 md:px-6">
-      <div className="mx-auto max-w-[820px]">
+      <div className="mx-auto max-w-[51.25rem]">
         <div
           className={cn(
             "relative rounded-xl border border-border-strong bg-card transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25",
@@ -624,7 +623,7 @@ export function CompanionPage() {
       >
         <CompanionAvatar />
         <div className="min-w-0">
-          <h1 className="truncate text-[14px] leading-tight font-semibold tracking-tight">Companion</h1>
+          <h1 className="truncate text-[0.875rem] leading-tight font-semibold tracking-tight">Companion</h1>
           <div className="truncate text-2xs leading-tight text-muted-foreground">{loaded ? <ConnectionLine connected={connected} busy={busy} /> : "Loading…"}</div>
         </div>
       </PageHeader>

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useVisibleAgents } from "@/hooks/use-visible-agents";
 import { AgentListFilter } from "@/components/agent-list-filter";
 import { useEffect, useMemo, useRef } from "react";
@@ -28,49 +25,55 @@ import { summarizeTool } from "@/lib/tools";
 import type { Agent, AgentState, Project, TimelineEntry } from "@/lib/types";
 import { ui, useUI } from "@/lib/ui";
 import { cn } from "@/lib/utils";
+import { dailyLine, greeting } from "@/lib/daily";
 
+/** "Needs you" as the Daily card (#235): the first thing in large type, the next two below. */
 function NeedsYouStrip() {
   const approvals = useStore((s) => s.approvals);
   const agents = useStore((s) => s.agents);
   const list = pendingApprovals(approvals);
   if (list.length === 0) return null;
+  const what = (a: (typeof list)[number]) => {
+    const s = summarizeTool(a.tool, a.input, agents[a.agent_id]?.cwd);
+    return { text: a.kind === "question" || a.kind === "companion" ? a.question : a.kind === "brake" ? a.description : s.detail, mono: a.kind === "permission" && s.mono };
+  };
+  const [first, ...rest] = list;
+  const f = what(first);
   return (
-    <section className="overflow-hidden rounded-xl border border-state-waiting/40 bg-card">
-      <div className="flex h-10 items-center gap-2 border-b border-state-waiting/20 bg-state-waiting/[0.06] px-4">
-        <span className="size-2 rounded-full bg-state-waiting" />
-        <h2 className="text-[13px] font-medium">
-          {list.length === 1 ? "1 thing needs you" : `${list.length} things need you`}
-        </h2>
-        <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground" asChild>
-          <a href={href(paths.inbox())}>
-            Review all <ArrowRight />
-          </a>
-        </Button>
+    <section className="overflow-hidden rounded-2xl border border-state-waiting/45 bg-state-waiting/[0.09]" aria-label="Needs you">
+      <div className="px-5 pt-4 pb-4">
+        <div className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[color-mix(in_oklab,var(--state-waiting)_55%,var(--foreground))] uppercase">
+          <span className="size-2 rounded-full bg-state-waiting" />
+          {list.length === 1 ? "One thing needs you" : `Needs you · 1 of ${list.length}`}
+        </div>
+        <p className={cn("mt-2 line-clamp-3 text-lg leading-snug font-semibold [overflow-wrap:anywhere]", f.mono && "font-mono text-base")}>{f.text || approvalHeadline(first)}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{agents[first.agent_id]?.name ?? "agent"}</span> · {approvalHeadline(first)} · {relativeTime(first.created_at)}
+          </span>
+          <Button size="sm" className="ml-auto" asChild>
+            <a href={href(paths.inbox() + "?id=" + first.id)}>Open</a>
+          </Button>
+        </div>
       </div>
-      <ul className="divide-y">
-        {list.slice(0, 3).map((a) => {
-          const ag = agents[a.agent_id];
-          const s = summarizeTool(a.tool, a.input, ag?.cwd);
-          return (
+      {rest.length > 0 && (
+        <ul className="divide-y border-t border-state-waiting/25 bg-card/70">
+          {rest.slice(0, 2).map((a) => (
             <li key={a.id}>
-              <a
-                href={href(paths.inbox() + "?id=" + a.id)}
-                className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2.5 text-sm outline-none hover:bg-accent/50 focus-visible:bg-accent/60 sm:flex sm:h-11 sm:py-0"
-              >
-                <span className="col-start-1 row-start-1 min-w-0 truncate sm:w-[120px] sm:shrink-0">
-                  <span className="font-medium">{ag?.name ?? "agent"}</span>
-                  <span className="text-muted-foreground sm:hidden"> {approvalHeadline(a)}</span>
-                </span>
-                <span className="hidden shrink-0 text-muted-foreground sm:inline">{approvalHeadline(a)}</span>
-                <span className="tabular col-start-2 row-start-1 shrink-0 justify-self-end text-2xs text-subtle-foreground sm:order-last">{relativeTime(a.created_at)}</span>
-                <span className={cn("col-span-2 min-w-0 flex-1 truncate text-muted-foreground", a.kind === "permission" && s.mono && "font-mono text-xs")}>
-                  {a.kind === "question" || a.kind === "companion" ? a.question : a.kind === "brake" ? a.description : s.detail}
-                </span>
+              <a href={href(paths.inbox() + "?id=" + a.id)} className="flex items-center gap-3 px-5 py-2.5 text-sm outline-none hover:bg-accent/50 focus-visible:bg-accent/60">
+                <span className="shrink-0 font-medium">{agents[a.agent_id]?.name ?? "agent"}</span>
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{what(a).text || approvalHeadline(a)}</span>
+                <span className="tabular shrink-0 text-2xs text-subtle-foreground">{relativeTime(a.created_at)}</span>
               </a>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+          <li>
+            <a href={href(paths.inbox())} className="flex items-center gap-1 px-5 py-2.5 text-sm text-muted-foreground hover:text-foreground">
+              {rest.length > 2 ? `${rest.length - 2} more · ` : ""}See all <ArrowRight className="size-3.5" />
+            </a>
+          </li>
+        </ul>
+      )}
     </section>
   );
 }
@@ -89,10 +92,10 @@ function HeadPanel({ head }: { head: Agent }) {
   return (
     <section className="rounded-xl border bg-card">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pt-4">
-        <AgentAvatar agent={head} label={headLabel} className="size-8 text-[13px]" />
+        <AgentAvatar agent={head} label={headLabel} className="size-8 text-[0.8125rem]" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <a href={href(paths.agent(head.id))} className="text-[14px] font-semibold tracking-tight hover:underline">
+            <a href={href(paths.agent(head.id))} className="text-[0.875rem] font-semibold tracking-tight hover:underline">
               {headLabel}
             </a>
             <ModelBadge agent={head} />
@@ -105,9 +108,9 @@ function HeadPanel({ head }: { head: Agent }) {
         </div>
         <div className="ml-auto flex items-center gap-0.5">
           <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
-            <a href={href(paths.board())} title="The conversation by topic">
+            <a href={href(paths.matrix())} title="The conversation by thread">
               <Waypoints />
-              <span className="hidden sm:inline">Board</span>
+              <span className="hidden sm:inline">Matrix</span>
             </a>
           </Button>
           <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
@@ -165,7 +168,7 @@ function ProjectCard({ p }: { p: Project }) {
     >
       <div className="flex items-center gap-2">
         <FolderClosed className="size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 truncate text-[14px] font-medium">{p.name}</span>
+        <span className="min-w-0 truncate text-[0.875rem] font-medium">{p.name}</span>
         {p.status !== "active" && <ProjectStatusBadge status={p.status} />}
       </div>
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-xs leading-5 text-muted-foreground">{p.brief || "No brief."}</p>
@@ -265,7 +268,7 @@ function ActivityFeed() {
               href={href(paths.agent(agent.id))}
               className="flex h-10 items-center gap-3 px-4 text-sm outline-none hover:bg-accent/50 focus-visible:bg-accent/60"
             >
-              <span className={cn("flex w-[132px] shrink-0 items-center gap-2 truncate", repeat && "invisible")} aria-hidden={repeat}>
+              <span className={cn("flex w-[8.25rem] shrink-0 items-center gap-2 truncate", repeat && "invisible")} aria-hidden={repeat}>
                 <StateDot state={agent.state} />
                 <span className="truncate font-medium text-foreground/90">{agent.name}</span>
               </span>
@@ -292,6 +295,7 @@ export function OverviewPage() {
     return Object.values(projects).sort((a, b) => order[a.status] - order[b.status] || b.updated_at - a.updated_at);
   }, [projects]);
   const running = Object.values(agents).filter((a) => a.state === "working" || a.state === "waiting" || a.state === "starting").length;
+  const pending = pendingApprovals(useStore((s) => s.approvals)).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -306,23 +310,26 @@ export function OverviewPage() {
           </>
         }
       >
-        <PageTitle>Overview</PageTitle>
+        <PageTitle>Home</PageTitle>
         <span className="tabular hidden truncate text-xs text-muted-foreground sm:inline">
           {machine} · {plural(Object.keys(agents).length, "agent")} · {running} active
         </span>
       </PageHeader>
       <PageBody className="space-y-8">
+        {/* Daily (#235): a greeting and one plain line, then what needs you, the conversation to
+            pick up, and what moves forward; the machine below. */}
+        <div>
+          <h2 className="text-2xl leading-tight font-semibold tracking-tight">{greeting(new Date().getHours())}</h2>
+          <p className="mt-1 text-muted-foreground">{dailyLine(running, pending)}</p>
+        </div>
         <NeedsYouStrip />
         <HeadPausedBanner />
-        {head ? <HeadPanel head={head} /> : <Skeleton className="h-40 rounded-xl" />}
-        <MachineStrip />
-        <FleetHostsStrip />
-        <CompanionStrip />
+        <Section title="Pick up a conversation">{head ? <HeadPanel head={head} /> : <Skeleton className="h-40 rounded-xl" />}</Section>
 
         <Section
           title={
             <span className="flex items-center gap-2">
-              Projects
+              Moving forward
               {list.length > 0 && <span className="tabular text-xs font-normal text-subtle-foreground">{list.length}</span>}
             </span>
           }
@@ -354,6 +361,9 @@ export function OverviewPage() {
             </div>
           )}
         </Section>
+        <MachineStrip />
+        <FleetHostsStrip />
+        <CompanionStrip />
 
         {list.length > 0 && (
           <Section

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // A stand-in for the macOS app's native capture under ?mock=…&native=1, so the start dialog's
 // "Screen with sound" and the recording bar can be seen without the app. It "picks" a display
 // at once and drives the mock recorder API; there is no media.

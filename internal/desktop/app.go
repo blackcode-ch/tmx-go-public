@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build desktop
 
 // Package desktop is the Wails window of `tmx app`. The window is only a client: it loads the
@@ -284,14 +281,20 @@ func (a *App) TerminalOpen(agentID string, cols, rows int) (string, error) {
 // TerminalOpenPath relays any of the daemon's terminal WebSockets by path: an agent's
 // (/api/agents/{id}/terminal) or an AI account's sign-in (/api/accounts/{harness}/login/terminal).
 func (a *App) TerminalOpenPath(path string, cols, rows int) (string, error) {
-	if !strings.HasPrefix(path, "/api/") || !strings.HasSuffix(path, "/terminal") {
-		return "", fmt.Errorf("not a terminal: %q", path)
+	p, q, err := TerminalPath(path)
+	if err != nil {
+		return "", err
 	}
-	return a.openTerminal(path, cols, rows)
+	return a.openTerminal(p, cols, rows, q)
 }
 
-func (a *App) openTerminal(path string, cols, rows int) (string, error) {
+func (a *App) openTerminal(path string, cols, rows int, extra ...url.Values) (string, error) {
 	q := url.Values{}
+	for _, e := range extra {
+		for k, v := range e {
+			q[k] = v
+		}
+	}
 	q.Set("cols", fmt.Sprint(cols))
 	q.Set("rows", fmt.Sprint(rows))
 	ctx, cancel := context.WithCancel(a.ctx)

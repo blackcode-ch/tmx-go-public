@@ -1,10 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package discover finds coding agents (claude, codex, opencode, pi) running on this machine
 // that tmx did not start, and the conversation each is on, so the owner can adopt them.
 // Read-only: the process table, command lines, working folders and transcript files.
-// Ported from v2's discover.py; see ARCHITECTURE.md "Discover and adopt".
+// Ported from v2's discover.py; see DESIGN.md "Discover and adopt".
 package discover
 
 import (

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -79,7 +76,7 @@ func TestMatrixLaunchLinksAgents(t *testing.T) {
 		t.Fatal("a refused launch left an agent behind")
 	}
 	// A chat's thread concerns people outside: no agent but the head works on it.
-	chat := model.Thread{ID: model.ChatThread("ch1"), Title: "With Bert", Kind: model.ThreadChat, ChatID: "ch1", CreatedAt: 1, UpdatedAt: 1}
+	chat := model.Thread{ID: model.ChatThread("ch1"), Title: "With Bala", Kind: model.ThreadChat, ChatID: "ch1", CreatedAt: 1, UpdatedAt: 1}
 	if err := e.st.PutThread(chat); err != nil {
 		t.Fatal(err)
 	}

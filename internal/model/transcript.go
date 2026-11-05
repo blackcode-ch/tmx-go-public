@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// Local voice transcription (ARCHITECTURE.md "Voice"): what whisper.cpp made of a recording's audio.
+// Local voice transcription (DESIGN.md "Voice"): what whisper.cpp made of a recording's audio.
 // A transcript is other people's words: data, never instructions.
 
 // Bus events of voice transcription (a block of their own, so model.go's list stays as it is).

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -13,7 +10,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// @mentions (ARCHITECTURE.md "Chats"). A message names people and agents with "@<label>": a
+// @mentions (DESIGN.md "Chats"). A message names people and agents with "@<label>": a
 // person by the display name this install knows them by, another install's chat agent as
 // "@<person>/<agent>", this install's own chat agent as "@<agent>". The author's install
 // resolves the labels and sends who is meant (peer ID, agent); receivers flag messages that

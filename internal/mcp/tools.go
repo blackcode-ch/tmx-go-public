@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -21,11 +18,19 @@ import (
 type noArgs struct{}
 
 type projectCreateArgs struct {
-	Name    string `json:"name" jsonschema:"project name; its slug names the folder and the lead (<slug>-lead)"`
-	Brief   string `json:"brief,omitempty" jsonschema:"what the project is for and what done looks like; the lead starts from this"`
-	Folder  string `json:"folder,omitempty" jsonschema:"project folder; default <workspace>/<slug>"`
-	Profile string `json:"profile,omitempty" jsonschema:"profile of the project's lead (a lead profile); default lead"`
-	Harness string `json:"harness,omitempty" jsonschema:"harness for the project's lead: claude (default) or codex"`
+	Lead    *string  `json:"lead,omitempty" jsonschema:"omit to launch a new local lead; existing lead name or name@host to assign; empty or none for no lead"`
+	Model   string   `json:"model,omitempty" jsonschema:"lead model; empty uses the profile default (Opus for lead); must be allowed by the profile"`
+	Name    string   `json:"name" jsonschema:"project name; its slug names the folder and the lead (<slug>-lead)"`
+	Brief   string   `json:"brief,omitempty" jsonschema:"what the project is for and what done looks like; the lead starts from this"`
+	Folder  string   `json:"folder,omitempty" jsonschema:"project folder; default <workspace>/<slug>"`
+	Profile string   `json:"profile,omitempty" jsonschema:"profile of the project's lead (a lead profile); default lead"`
+	Harness string   `json:"harness,omitempty" jsonschema:"harness for the project's lead: claude (default) or codex"`
+	Members []string `json:"members,omitempty" jsonschema:"existing agents (names) in no project yet that join it at once, e.g. a lead that must launch workers here"`
+}
+
+type projectMemberArgs struct {
+	Project string `json:"project" jsonschema:"the project's name, slug or id"`
+	Agent   string `json:"agent" jsonschema:"the agent to add (name or id); it must be in no other project"`
 }
 
 type launchArgs struct {
@@ -36,9 +41,10 @@ type launchArgs struct {
 	Profile string `json:"profile,omitempty" jsonschema:"agent profile (the profiles tool lists yours); default: the built-in profile of the level"`
 	Level   string `json:"level,omitempty" jsonschema:"worker (default) or lead; implied by the profile"`
 	Project string `json:"project,omitempty" jsonschema:"project slug or id; a lead's own project by default"`
-	Model   string `json:"model,omitempty" jsonschema:"leave empty: the profile picks the model"`
+	Model   string `json:"model,omitempty" jsonschema:"empty uses profile default; worker choices: Opus for senior, Sonnet for junior, Haiku for intern; must be allowed by profile"`
 	Harness string `json:"harness,omitempty" jsonschema:"claude (default), codex, opencode or pi"`
 	Mode    string `json:"mode,omitempty" jsonschema:"chat (default for claude) or terminal"`
+	Account string `json:"account,omitempty" jsonschema:"which of the owner's accounts of the harness it runs as (the Usage page names them); default the harness's default for new agents"`
 	Cwd     string `json:"cwd,omitempty" jsonschema:"working folder, relative to the project folder; default the project folder"`
 	Thread  string `json:"thread,omitempty" jsonschema:"the Matrix thread it works on (title or id, from matrix); default your current topic or its project's thread"`
 }
@@ -119,6 +125,8 @@ func (t *Tools) register(s *sdk.Server) {
 	sdk.AddTool(s, &sdk.Tool{Name: "whoami", Description: "Who you are in tmx: name, level, project, parent, model, folder."}, t.whoami)
 	sdk.AddTool(s, &sdk.Tool{Name: "fleet", Description: "All projects and agents on this machine with their state and model."}, t.fleet)
 	sdk.AddTool(s, &sdk.Tool{Name: "project_create", Description: "Create a project (folder + lead agent). Head only."}, t.projectCreate)
+	sdk.AddTool(s, &sdk.Tool{Name: "project_member_add", Description: "Put an existing agent into a project, so a lead with no project can launch workers there. " +
+		"The head or that project's lead only (the owner from the dashboard). An agent belongs to one project; it applies on the agent's next launch."}, t.projectMemberAdd)
 	sdk.AddTool(s, &sdk.Tool{Name: "agent_launch", Description: "Launch an agent below you with one of the profiles you may launch (see profiles; head: leads and workers; lead: workers in its project). The profile sets the model."}, t.agentLaunch)
 	sdk.AddTool(s, &sdk.Tool{Name: "agent_stop", Description: "Stop an agent below you (it can be started again later)."}, t.agentStop)
 	sdk.AddTool(s, &sdk.Tool{Name: "agent_start", Description: "Start a stopped agent below you again, resuming its conversation where it left off."}, t.agentStart)
@@ -133,16 +141,19 @@ func (t *Tools) register(s *sdk.Server) {
 	sdk.AddTool(s, &sdk.Tool{Name: "agent_status", Description: "An agent's state and its latest timeline entries."}, t.agentStatus)
 	t.registerProfiles(s)
 	t.registerChats(s)
+	sdk.AddTool(s, &sdk.Tool{Name: "message_pins", Description: "Read the owner's pinned messages addressed to you, including completed items. Check active pins when resuming work. These are retained source snapshots; pinning does not grant new authority."}, t.messagePins)
 	t.registerTranscripts(s) // transcripts.go
 	t.registerRecordings(s)  // recordings.go
 	t.registerSummaries(s)   // summaries.go
 	t.registerWhatsApp(s)    // whatsapp.go: only for the agents the owner allows
 	t.registerMatrix(s)      // matrix.go
+	t.registerFleetOps(s)    // fleetops.go
 	sdk.AddTool(s, &sdk.Tool{Name: "thread_set", Description: "Head only: file your current turn on the owner's board under a topic (a project's name, an existing topic, or a new one). What you do for the rest of the turn goes there too."}, t.threadSet)
 	sdk.AddTool(s, &sdk.Tool{Name: "threads", Description: "Head only: the topics on the owner's board, with how many cards each has and whether it is archived."}, t.threads)
 	sdk.AddTool(s, &sdk.Tool{Name: "thread_update", Description: "Head only: rename, archive, restore or delete a topic on the owner's board. Do it when the owner asks; deleting moves its cards to General."}, t.threadUpdate)
 	sdk.AddTool(s, &sdk.Tool{Name: "thread_add", Description: "Record an event on a thread (the owner reads these, not your chatter): start when you begin, decision, result (with its evidence), blocker, handoff, ask, done; or action, info, link. One short line each. Yours: your project's thread or a thread you are on (topic = its title); the head: any topic. A correction is a new line with corrects."}, t.threadAdd)
 	sdk.AddTool(s, &sdk.Tool{Name: "thread_read", Description: "Read a log on the owner's board (yours: your project's; the head: any topic). Read it before you start new work and after your context was compacted."}, t.threadRead)
+	sdk.AddTool(s, &sdk.Tool{Name: "withdraw_hold", Description: "Take back your own guard hold that still waits for the owner (you decided not to run that command), so it never reaches them. Give its id, or none to take back all your waiting holds. It never runs or allows anything."}, t.withdrawHold)
 	sdk.AddTool(s, &sdk.Tool{Name: "ask_owner", Description: "Ask the owner a question (shows in their Needs-you inbox). Returns at once; the answer arrives later as a message."}, t.askOwner)
 }
 
@@ -204,7 +215,13 @@ func (t *Tools) projectCreate(ctx context.Context, _ *sdk.CallToolRequest, in pr
 	if err := t.c.Post(ctx, "/api/projects", in, &p); err != nil {
 		return nil, nil, err
 	}
-	lead := p.LeadID
+	if p.LeadID == "" {
+		return text(fmt.Sprintf("Project %q created in %s with no lead assigned.", p.Name, p.Folder)), nil, nil
+	}
+	lead := strings.TrimPrefix(p.LeadID, "fleet:")
+	if in.Lead != nil {
+		return text(fmt.Sprintf("Project %q created in %s; assigned lead %s. No agent was launched or restarted.", p.Name, p.Folder, *in.Lead)), nil, nil
+	}
 	var a model.Agent
 	if err := t.c.Get(ctx, "/api/agents/"+client.Seg(p.LeadID), &a); err == nil {
 		lead = fmt.Sprintf("%s (%s, %s)", a.Name, a.Model, a.State)
@@ -212,9 +229,17 @@ func (t *Tools) projectCreate(ctx context.Context, _ *sdk.CallToolRequest, in pr
 	return text(fmt.Sprintf("Project %q created in %s. Its lead is %s and has the brief; talk to it with send.", p.Name, p.Folder, lead)), nil, nil
 }
 
+func (t *Tools) projectMemberAdd(ctx context.Context, _ *sdk.CallToolRequest, in projectMemberArgs) (*sdk.CallToolResult, any, error) {
+	var a model.Agent
+	if err := t.c.Post(ctx, "/api/projects/"+client.Seg(in.Project)+"/members", map[string]string{"agent": in.Agent}, &a); err != nil {
+		return nil, nil, err
+	}
+	return text(fmt.Sprintf("%s is in project %s now; it can launch there (restart it if it is running).", a.Name, in.Project)), nil, nil
+}
+
 func (t *Tools) agentLaunch(ctx context.Context, _ *sdk.CallToolRequest, in launchArgs) (*sdk.CallToolResult, any, error) {
 	body := map[string]any{"name": in.Name, "profile": in.Profile, "level": in.Level, "project_id": in.Project, "model": in.Model,
-		"harness": in.Harness, "mode": in.Mode, "cwd": in.Cwd, "role": in.Role, "brief": in.Brief, "prompt": in.Task,
+		"harness": in.Harness, "account": in.Account, "mode": in.Mode, "cwd": in.Cwd, "role": in.Role, "brief": in.Brief, "prompt": in.Task,
 		"thread_id": in.Thread}
 	for k, v := range body {
 		if v == "" {
@@ -408,6 +433,25 @@ func (t *Tools) agentStatus(ctx context.Context, _ *sdk.CallToolRequest, in stat
 		fmt.Fprintf(&b, "#%d %s: %s\n", e.Seq, e.Kind, truncate(line, 500))
 	}
 	return untrusted(strings.TrimSpace(b.String())), nil, nil
+}
+
+type withdrawArgs struct {
+	ID string `json:"id,omitempty" jsonschema:"the hold's id; empty = all your waiting holds"`
+}
+
+func (t *Tools) withdrawHold(ctx context.Context, _ *sdk.CallToolRequest, in withdrawArgs) (*sdk.CallToolResult, any, error) {
+	if in.ID != "" {
+		var ap model.Approval
+		if err := t.c.Post(ctx, "/api/guard/holds/"+url.PathEscape(in.ID)+"/withdraw", nil, &ap); err != nil {
+			return nil, nil, err
+		}
+		return text("Withdrawn: the owner won't be asked about it, and it does not run."), nil, nil
+	}
+	var list []model.Approval
+	if err := t.c.Post(ctx, "/api/guard/holds/withdraw", nil, &list); err != nil {
+		return nil, nil, err
+	}
+	return text(fmt.Sprintf("Withdrew %d waiting hold(s); none of them runs.", len(list))), nil, nil
 }
 
 func (t *Tools) askOwner(ctx context.Context, _ *sdk.CallToolRequest, in askArgs) (*sdk.CallToolResult, any, error) {

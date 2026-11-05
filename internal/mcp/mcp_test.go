@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -83,11 +80,28 @@ func TestToolList(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Earlier tool names (LegacyToolNames, private build only) are checked apart, so the list
+			// below is the same in the private build and the public snapshot.
+			legacy := map[string]bool{}
+			for _, olds := range LegacyToolNames {
+				for _, o := range olds {
+					legacy[o] = false
+				}
+			}
 			var names []string
 			for _, tl := range res.Tools {
+				if _, ok := legacy[tl.Name]; ok {
+					legacy[tl.Name] = true
+					continue
+				}
 				names = append(names, tl.Name)
 			}
-			want := "agent_keys,agent_launch,agent_restart,agent_screen,agent_start,agent_status,agent_stop,agent_type,announce_set,ask_owner,chat_move,chat_read,chat_send,chat_topic,chats,companion_message,fleet,inbox,matrix,my_part,process_start,process_stop,processes,profiles,project_artifacts,project_create,recording_summary,recordings,reply,report,send,thread_add,thread_read,thread_set,thread_update,threads,transcript_read,transcripts,whatsapp_chats,whatsapp_read,whatsapp_send,whoami"
+			for o, seen := range legacy {
+				if !seen {
+					t.Errorf("earlier tool name %q is not registered", o)
+				}
+			}
+			want := "agent_keys,agent_launch,agent_restart,agent_screen,agent_start,agent_status,agent_stop,agent_type,announce_set,ask_owner,chat_move,chat_read,chat_send,chat_topic,chats,companion_message,daemon_log,daemon_restart,fleet,inbox,matrix,message_pins,my_part,owner_status,process_start,process_stop,processes,profiles,project_artifacts,project_create,project_import,project_member_add,recording_summary,recordings,reply,report,send,thread_add,thread_read,thread_set,thread_update,threads,transcript_read,transcripts,whatsapp_chats,whatsapp_read,whatsapp_send,whoami,withdraw_hold"
 			if !enabled {
 				want = strings.Replace(want, "whatsapp_chats,whatsapp_read,whatsapp_send,", "", 1)
 			}
@@ -124,12 +138,12 @@ func TestHeadLeadWorkerFlow(t *testing.T) {
 	if _, isErr := call(t, head, "project_create", map[string]any{"name": "Unsupported", "harness": "pi"}); !isErr {
 		t.Fatal("project with unsupported guard adapter accepted")
 	}
-	out := mustOK(t, head, "project_create", map[string]any{"name": "Shop", "brief": "an online shop", "harness": "claude"})
+	out := mustOK(t, head, "project_create", map[string]any{"name": "Shop", "brief": "an online shop", "harness": "claude", "model": "claude-sonnet-5"})
 	if !strings.Contains(out, "shop-lead") {
 		t.Fatalf("project_create: %s", out)
 	}
 	projectLead, err := d.Fleet.Agent("shop-lead")
-	if err != nil || projectLead.Harness != "claude" || projectLead.Model == "" {
+	if err != nil || projectLead.Harness != "claude" || projectLead.Model != "claude-sonnet-5" {
 		t.Fatalf("project lead harness/model = %q/%q, err %v", projectLead.Harness, projectLead.Model, err)
 	}
 	tree := mustOK(t, head, "fleet", nil)
@@ -139,10 +153,10 @@ func TestHeadLeadWorkerFlow(t *testing.T) {
 
 	lead := session(t, d, "shop-lead")
 	out = mustOK(t, lead, "agent_launch", map[string]any{"name": "shop-api", "task": "build the API", "role": "backend"})
-	if !strings.Contains(out, "worker on claude-sonnet-5-5") {
+	if !strings.Contains(out, "worker on claude-sonnet-5") {
 		t.Fatalf("agent_launch: %s", out)
 	}
-	if out, isErr := call(t, lead, "agent_launch", map[string]any{"name": "x2", "model": "claude-opus-5-5"}); !isErr || !strings.Contains(out, "not allowed") {
+	if out, isErr := call(t, lead, "agent_launch", map[string]any{"name": "x2", "model": "not-allowed"}); !isErr || !strings.Contains(out, "not allowed") {
 		t.Fatalf("wrong model: %v %s", isErr, out)
 	}
 	if out, isErr := call(t, lead, "project_create", map[string]any{"name": "nope"}); !isErr || !strings.Contains(out, "cannot create") {
@@ -207,7 +221,7 @@ func TestProfilesTool(t *testing.T) {
 	mustOK(t, head, "project_create", map[string]any{"name": "Shop"})
 	lead := session(t, d, "shop-lead")
 	out := mustOK(t, lead, "profiles", nil)
-	if !strings.Contains(out, "Your profile: Lead (lead)") || !strings.Contains(out, "- reviewer: Reviewer, a worker on claude-sonnet-5-5, read-only") ||
+	if !strings.Contains(out, "Your profile: Lead (lead)") || !strings.Contains(out, "- reviewer: Reviewer, a worker on claude-sonnet-5, read-only") ||
 		strings.Contains(out, "- head") {
 		t.Fatalf("profiles: %s", out)
 	}
@@ -286,5 +300,28 @@ func TestThreadLogTools(t *testing.T) {
 	}
 	if out := mustOK(t, head, "threads", nil); !strings.Contains(out, "alpha (project): 0 cards, 1 log line") {
 		t.Fatalf("threads: %s", out)
+	}
+}
+
+func TestHeadAndLeadPassWorkerModelChoices(t *testing.T) {
+	d := apitest.New(t)
+	head := session(t, d, "head")
+	mustOK(t, head, "project_create", map[string]any{"name": "Ladder", "model": "claude-opus-5-5"})
+	lead := session(t, d, "ladder-lead")
+	for _, role := range []string{"head", "lead"} {
+		caller := head
+		if role == "lead" {
+			caller = lead
+		}
+		for _, grade := range []struct{ name, model string }{
+			{"senior", "claude-opus-5-5"}, {"junior", "claude-sonnet-5"}, {"intern", "claude-haiku-4-5-20251001"},
+		} {
+			name := role + "-" + grade.name
+			mustOK(t, caller, "agent_launch", map[string]any{"name": name, "project": "ladder", "model": grade.model})
+			agent, err := d.Fleet.Agent(name)
+			if err != nil || agent.Model != grade.model {
+				t.Fatalf("%s model: %+v %v", name, agent, err)
+			}
+		}
 	}
 }

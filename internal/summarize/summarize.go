@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package summarize writes a summary of every finished recording (ARCHITECTURE.md "Summaries"). When
+// Package summarize writes a summary of every finished recording (DESIGN.md "Summaries"). When
 // the recorder says a recording is done, it has every segment's WAV transcribed (setting voice
 // up first when it is missing), waits until each transcript is done or failed, then runs Claude
 // Code once, `claude -p` with the cheapest Haiku, on the transcript and on up to 20 still frames.
@@ -82,6 +79,9 @@ type Options struct {
 	Timeout time.Duration
 	// CheckEvery: how often waiting summaries are looked at without an event; 0 = 10 s.
 	CheckEvery time.Duration
+	// Peer runs the local model on a fleet peer (summaries.via_peer); nil = no fleet peers.
+	Peer Peer
+
 	// NoLowPriority runs claude at normal priority (tests).
 	NoLowPriority bool
 }
@@ -102,6 +102,9 @@ type Service struct {
 	setupAt   time.Time       // when voice was last set up for a recording (zero: not since the last new one)
 	dropped   map[string]bool // optional claude flags this claude does not know
 
+	peerSlot           chan struct{}     // ServePeer: one peer generate at a time
+	wroteBy            string            // the model that wrote the latest answer (wrote)
+	madeHere           map[string]string // FinishedHere: why the daemon made the report, not its worker
 	wakeWatch, wakeRun chan struct{}
 	ctx                context.Context
 	cancel             context.CancelFunc
@@ -129,8 +132,8 @@ func New(o Options) *Service {
 		o.CheckEvery = 10 * time.Second
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Service{o: o, log: o.Logger, again: map[string]bool{}, voiceWait: map[string]bool{}, dropped: map[string]bool{},
-		wakeWatch: make(chan struct{}, 1), wakeRun: make(chan struct{}, 1), ctx: ctx, cancel: cancel}
+	return &Service{o: o, log: o.Logger, again: map[string]bool{}, voiceWait: map[string]bool{}, dropped: map[string]bool{}, madeHere: map[string]string{},
+		wakeWatch: make(chan struct{}, 1), wakeRun: make(chan struct{}, 1), peerSlot: make(chan struct{}, 1), ctx: ctx, cancel: cancel}
 }
 
 // Start forgets the summaries of deleted recordings, queues again what a restart cut off, and
@@ -313,6 +316,15 @@ func (s *Service) Finished(r model.Recording) {
 	s.kick()
 }
 
+// FinishedHere is Finished when the daemon makes the report itself because its worker could not (recworker):
+// the report says so ("Made by the daemon: <why>.").
+func (s *Service) FinishedHere(r model.Recording, why string) {
+	s.mu.Lock()
+	s.madeHere[r.ID] = why
+	s.mu.Unlock()
+	s.Finished(r)
+}
+
 // Summarize (re)makes a recording's summary on the owner's request: it transcribes what is not
 // transcribed yet (setting voice up if needed), then has Claude write it again. Any finished
 // recording can be summarized, an interrupted one too.
@@ -447,6 +459,29 @@ func (s *Service) Get(id string) (model.RecordingSummary, error) {
 		return x, nil
 	}
 	return x, err
+}
+
+// Fail marks a recording's report failed with reason (internal/recworker: its worker failed or ran out of
+// time). A summary being written right now, or already finished, is left alone: that outcome is the truth.
+// It reports whether the summary was marked.
+func (s *Service) Fail(id, reason string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running == id {
+		return false, nil
+	}
+	x, err := s.o.Store.GetSummary(id)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		x = model.RecordingSummary{RecordingID: id, CreatedAt: s.now()}
+	case err != nil:
+		return false, err
+	case !x.State.Pending():
+		return false, nil
+	}
+	delete(s.voiceWait, id)
+	x.State, x.Error, x.Note, x.UpdatedAt = model.SummaryFailed, reason, "", s.now()
+	return true, s.saveLocked(x)
 }
 
 // Attach fills each recording's Summary and SummaryState (lists and reads of recordings).

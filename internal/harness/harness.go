@@ -1,10 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package harness knows each coding agent tool tmx runs: Claude Code, Codex, opencode, pi and
 // a plain shell. Per harness: executables, modes, launch flags and env for terminal mode,
 // screen patterns and the answers to its menus, known first-run gates, and where it keeps
-// its conversations. Ported from v2's adapters.py; see ARCHITECTURE.md "Harnesses".
+// its conversations. Ported from v2's adapters.py; see DESIGN.md "Harnesses".
 package harness
 
 import (
@@ -156,6 +153,21 @@ var registry = []Info{
 		TypedMail: true, SubmitDelay: 400 * time.Millisecond,
 	},
 	{
+		// Google's Gemini CLI (npm @google/gemini-cli). Patterns from its own UI
+		// (packages/cli/src/ui: LoadingIndicator, InputPrompt, ToolConfirmationMessage,
+		// FolderTrustDialog), not yet checked against a live screen.
+		Name: model.HarnessGemini, Label: "Gemini CLI", Install: "npm i -g @google/gemini-cli",
+		Modes: []model.Mode{model.ModeTerminal}, commands: []string{"gemini"},
+		Patterns: &screen.Patterns{
+			Working:  screen.Rx(`esc to cancel`),
+			Idle:     screen.Rx(`Type your message`),
+			Approval: screen.Rx(`Allow once`),
+			Trust:    screen.Rx(`Do you trust`),
+		},
+		Synonyms:  menuNav,
+		TypedMail: true, SubmitDelay: 400 * time.Millisecond,
+	},
+	{
 		Name: model.HarnessPi, Label: "pi", Install: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
 		Modes: []model.Mode{model.ModeTerminal}, commands: []string{"pi"},
 		Patterns: &screen.Patterns{
@@ -207,22 +219,7 @@ func LookPath(h model.Harness, override string) (string, error) {
 			return p, nil
 		}
 	}
-	home, _ := os.UserHomeDir()
-	dirs := []string{
-		filepath.Join(home, ".local", "bin"), filepath.Join(home, ".npm-global", "bin"),
-		filepath.Join(home, ".bun", "bin"), filepath.Join(home, ".opencode", "bin"),
-		"/opt/homebrew/bin", "/usr/local/bin",
-	}
-	if h == model.HarnessClaude {
-		dirs = append(dirs, filepath.Join(home, ".claude", "local"))
-	}
-	if runtime.GOOS == "windows" {
-		dirs = []string{filepath.Join(os.Getenv("APPDATA"), "npm"), filepath.Join(home, ".local", "bin")}
-		if h == "agy" || h == "antigravity" {
-			dirs = append(dirs, filepath.Join(os.Getenv("LOCALAPPDATA"), "agy", "bin"))
-		}
-	}
-	for _, d := range dirs {
+	for _, d := range installDirs(h) {
 		for _, c := range info.commands {
 			for _, n := range exeNames(c) {
 				p := filepath.Join(d, n)
@@ -233,6 +230,27 @@ func LookPath(h model.Harness, override string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("%s is %w (%s)", info.Label, ErrNotInstalled, info.Install)
+}
+
+// installDirs are the usual install folders of h, searched after PATH.
+func installDirs(h model.Harness) []string {
+	home, _ := os.UserHomeDir()
+	if runtime.GOOS == "windows" {
+		dirs := []string{filepath.Join(os.Getenv("APPDATA"), "npm"), filepath.Join(home, ".local", "bin")}
+		if h == "agy" || h == "antigravity" {
+			dirs = append(dirs, filepath.Join(os.Getenv("LOCALAPPDATA"), "agy", "bin"))
+		}
+		return dirs
+	}
+	dirs := []string{
+		filepath.Join(home, ".local", "bin"), filepath.Join(home, ".npm-global", "bin"),
+		filepath.Join(home, ".bun", "bin"), filepath.Join(home, ".opencode", "bin"),
+		"/opt/homebrew/bin", "/usr/local/bin",
+	}
+	if h == model.HarnessClaude {
+		dirs = append(dirs, filepath.Join(home, ".claude", "local"))
+	}
+	return dirs
 }
 
 func exeNames(c string) []string {
