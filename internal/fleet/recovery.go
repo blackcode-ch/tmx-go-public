@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -23,6 +20,7 @@ func (f *Fleet) Start() error {
 	}
 
 	f.mu.Lock()
+	f.applyRuleDefaultsLocked() // log the rule-switch defaults once (the owner, 3 Nov 22:14)
 	for i := range pending {
 		if pending[i].Kind == model.ApprovalPermission || pending[i].Kind == model.ApprovalGuard {
 			f.finishApprovalLocked(&pending[i], model.ApprovalExpired, "")
@@ -52,7 +50,7 @@ func (f *Fleet) Start() error {
 	f.mu.Unlock()
 
 	for _, id := range toStart {
-		if err := f.startAgent(id, ""); err != nil {
+		if err := f.startAgentOpts(id, "", startOpts{reattach: true}); err != nil {
 			f.log.Warn("restart agent", "agent", id, "err", err)
 			f.mu.Lock()
 			if r := f.agents[id]; r != nil && r.proc == nil && !r.starting {
@@ -62,6 +60,22 @@ func (f *Fleet) Start() error {
 			f.mu.Unlock()
 		}
 	}
+	f.adoptTools()
 	f.startShelveLoop()
 	return nil
+}
+
+// adoptTools takes over the agents' tools an earlier daemon left running in their session
+// hosts; a tool whose agent is gone is stopped.
+func (f *Fleet) adoptTools() {
+	for _, p := range f.processes.Adopt() {
+		f.mu.Lock()
+		_, ok := f.agents[p.OwnerID]
+		f.mu.Unlock()
+		if !ok {
+			f.processes.Stop(p.ID)
+			continue
+		}
+		f.log.Info("tool still running after the daemon restarted", "process", p.ID, "agent", p.OwnerID, "purpose", p.Purpose)
+	}
 }

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package peers
 
 import (
@@ -46,7 +43,7 @@ func TestImportPythonTokens(t *testing.T) {
 	hosta, hostc, other := NewPairToken(), NewPairToken(), NewPairToken()
 	// Python's real shape: extra fields, a float old_until, an unrelated peer that is not ours.
 	py := pythonState(t, `{"hosta":{"token":"`+hosta+`","role":"full","old_token":"x","old_until":1793619881.5,"stored":1,"sent":2},
-		"hostc":{"token":"`+hostc+`","role":"full"},"spare-mac":{"token":"`+other+`","role":"full"}}`,
+		"hostc":{"token":"`+hostc+`","role":"full"},"clara-mac":{"token":"`+other+`","role":"full"}}`,
 		`{"host":"hostb","port":8777,"fleet_token":"fleet-`+strings.Repeat("f", 40)+`"}`)
 	p := config.Paths{Home: t.TempDir()}
 	rows, err := ImportPython(prodConfig(), p, py)
@@ -57,7 +54,7 @@ func TestImportPythonTokens(t *testing.T) {
 		t.Fatalf("%+v", rows)
 	}
 	ts := NewTokens(p.PeersFile())
-	if ts.For("hosta") != hosta || ts.For("hostc") != hostc || ts.For("spare-mac") != "" {
+	if ts.For("hosta") != hosta || ts.For("hostc") != hostc || ts.For("clara-mac") != "" {
 		t.Fatal("tokens not imported as they were, or a peer we don't have was imported")
 	}
 	if who, ok := ts.Identify(hosta); !ok || who != "hosta" {
@@ -124,19 +121,24 @@ func TestImportPythonRefusals(t *testing.T) {
 }
 
 // Python's role "cloud" (a cloud box, limited to a few routes there) is never imported as a full
-// peer here.
+// peer here. An entry with no role key at all defaults to "full" there too (Python's own
+// r.get("role") or "full"), so it is imported, not skipped.
 func TestImportPythonSkipsCloudPeers(t *testing.T) {
 	p := config.Paths{Home: t.TempDir()}
-	py := pythonState(t, `{"hosta":{"token":"`+NewPairToken()+`","role":"cloud"},"hostc":{"token":"`+NewPairToken()+`"}}`, `{}`)
+	hostc := NewPairToken()
+	py := pythonState(t, `{"hosta":{"token":"`+NewPairToken()+`","role":"cloud"},"hostc":{"token":"`+hostc+`"}}`, `{}`)
 	rows, err := ImportPython(prodConfig(), p, py)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := statuses(rows); s["hosta"] != ImportSkipped || s["hostc"] != ImportSkipped {
+	if s := statuses(rows); s["hosta"] != ImportSkipped || s["hostc"] != ImportImported {
 		t.Fatalf("%+v", rows)
 	}
 	if NewTokens(p.PeersFile()).For("hosta") != "" {
 		t.Fatal("a cloud token was imported")
+	}
+	if NewTokens(p.PeersFile()).For("hostc") != hostc {
+		t.Fatal("a peer with no explicit role (defaults to full) was not imported")
 	}
 }
 

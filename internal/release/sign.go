@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package release
 
 import (
@@ -29,7 +26,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/update"
 )
 
-// Release signing (ARCHITECTURE.md "Signing a release"). Sign refuses unless every gate holds, checked
+// Release signing (DESIGN.md "Signing a release"). Sign refuses unless every gate holds, checked
 // here through the GitHub API, not by whoever runs it:
 //
 //	(a) the tag's commit is fleet/main's head or an ancestor of it;

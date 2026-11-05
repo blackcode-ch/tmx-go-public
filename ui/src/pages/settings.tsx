@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useState } from "react";
 import { ProcessList } from "@/components/process-list";
 import { ExternalLink, Laptop, Moon, Sun } from "lucide-react";
@@ -10,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { CopyButton } from "@/components/copy-button";
 import { DiscoverSection } from "@/components/discover-section";
 import { PageBody, PageHeader, PageTitle, Section } from "@/components/page";
+import { P2PSection } from "@/components/p2p-settings";
 import { ProfilesSection } from "@/components/profiles-section";
 import { SafetySection } from "@/components/safety-settings";
 import { OwnerDevices } from "@/components/device-pairing";
@@ -24,11 +22,12 @@ import { displayPath, modelName } from "@/lib/format";
 import { api } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { setTheme, useTheme, type ThemePref } from "@/lib/theme";
+import { applyTextSize, savedTextSize, TEXT_SIZES, type TextSize } from "@/lib/text-size";
 import { cn } from "@/lib/utils";
 import { chatApi } from "@/lib/chats";
 import { toast } from "sonner";
 
-export const KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5-20251001"];
+export const KNOWN_MODELS = ["claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"];
 
 export const MODES: { value: string; label: string; hint: string }[] = [
   { value: "auto", label: "Auto", hint: "Claude's classifier decides; anything it escalates comes to Needs you." },
@@ -81,7 +80,7 @@ export function ModelPicker({ value, onChange }: { value: string; onChange: (v: 
         </SelectContent>
       </Select>
       {custom && (
-        <Input value={value} onChange={(e) => onChange(e.target.value.trim())} placeholder="claude-…" className="font-mono text-[12.5px] sm:w-64" spellCheck={false} autoFocus />
+        <Input value={value} onChange={(e) => onChange(e.target.value.trim())} placeholder="claude-…" className="font-mono text-[0.7812rem] sm:w-64" spellCheck={false} autoFocus />
       )}
     </div>
   );
@@ -103,11 +102,37 @@ function ThemePicker() {
           aria-checked={pref === o.v}
           onClick={() => setTheme(o.v)}
           className={cn(
-            "flex h-7 items-center gap-1.5 rounded-md px-3 text-[12.5px] text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+            "flex h-7 items-center gap-1.5 rounded-md px-3 text-[0.7812rem] text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
             pref === o.v && "bg-background font-medium text-foreground shadow-sm dark:bg-accent",
           )}
         >
           <o.icon className="size-3.5" />
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Text size, per device (lib/text-size.ts): the whole UI scales with it. */
+function TextSizePicker() {
+  const [size, setSize] = useState<TextSize>(savedTextSize);
+  return (
+    <div role="radiogroup" aria-label="Text size" className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+      {TEXT_SIZES.map((o) => (
+        <button
+          key={o.id}
+          role="radio"
+          aria-checked={size === o.id}
+          onClick={() => {
+            applyTextSize(o.id);
+            setSize(o.id);
+          }}
+          className={cn(
+            "flex h-7 items-center rounded-md px-3 text-[0.7812rem] text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+            size === o.id && "bg-background font-medium text-foreground shadow-sm dark:bg-accent",
+          )}
+        >
           {o.label}
         </button>
       ))}
@@ -228,7 +253,7 @@ export function SettingsPage() {
       <PageHeader>
         <PageTitle>Settings</PageTitle>
       </PageHeader>
-      <PageBody width="max-w-[820px]" className="space-y-10">
+      <PageBody width="max-w-[51.25rem]" className="space-y-10">
         <ProcessList />
         <ProcessList projectTools />
         <ProfilesSection />
@@ -241,6 +266,8 @@ export function SettingsPage() {
         <div id="companion" className="scroll-mt-6">
           <CompanionSection />
         </div>
+
+        <P2PSection />
 
         <ResourceSettings />
         <DiscoverSection />
@@ -257,6 +284,9 @@ export function SettingsPage() {
             <Row label="Theme" hint="System follows your OS setting.">
               <ThemePicker />
             </Row>
+            <Row label="Text size" hint="For this device. Every page grows with it; no zooming needed.">
+              <TextSizePicker />
+            </Row>
           </div>
         </Section>
 
@@ -268,7 +298,7 @@ export function SettingsPage() {
             <ChatNameRow />
             <Row label="Workspace" hint="New project folders go here.">
               <div className="flex min-w-0 items-center gap-1 pt-1">
-                <Truncate className="font-mono text-[12.5px]" title={workspace}>
+                <Truncate className="font-mono text-[0.7812rem]" title={workspace}>
                   {displayPath(workspace)}
                 </Truncate>
                 <CopyButton text={workspace} label="Copy path" />
@@ -293,7 +323,7 @@ export function SettingsPage() {
               <p className="pt-1.5 text-sm">{via}</p>
             </Row>
             <Row label="Version">
-              <p className="pt-1.5 font-mono text-[12.5px]">{version}</p>
+              <p className="pt-1.5 font-mono text-[0.7812rem]">{version}</p>
             </Row>
           </div>
         </Section>

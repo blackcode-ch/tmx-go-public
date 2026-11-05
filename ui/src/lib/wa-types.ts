@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// WhatsApp in tmx (ARCHITECTURE.md "WhatsApp"): the owner's own account linked as a companion device,
+// WhatsApp in tmx (DESIGN.md "WhatsApp"): the owner's own account linked as a companion device,
 // the way WhatsApp Web is. These mirror the daemon's JSON (internal/whatsapp), same names.
 
 export type WaState = "unlinked" | "linking" | "connecting" | "connected" | "logged_out" | "error";

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package watest is a fake WhatsApp connection for tests: it links when the test says the
 // phone scanned, records what is sent, and serves attachments the test put in.
 package watest

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package p2p connects tmx installs directly (go-libp2p): identity, invites, pairing and
 // signed envelopes between peers. The chat layer (internal/chat) builds on Node only, so it
 // is tested with a fake; this file is the contract between the two (coordinator, 23 Oct).
@@ -154,7 +151,7 @@ type Node interface {
 	Fetch(ctx context.Context, peerID, chatID, fileID string, w io.Writer, maxBytes int64) (int64, error)
 	// Sign signs env as this node (From, At if zero, Sig) without sending it: a statement
 	// others may pass on and anyone can check with VerifyEnvelope (a group's admin
-	// certificate, ARCHITECTURE.md "Chats"). The same limits as Send apply.
+	// certificate, DESIGN.md "Chats"). The same limits as Send apply.
 	Sign(env Envelope) (Envelope, error)
 	// VerifyEnvelope checks that env.Sig is env.From's signature over env. Envelopes from
 	// Incoming are verified already; this is for one passed on by another peer.

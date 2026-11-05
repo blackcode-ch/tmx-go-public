@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -27,13 +24,13 @@ import (
 // claudeUsageArgs: --strict-mcp-config keeps the owner's MCP servers from starting for it.
 var claudeUsageArgs = []string{"-p", "/usage", "--output-format", "json", "--no-session-persistence", "--strict-mcp-config"}
 
-func claudeLogin(context.Context, *Service, string) []string  { return []string{"auth", "login"} }
-func claudeLogout(context.Context, *Service, string) []string { return []string{"auth", "logout"} }
+func claudeLogin(context.Context, *scope, string) []string  { return []string{"auth", "login"} }
+func claudeLogout(context.Context, *scope, string) []string { return []string{"auth", "logout"} }
 
 // claudeRun is s.run for claude: in the daemon's start queue (one claude start at a time per
 // CLAUDE_CONFIG_DIR, claude.BeginStart), its turn held until it exited: it may write
 // .claude.json until then. s.run bounds it (timeout, then the process tree is killed).
-func (s *Service) claudeRun(ctx context.Context, timeout time.Duration, path string, args ...string) ran {
+func (s *scope) claudeRun(ctx context.Context, timeout time.Duration, path string, args ...string) ran {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	exited := make(chan struct{})
@@ -51,7 +48,7 @@ func (s *Service) claudeRun(ctx context.Context, timeout time.Duration, path str
 // queue before the queue stops it: the kill, WaitDelay and reaping after the timeout.
 const claudeHoldSlack = 30 * time.Second
 
-func claudeCheck(ctx context.Context, s *Service, path string) result {
+func claudeCheck(ctx context.Context, s *scope, path string) result {
 	r := s.claudeRun(ctx, s.o.CheckTimeout, path, "auth", "status", "--json")
 	if r.err != nil {
 		return result{err: "Couldn't run claude auth status: " + r.err.Error()}
@@ -92,7 +89,7 @@ func claudeCheck(ctx context.Context, s *Service, path string) result {
 }
 
 // runUsage runs /usage; an older claude that does not know an optional flag runs without it.
-func (s *Service) runUsage(ctx context.Context, path string) ran {
+func (s *scope) runUsage(ctx context.Context, path string) ran {
 	args := append([]string(nil), claudeUsageArgs...)
 	for range 2 {
 		u := s.claudeRun(ctx, s.o.UsageTimeout, path, args...)

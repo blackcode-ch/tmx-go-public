@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -107,14 +104,21 @@ func (f *Fleet) decideOwnerCardLocked(ap model.Approval, d DecideRequest) (model
 		if len(body) > MaxBodyBytes {
 			return old, nil, false, errf(KindInvalid, "answer is too long")
 		}
-		mail = &model.Message{ID: model.NewID(), From: model.Owner, To: ap.AgentID, Body: body, State: model.MsgQueued, CreatedAt: model.Now(), ThreadID: f.liveThread(ap.ThreadID)}
+		to := f.projectCardAnswerRecipientLocked(ap)
+		if to != ap.AgentID {
+			body = fmt.Sprintf("Project card %s (original asker %s; routed because the asker is unavailable):\n%s", ap.ID, ap.AgentID, body)
+			if len(body) > MaxBodyBytes {
+				return old, nil, false, errf(KindInvalid, "answer is too long")
+			}
+		}
+		mail = &model.Message{ID: model.NewID(), From: model.Owner, To: to, Body: body, State: model.MsgQueued, CreatedAt: model.Now(), ThreadID: f.liveThread(ap.ThreadID)}
 		mail.Receipt, mail.ReceiptAt = "queued", mail.CreatedAt
 	}
-	if err := f.st.CommitCardAnswer(old, ap, d.AnswerID, string(request), mail); err != nil {
+	if err := f.st.CommitCardAnswer(old, ap, d.AnswerID, string(request), mail, ownerPeerMapping(mail)...); err != nil {
 		return old, nil, false, err
 	}
 	if mail != nil {
-		if r := f.agents[ap.AgentID]; r != nil {
+		if r := f.agents[mail.To]; r != nil {
 			f.refreshQueuedLocked(r)
 		}
 	}

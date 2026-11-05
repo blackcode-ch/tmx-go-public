@@ -1,5 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
+//go:build !windows || tmx_ci
+
+// On Windows only in CI (-tags tmx_ci), never on a dev PC: Windows Defender flags the
+// destructive command strings in this file (GenShadowCopy, Hostc 3 Nov 14:37) and kills
+// the process tree. They are matched as strings only; nothing is run.
 
 package guard
 
@@ -256,8 +259,8 @@ func TestPOSIXCommands(t *testing.T) {
 		{"npm ci && sudo npm i -g pnpm", H, RuleElevation},
 		// held: deletes outside
 		{"rm -rf ~/nonexistent-dir-xyz", H, RuleDeleteOutside},
-		{"rm -rf ../other-project", H, RuleDeleteOutside},
-		{"rm -rf /Users/owner/Projects/other", H, RuleDeleteOutside},
+		{"rm -rf ../other-project", A, ""},            // the owner's own folders: ordinary work (3 Nov)
+		{"rm -rf /Users/owner/Projects/other", A, ""}, // the owner's own folders: ordinary work (3 Nov)
 		{"rm -rf \"$BUILD_DIR\"", H, RuleDeleteOutside},
 		{"rm -rf $(cat dirs.txt)", H, RuleDeleteOutside},
 		{"rm -rf .", H, RuleDeleteOutside},
@@ -296,8 +299,10 @@ func TestPOSIXCommands(t *testing.T) {
 		{"mv build.zip ~/Downloads/", H, RuleWriteOutside},
 		{"ln -s $(pwd)/bin/tool /usr/local/bin/tool", H, RuleWriteOutside},
 		{"chmod +x ~/bin/run.sh", H, RulePermsOutside},
-		{"echo '{\"disableAllHooks\":true}' > .claude/settings.local.json", H, RuleClaudeConfig},
-		{"cp settings.json ~/.claude/settings.json", H, RuleClaudeConfig},
+		// a shell write to Claude settings can't be checked for the guard hook: the fixed carve-out
+		// (tmx-lead, 3 Nov 22:37), also with no owner states
+		{"echo '{\"disableAllHooks\":true}' > .claude/settings.local.json", B, RuleClaudeHooks},
+		{"cp settings.json ~/.claude/settings.json", B, RuleClaudeHooks},
 		// held: desktop
 		{"open index.html", H, RuleDesktop},
 		{"open -a Safari https://example.com", H, RuleDesktop},

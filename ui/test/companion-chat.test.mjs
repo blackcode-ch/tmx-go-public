@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The Companion 1:1 conversation store (src/lib/companion-chat.ts): event-driven refresh,
 // reply mode and the unread mark, against a fake daemon and a zustand vanilla store.
 import test from "node:test";

@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Settings → Companion (ARCHITECTURE.md "Companion"): both links with clear next steps, and the tasks
+// Settings → Companion (DESIGN.md "Companion"): both links with clear next steps, and the tasks
 // tmx handed to Companion.
 //   Companion reads tmx: tmx's MCP entry + skill in Companion's folder (~/.aios), a token of its own.
 //   tmx hands Companion tasks: the agent key Companion issued to tmx, Companion's address.
@@ -281,14 +278,14 @@ function TaskLink({ st, onChange }: { st: CompanionStatus; onChange: () => void 
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="Companion's key for tmx"
-          className="h-8 font-mono text-[12.5px] sm:max-w-72"
+          className="h-8 font-mono text-[0.7812rem] sm:max-w-72"
           autoComplete="off"
           spellCheck={false}
           aria-label="Companion's key for tmx"
           autoFocus
         />
         {showUrl && (
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:8010" className="h-8 font-mono text-[12.5px] sm:max-w-52" aria-label="Companion's address" spellCheck={false} />
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:8010" className="h-8 font-mono text-[0.7812rem] sm:max-w-52" aria-label="Companion's address" spellCheck={false} />
         )}
         <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!token.trim() || !!busy}>
           {busy === "connect" && <Loader2 className="animate-spin" />}
@@ -309,7 +306,7 @@ function TaskLink({ st, onChange }: { st: CompanionStatus; onChange: () => void 
   const connecting = (
     <>
       {one.waiting && (
-        <div className="flex items-center gap-2 rounded-lg bg-muted/70 px-2.5 py-2 text-[12.5px] text-foreground/85" role="status" data-companion-connecting>
+        <div className="flex items-center gap-2 rounded-lg bg-muted/70 px-2.5 py-2 text-[0.7812rem] text-foreground/85" role="status" data-companion-connecting>
           <Loader2 className="size-3.5 shrink-0 animate-spin text-brand" />
           <span className="min-w-0 flex-1">
             Companion is open: click <span className="font-medium text-foreground">Connect</span> next to tmx.
@@ -405,7 +402,7 @@ function TaskLink({ st, onChange }: { st: CompanionStatus; onChange: () => void 
           ) : refused ? (
             <>
               <p>
-                Companion {st.version} answers at <span className="font-mono text-[11.5px]">{st.address.url}</span> but no longer accepts tmx's key: it was replaced or
+                Companion {st.version} answers at <span className="font-mono text-[0.7188rem]">{st.address.url}</span> but no longer accepts tmx's key: it was replaced or
                 removed in Companion, or Companion is signed in to another account. Tasks wait until you connect again.
               </p>
               {st.error && <p className="text-subtle-foreground">Companion says: {st.error}</p>}
@@ -413,12 +410,12 @@ function TaskLink({ st, onChange }: { st: CompanionStatus; onChange: () => void 
             </>
           ) : st.reachable ? (
             <p>
-              <span className="font-medium text-state-ok">Connected.</span> Companion {st.version} answers at <span className="font-mono text-[11.5px]">{st.address.url}</span> (
+              <span className="font-medium text-state-ok">Connected.</span> Companion {st.version} answers at <span className="font-mono text-[0.7188rem]">{st.address.url}</span> (
               {SOURCE[st.address.source] ?? st.address.source}); it knows tmx as “{st.label || "tmx"}”.
             </p>
           ) : (
             <p>
-              Companion does not answer at <span className="font-mono text-[11.5px]">{st.address.url}</span> ({SOURCE[st.address.source] ?? st.address.source}). Is it running?
+              Companion does not answer at <span className="font-mono text-[0.7188rem]">{st.address.url}</span> ({SOURCE[st.address.source] ?? st.address.source}). Is it running?
               Tasks wait until it is.
             </p>
           )}

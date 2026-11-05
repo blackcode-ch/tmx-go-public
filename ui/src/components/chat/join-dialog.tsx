@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Join with a link someone sent: preview first ("Join Alex's tmx" / "Join group Trip by
 // Alex"), then pair and land in the chat.
 import { useEffect, useRef, useState } from "react";
@@ -77,7 +74,7 @@ export function JoinDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !joining && chatUI.closeJoin()}>
-      <DialogContent className="grid-cols-1 sm:max-w-[460px]">
+      <DialogContent className="grid-cols-1 sm:max-w-[28.75rem]">
         <form onSubmit={join} className="grid min-w-0 grid-cols-1 gap-4">
           <DialogHeader>
             <DialogTitle>Join with an invite</DialogTitle>
@@ -92,7 +89,7 @@ export function JoinDialog() {
               spellCheck={false}
               autoComplete="off"
               placeholder="tmx://join/…"
-              className="font-mono text-[12.5px]"
+              className="font-mono text-[0.7812rem]"
               onChange={(e) => {
                 const v = e.target.value;
                 setLink(v);
@@ -119,7 +116,7 @@ export function JoinDialog() {
                 <PersonAvatar name={preview.name} size="lg" />
               )}
               <div className="min-w-0">
-                <p className="truncate text-[14px] font-medium">
+                <p className="truncate text-[0.875rem] font-medium">
                   {group ? `Join group “${preview.group_name || "Unnamed"}” by ${preview.name}` : `Join ${preview.name}'s tmx`}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">

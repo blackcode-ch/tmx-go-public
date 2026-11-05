@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useState } from "react";
 import { highlight } from "@/lib/highlight";
 import { cn } from "@/lib/utils";
@@ -51,7 +48,7 @@ export function CodeBlock({
         </div>
       )}
       <div
-        className="scroll-thin overflow-auto px-3 py-2.5 font-mono text-[12px] leading-[1.6]"
+        className="scroll-thin overflow-auto px-3 py-2.5 font-mono text-[0.75rem] leading-[1.6]"
         style={{ maxHeight: maxHeight === "none" ? undefined : maxHeight }}
       >
         {html ? (

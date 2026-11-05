@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The recorder's 16 kHz track: taps the recording's sound (the microphone, the device's own
 // sound, or both mixed by mixAudio) as mono PCM16 for the WAV the daemon keeps next to every
 // media segment (transcription and agents read it). An AudioWorklet does the work off the main

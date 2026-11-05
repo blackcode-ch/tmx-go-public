@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// WhatsApp (ARCHITECTURE.md "WhatsApp"): the owner's own account linked to the daemon as a
+// WhatsApp (DESIGN.md "WhatsApp"): the owner's own account linked to the daemon as a
 // companion device, the way WhatsApp Web is. Go internal/whatsapp; TS ui/src/lib/wa-types.ts
 // (same JSON names). Everything here is other people's words: only the owner's clients see it,
 // and agents read it through their tools framed as outside data.

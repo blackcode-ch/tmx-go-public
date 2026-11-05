@@ -10,34 +10,37 @@
   borders. State colours are used only for small indicators, never for large surfaces.
 */
 :root {
+  /* The Tiamatrix green (the Python dashboard's palette and the Pocket dragon's: terminal-matrix
+     tmx/design/tiamatrix-green/palette.json), Go's default since 3 Nov (#235). State colours keep
+     their meaning. */
   --radius: 0.5rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.18 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0 0);
-  --primary: oklch(0.2 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.965 0 0);
-  --secondary-foreground: oklch(0.2 0 0);
-  --muted: oklch(0.965 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --subtle-foreground: oklch(0.62 0 0);
-  --accent: oklch(0.955 0 0);
-  --accent-foreground: oklch(0.2 0 0);
+  --background: #f1f5ed;
+  --foreground: #202a25;
+  --card: #fbfcf8;
+  --card-foreground: #202a25;
+  --popover: #fbfcf8;
+  --popover-foreground: #202a25;
+  --primary: #356348;
+  --primary-foreground: #ffffff;
+  --secondary: #e7eddf;
+  --secondary-foreground: #202a25;
+  --muted: #e7eddf;
+  --muted-foreground: #4e6254;
+  --subtle-foreground: #657f60;
+  --accent: #e7eddf;
+  --accent-foreground: #202a25;
   --destructive: oklch(0.56 0.2 25);
-  --border: oklch(0.915 0 0);
-  --border-strong: oklch(0.86 0 0);
-  --input: oklch(0.89 0 0);
-  --ring: oklch(0.56 0.14 258 / 0.55);
+  --border: #d9e3d1;
+  --border-strong: #b9c8b2;
+  --input: #c9d4c2;
+  --ring: rgb(53 99 72 / 0.5);
 
-  --brand: oklch(0.53 0.15 258);
-  --brand-foreground: oklch(0.99 0 0);
-  --brand-soft: oklch(0.53 0.15 258 / 0.09);
+  --brand: #356348;
+  --brand-foreground: #ffffff;
+  --brand-soft: rgb(53 99 72 / 0.1);
 
-  --state-working: oklch(0.56 0.15 258);
+  --state-working: #2f7d56;
   --state-waiting: oklch(0.72 0.16 70);
   --state-error: oklch(0.58 0.21 25);
   --state-idle: oklch(0.7 0 0);
@@ -49,45 +52,45 @@
   --diff-del-bg: oklch(0.6 0.2 25 / 0.09);
   --diff-del-fg: oklch(0.48 0.17 25);
 
-  --sidebar: oklch(0.982 0 0);
-  --sidebar-foreground: oklch(0.25 0 0);
-  --sidebar-accent: oklch(0.94 0 0);
-  --sidebar-accent-foreground: oklch(0.18 0 0);
-  --sidebar-border: oklch(0.915 0 0);
+  --sidebar: #e7eddf;
+  --sidebar-foreground: #202a25;
+  --sidebar-accent: #d9e3d1;
+  --sidebar-accent-foreground: #202a25;
+  --sidebar-border: #d9e3d1;
 
-  --code-bg: oklch(0.975 0 0);
-  --bubble: oklch(0.955 0 0);
+  --code-bg: #e7eddf;
+  --bubble: #e7eddf;
 
   color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.172 0 0);
-  --foreground: oklch(0.93 0 0);
-  --card: oklch(0.198 0 0);
-  --card-foreground: oklch(0.93 0 0);
-  --popover: oklch(0.21 0 0);
-  --popover-foreground: oklch(0.93 0 0);
-  --primary: oklch(0.93 0 0);
-  --primary-foreground: oklch(0.18 0 0);
-  --secondary: oklch(0.245 0 0);
-  --secondary-foreground: oklch(0.93 0 0);
-  --muted: oklch(0.23 0 0);
-  --muted-foreground: oklch(0.66 0 0);
-  --subtle-foreground: oklch(0.54 0 0);
-  --accent: oklch(0.245 0 0);
-  --accent-foreground: oklch(0.95 0 0);
+  --background: #151e19;
+  --foreground: #eaf1e8;
+  --card: #202a25;
+  --card-foreground: #eaf1e8;
+  --popover: #202a25;
+  --popover-foreground: #eaf1e8;
+  --primary: #b7d3a3;
+  --primary-foreground: #202a25;
+  --secondary: #29372d;
+  --secondary-foreground: #eaf1e8;
+  --muted: #29372d;
+  --muted-foreground: #b7c5b4;
+  --subtle-foreground: #809579;
+  --accent: #29372d;
+  --accent-foreground: #eaf1e8;
   --destructive: oklch(0.65 0.19 25);
-  --border: oklch(1 0 0 / 0.085);
-  --border-strong: oklch(1 0 0 / 0.14);
-  --input: oklch(1 0 0 / 0.12);
-  --ring: oklch(0.7 0.13 258 / 0.6);
+  --border: rgb(234 241 232 / 0.1);
+  --border-strong: rgb(234 241 232 / 0.17);
+  --input: rgb(234 241 232 / 0.14);
+  --ring: rgb(183 211 163 / 0.6);
 
-  --brand: oklch(0.7 0.13 258);
-  --brand-foreground: oklch(0.16 0 0);
-  --brand-soft: oklch(0.7 0.13 258 / 0.12);
+  --brand: #b7d3a3;
+  --brand-foreground: #202a25;
+  --brand-soft: rgb(183 211 163 / 0.13);
 
-  --state-working: oklch(0.7 0.13 258);
+  --state-working: #8fc79f;
   --state-waiting: oklch(0.8 0.14 75);
   --state-error: oklch(0.68 0.19 25);
   --state-idle: oklch(0.52 0 0);
@@ -99,14 +102,14 @@
   --diff-del-bg: oklch(0.65 0.2 25 / 0.13);
   --diff-del-fg: oklch(0.78 0.13 25);
 
-  --sidebar: oklch(0.152 0 0);
-  --sidebar-foreground: oklch(0.86 0 0);
-  --sidebar-accent: oklch(0.225 0 0);
-  --sidebar-accent-foreground: oklch(0.96 0 0);
-  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar: #1b251e;
+  --sidebar-foreground: #dfe8dc;
+  --sidebar-accent: #29372d;
+  --sidebar-accent-foreground: #eaf1e8;
+  --sidebar-border: rgb(234 241 232 / 0.08);
 
-  --code-bg: oklch(0.155 0 0);
-  --bubble: oklch(0.245 0 0);
+  --code-bg: #1b251e;
+  --bubble: #29372d;
 
   color-scheme: dark;
 }
@@ -115,7 +118,7 @@
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  /* Dense type scale: 13px body, 11.5px meta. */
+  /* Type scale in rem: at the root size of 125% (Normal) the body is about 16px. */
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
   --text-xs: 0.71875rem;
@@ -199,6 +202,12 @@
   body,
   #root {
     height: 100%;
+  }
+  /* Readable by default (the owner, 3 Nov: "everything is too tiny"): the UI is sized in rem, so
+     this one root size scales every page. 125% = Normal; Settings > Text size picks Large or
+     Larger per device (lib/text-size.ts sets the inline size, which wins over this). */
+  html {
+    font-size: 125%;
   }
   body {
     @apply bg-background text-foreground font-sans text-sm antialiased;
@@ -357,7 +366,7 @@
 
 /* xterm inside its card */
 .xterm-host .xterm {
-  padding: 10px 12px;
+  padding: 0.625rem 0.75rem;
   height: 100%;
 }
 .xterm-host .xterm-viewport {

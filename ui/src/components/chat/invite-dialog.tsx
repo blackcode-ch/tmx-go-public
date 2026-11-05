@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Invite someone: a big QR code (drawn here), the link to copy, its expiry; a new code or
 // revoke. A DM invite is for one person, once; a group invite works for several people until
 // it expires (the group's admin only).
@@ -28,7 +25,7 @@ function KindSwitch({ kind, onChange }: { kind: InviteKind; onChange: (k: Invite
       aria-checked={kind === k}
       onClick={() => onChange(k)}
       className={cn(
-        "flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md text-[13px] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+        "flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md text-[0.8125rem] text-muted-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
         kind === k && "bg-background font-medium text-foreground shadow-sm ring-1 ring-border",
       )}
     >
@@ -133,7 +130,7 @@ export function InviteDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && chatUI.closeInvite()}>
-      <DialogContent className="grid-cols-1 sm:max-w-[440px]">
+      <DialogContent className="grid-cols-1 sm:max-w-[27.5rem]">
         <DialogHeader>
           <DialogTitle>Invite someone</DialogTitle>
           <DialogDescription>
@@ -181,11 +178,11 @@ export function InviteDialog() {
         )}
 
         <div className="flex flex-col items-center gap-3 pt-1">
-          <div className="relative flex size-[252px] items-center justify-center">
+          <div className="relative flex size-[15.75rem] items-center justify-center">
             {live ? (
               <QRCode value={invite.link} size={232} label={kind === "group" ? `Invite to ${group?.name ?? "the group"}` : "Invite QR code"} />
             ) : (
-              <div className="flex size-[252px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center text-xs text-muted-foreground">
+              <div className="flex size-[15.75rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center text-xs text-muted-foreground">
                 {busy ? (
                   <Loader2 className="size-5 animate-spin" />
                 ) : invite?.revoked ? (
@@ -212,7 +209,7 @@ export function InviteDialog() {
 
         {live && (
           <div className="flex min-w-0 items-center gap-1 rounded-lg border bg-muted/40 py-1 pr-1 pl-2.5">
-            <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-muted-foreground" title={invite.link}>
+            <code className="min-w-0 flex-1 truncate font-mono text-[0.7188rem] text-muted-foreground" title={invite.link}>
               {invite.link}
             </code>
             <CopyButton text={invite.link} label="Copy link" />

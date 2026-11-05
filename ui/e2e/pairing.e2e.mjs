@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Pairing a phone end to end with the owner PIN (ARCHITECTURE.md). User story: as the owner, I pair my
+// Pairing a phone end to end with the owner PIN (docs/phone-pairing.md). User story: as the owner, I pair my
 // phone by scanning a QR and typing my owner PIN, in one go, so that passkeys never lock me out again.
 // The owner sets the PIN once on the host (Settings -> Safety); the phone reaches the daemon through the
 // trusted HTTPS proxy, asks to pair, types the PIN and opens the dashboard, also after a reload, at phone

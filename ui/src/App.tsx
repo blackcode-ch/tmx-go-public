@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect } from "react";
 import { Inbox, KeyRound, Menu, PlugZap, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -32,7 +29,6 @@ import { AgentPage } from "@/pages/agent";
 import { ChatPage } from "@/pages/chat";
 import { ChatsPage } from "@/pages/chats";
 import { CompanionPage } from "@/pages/companion";
-import { BoardPage } from "@/pages/board";
 import { InboxPage } from "@/pages/inbox";
 import { OverviewPage } from "@/pages/overview";
 import { ProjectPage } from "@/pages/project";
@@ -46,8 +42,10 @@ import { SettingsPage } from "@/pages/settings";
 import { MatrixPage } from "@/pages/matrix";
 import { WhatsAppPage } from "@/pages/whatsapp";
 import { UsagePage } from "@/pages/usage";
+import { FeaturesPage } from "@/pages/features";
 import { waSendShownAt } from "@/lib/whatsapp";
 import { PairDevice } from "@/components/device-pairing";
+import { BrandMark } from "@/components/brand-mark";
 
 function Routes() {
   const r = useRoute();
@@ -56,8 +54,6 @@ function Routes() {
       return <OverviewPage />;
     case "inbox":
       return <InboxPage />;
-    case "board":
-      return <BoardPage />;
     case "matrix":
       return <MatrixPage />;
     case "settings":
@@ -78,6 +74,8 @@ function Routes() {
       return <WhatsAppPage jid={r.jid} />;
     case "companion":
       return <CompanionPage />;
+    case "features":
+      return <FeaturesPage />;
     case "usage":
       return <UsagePage />;
     default:
@@ -101,7 +99,8 @@ function MobileBar() {
       <Button variant="ghost" size="icon-sm" aria-label="Open navigation" onClick={() => ui.openMobileNav(true)}>
         <Menu className="size-4" />
       </Button>
-      <span className="truncate text-[13px] font-semibold">{machine || "tmx"}</span>
+      <BrandMark className="ml-0.5" />
+      <span className="truncate text-[0.8125rem] font-semibold">{machine || "tmx"}</span>
       <ReconnectingPill className="ml-1" />
       <div className="ml-auto flex items-center gap-0.5">
         <Button variant="ghost" size="icon-sm" aria-label="Search" onClick={() => ui.openPalette(true)}>
@@ -122,7 +121,7 @@ function MobileNav() {
   const open = useUI((s) => s.mobileNav);
   return (
     <Sheet open={open} onOpenChange={(v) => ui.openMobileNav(v)}>
-      <SheetContent side="left" showCloseButton={false} className="w-[290px] gap-0 bg-sidebar p-0 sm:max-w-[290px]" aria-describedby={undefined}>
+      <SheetContent side="left" showCloseButton={false} className="w-[18.125rem] gap-0 bg-sidebar p-0 sm:max-w-[18.125rem]" aria-describedby={undefined}>
         <SheetTitle className="sr-only">Navigation</SheetTitle>
         <SheetDescription className="sr-only">Agents and projects on this machine</SheetDescription>
         <SidebarContent onNavigate={() => ui.openMobileNav(false)} />
@@ -153,7 +152,7 @@ function useApprovalToasts() {
 function Boot() {
   return (
     <div className="flex h-full">
-      <div className="hidden w-[260px] shrink-0 flex-col gap-3 border-r bg-sidebar p-3 pt-[60px] md:flex">
+      <div className="hidden w-[16.25rem] shrink-0 flex-col gap-3 border-r bg-sidebar p-3 pt-[3.75rem] md:flex">
         <Skeleton className="h-16 rounded-lg" />
         <Skeleton className="h-6 w-3/4" />
         <Skeleton className="h-6 w-2/3" />
@@ -161,8 +160,8 @@ function Boot() {
         <Skeleton className="h-5 w-2/3" />
         <Skeleton className="h-5 w-3/5" />
       </div>
-      <div className="flex-1 p-8 pt-[72px]">
-        <div className="mx-auto max-w-[1040px] space-y-6">
+      <div className="flex-1 p-8 pt-[4.5rem]">
+        <div className="mx-auto max-w-[65rem] space-y-6">
           <Skeleton className="h-40 rounded-xl" />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <Skeleton className="h-32 rounded-xl" />

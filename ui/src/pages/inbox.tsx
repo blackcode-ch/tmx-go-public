@@ -1,10 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, CirclePause, MessageCircleQuestion, ShieldAlert, Sparkles, SquareTerminal } from "lucide-react";
 import { Kbd } from "@/components/ui/kbd";
 import { JobQuarantineCards } from "@/components/job-quarantine";
+import { OwnerCardRecovery } from "@/components/owner-card-recovery";
 import { AgentAvatar } from "@/components/agent-avatar";
 import { ApprovalActions, type ApprovalActionsHandle, ApprovalBody, approvalHeadline, GuardFootnote } from "@/components/approval";
 import { guardOf } from "@/components/guard";
@@ -18,7 +16,7 @@ import { PAUSE_LABEL } from "@/lib/resources";
 import { harnessLabel, terminalMenuOf } from "@/lib/harness";
 import { href, paths } from "@/lib/router";
 import { pendingApprovals, useStore } from "@/lib/store";
-import { cardsWithSavedAnswers, useCardAnswers, useCardDrafts } from "@/lib/card-answers";
+import { cardAnswerKey, useCardSends, cardsWithSavedAnswers, useCardAnswers, useCardDrafts } from "@/lib/card-answers";
 import type { Agent, Approval } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -103,6 +101,7 @@ function ApprovalCard({
 export function InboxPage() {
   const approvals = useStore((s) => s.approvals);
   const scope = useStore((s) => s.transport?.baseURL || "");
+  const sending = useCardSends((s) => s.items);
   const pendingAnswers = useCardAnswers((s) => s.items);
   const drafts = useCardDrafts((s) => s.items);
   const agents = useStore((s) => s.agents);
@@ -110,8 +109,9 @@ export function InboxPage() {
   useNow(20_000);
   const list = useMemo(() => {
     const merged = cardsWithSavedAnswers(approvals, scope, pendingAnswers, drafts);
-    return pendingApprovals(merged);
-  }, [approvals, pendingAnswers, drafts, scope]);
+    return pendingApprovals(merged).filter((a) => !sending[cardAnswerKey(scope, a.id)]);
+  }, [approvals, pendingAnswers, drafts, scope, sending]);
+  const sendingCount = Object.values(pendingAnswers).filter((p) => p.scope === scope && sending[cardAnswerKey(scope, p.card.id)]).length;
   const deferred = Object.values(approvals).filter((a) => a.state === "pending" && a.deferred);
 
   const groups = useMemo(() => {
@@ -164,6 +164,7 @@ export function InboxPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader>
+        <OwnerCardRecovery />
         <PageTitle>Needs you</PageTitle>
         {list.length > 0 && <span className="tabular text-xs text-muted-foreground">{list.length} pending</span>}
         {list.length > 1 && (
@@ -173,8 +174,9 @@ export function InboxPage() {
           </span>
         )}
       </PageHeader>
-      <PageBody width="max-w-[820px]">
+      <PageBody width="max-w-[51.25rem]">
         <JobQuarantineCards />
+        {sendingCount > 0 && <p role="status" className="mb-4 text-sm text-muted-foreground">Sending {sendingCount === 1 ? "your saved answer" : `${sendingCount} saved answers`}? Your words stay saved until delivery is confirmed.</p>}
         {list.length === 0 ? (
           <EmptyState icon={CheckCircle2} title="Nothing needs you" className="mt-6">
             When an agent asks for permission or has a question for you, it shows up here.
@@ -186,8 +188,8 @@ export function InboxPage() {
               return (
                 <section key={g.agentId} aria-label={g.agent?.name}>
                   <div className="mb-2.5 flex items-center gap-2.5">
-                    {g.agent && <AgentAvatar agent={g.agent} className="size-5 text-[10px]" />}
-                    <a href={href(paths.agent(g.agentId))} className="text-[13px] font-medium hover:underline">
+                    {g.agent && <AgentAvatar agent={g.agent} className="size-5 text-[0.625rem]" />}
+                    <a href={href(paths.agent(g.agentId))} className="text-[0.8125rem] font-medium hover:underline">
                       {g.agent?.name ?? g.agentId}
                     </a>
                     {g.agent && <StateDot state={g.agent.state} />}

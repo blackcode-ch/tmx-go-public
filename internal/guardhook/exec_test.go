@@ -1,5 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
+//go:build !windows || tmx_ci
+
+// On Windows only in CI (-tags tmx_ci), never on a dev PC: this file carries dangerous command
+// strings (kill-by-name), the class Defender flagged on 3 Nov. Matched as data; nothing is run.
 
 package guardhook
 

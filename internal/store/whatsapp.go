@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -12,7 +9,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// ---- WhatsApp (ARCHITECTURE.md "WhatsApp"): the linked account's chats, messages, reactions and
+// ---- WhatsApp (DESIGN.md "WhatsApp"): the linked account's chats, messages, reactions and
 // contacts. Names are resolved when read: a contact's address-book name, else the name they
 // chose, else what the message carried. Nothing here is the device's keys (secrets/whatsapp.db).
 

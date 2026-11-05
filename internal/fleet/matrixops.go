@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
-// The Matrix (ARCHITECTURE.md "Matrix"), M1b: opening intent threads, moving them through their
+// The Matrix (DESIGN.md "Matrix"), M1b: opening intent threads, moving them through their
 // lifecycle (each change an event), and the lists behind "mine" and "see by".
 
 import (

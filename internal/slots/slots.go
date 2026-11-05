@@ -1,11 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package slots holds machine-wide counting semaphores for heavy work (builds, test suites,
 // browsers): `tmx slot -- <command>` waits for a place of its kind, runs the command and
 // gives the place back. A place is a lease: the client renews it, and one that is not
 // renewed, or whose client process is gone, lapses, so a crash never keeps a slot.
-// See ARCHITECTURE.md "Resources".
+// See DESIGN.md "Resources".
 package slots
 
 import (

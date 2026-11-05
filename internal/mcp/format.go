@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -43,7 +40,7 @@ func (ix snapIndex) name(id, fallback string) string {
 }
 
 // FormatTree renders head → projects → agents with state and model (also used by `tmx ls`).
-// It never shows money: plan usage is under "AI accounts" (ARCHITECTURE.md "AI accounts and usage").
+// It never shows money: plan usage is under "AI accounts" (DESIGN.md "AI accounts and usage").
 func FormatTree(s model.Snapshot) string {
 	var b strings.Builder
 	line := func(indent string, a model.Agent) {

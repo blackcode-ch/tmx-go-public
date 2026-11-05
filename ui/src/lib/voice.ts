@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Local voice transcription (ARCHITECTURE.md "Voice"): the daemon downloads whisper.cpp's engine and a
+// Local voice transcription (DESIGN.md "Voice"): the daemon downloads whisper.cpp's engine and a
 // model on demand and transcribes on this machine. The UI shows the state ("voice.status"
 // events), lets the owner set it up, and sends dictation (lib/dictation.ts).
 import { create } from "zustand";

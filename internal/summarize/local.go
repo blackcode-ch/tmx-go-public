@@ -1,13 +1,9 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package summarize
 
-// The local backend (the owner, 3 Nov: recordings are client content - the report is written on our own machine,
-// never by a cloud API). It is the default: config summaries.backend "" or "local" asks the local Ollama
-// (loopback only, summaries.local_url, default http://127.0.0.1:11434) with summaries.local_model (default
-// gemma4:e4b, which reads the still frames as images). "claude" keeps the Claude Code path for owners who choose
-// it for their own, non-client recordings.
+// The local backend: the local Ollama (loopback only, summaries.local_url, default http://127.0.0.1:11434) with
+// summaries.local_model (default gemma4:e4b, which reads the still frames as images), or a fleet peer's
+// (summaries.via_peer, peer.go). It writes a summary when summaries.backend is "local" (falling back to the cloud
+// model without a local route), and always for a clinic recording (patient data: local only, see run).
 
 import (
 	"bytes"
@@ -34,10 +30,15 @@ const DefaultLocalURL = "http://127.0.0.1:11434"
 // LocalFrames is how many still frames go to the local model as images (a small vision model reads a few well).
 const LocalFrames = 6
 
-// local reports whether summaries are written on this machine (the default).
+// localConfigured: this daemon names a local model to use (summaries.local_url or via_peer), not only the default.
+func (s *Service) localConfigured() bool {
+	c := s.settings()
+	return strings.TrimSpace(c.LocalURL) != "" || strings.TrimSpace(c.ViaPeer) != ""
+}
+
+// local reports whether the local model is preferred (summaries.backend "local"); the default is the cloud model.
 func (s *Service) local() bool {
-	b := strings.ToLower(strings.TrimSpace(s.settings().Backend))
-	return b == "" || b == "local"
+	return strings.ToLower(strings.TrimSpace(s.settings().Backend)) == "local"
 }
 
 func (s *Service) localModel() string {
@@ -102,11 +103,11 @@ func (s *Service) runLocal(ctx context.Context, a ask) (string, error) {
 	if len(images) > 0 {
 		body["images"] = images
 	}
-	text, err := s.ollama(ctx, base, body)
+	text, err := s.generate(ctx, base, body)
 	if err != nil && len(images) > 0 { // a model without vision: the transcript alone
 		delete(body, "images")
 		body["prompt"] = a.prompt
-		text, err = s.ollama(ctx, base, body)
+		text, err = s.generate(ctx, base, body)
 	}
 	return text, err
 }
@@ -147,4 +148,23 @@ func (s *Service) ollama(ctx context.Context, base string, body map[string]any) 
 		return "", errors.New("the local model gave an empty answer")
 	}
 	return out.Response, nil
+}
+
+// wrote notes the model that wrote the latest answer (summaries run one at a time); make reports it.
+func (s *Service) wrote(model string) {
+	s.mu.Lock()
+	s.wroteBy = model
+	s.mu.Unlock()
+}
+
+// takeWrote returns (and clears) the model that wrote the answers since the last call; def when none did.
+func (s *Service) takeWrote(def string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m := s.wroteBy
+	s.wroteBy = ""
+	if m == "" {
+		return def
+	}
+	return m
 }

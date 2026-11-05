@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -18,7 +15,7 @@ func TestHarnessesDiscoverAdoptRoutes(t *testing.T) {
 		Structured bool
 		Installed  bool
 	}
-	if s := agent.do("GET", "/api/harnesses", nil, &hs); s != 200 || len(hs) != 6 || hs[1].Name != "codex" || !hs[1].Structured || hs[3].Name != "agy" || hs[5].Name != "shell" || !hs[5].Installed {
+	if s := agent.do("GET", "/api/harnesses", nil, &hs); s != 200 || len(hs) != 7 || hs[1].Name != "codex" || !hs[1].Structured || hs[3].Name != "agy" || hs[4].Name != "gemini" || hs[6].Name != "shell" || !hs[6].Installed {
 		t.Fatalf("%d %+v", s, hs)
 	}
 	for _, r := range []struct{ m, p string }{{"GET", "/api/discover"}, {"POST", "/api/adopt"}} {

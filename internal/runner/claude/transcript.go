@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package claude
 
 import (
@@ -25,7 +22,7 @@ type transcriptRecord struct {
 	Message         *wireContent `json:"message"`
 }
 
-// TranscriptLine reads one transcript line (ARCHITECTURE.md "Switching live"). The assistant's text,
+// TranscriptLine reads one transcript line (DESIGN.md "Switching live"). The assistant's text,
 // thinking and tool calls and the tool results become timeline entries exactly as in chat mode;
 // prompt is the text of a message someone sent ("" otherwise: tool results, text Claude adds
 // itself, side chains of sub-agents, bookkeeping). A compaction gives a system entry.

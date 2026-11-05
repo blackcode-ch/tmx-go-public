@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -26,7 +23,7 @@ const (
 	stopWaitMax = 15 * time.Second // then wait at most this for the event loop to end
 )
 
-// Agent env names (ARCHITECTURE.md "MCP tools").
+// Agent env names (DESIGN.md "MCP tools").
 const (
 	EnvURL   = "TMXG_URL"
 	EnvAgent = "TMXG_AGENT_ID"
@@ -250,9 +247,18 @@ func (f *Fleet) startAgentOpts(id, prompt string, o startOpts) error {
 		f.mu.Unlock()
 		return nil
 	}
+	if r.hostStopping {
+		f.mu.Unlock()
+		return errf(KindConflict, "its session host is being stopped; start it again once that is done")
+	}
 	if err := f.launchAdmissionLocked(r.a); err != nil {
 		f.mu.Unlock()
 		return err
+	}
+	if o.reattach || r.hostUnknown {
+		if ok, err := f.reattachLocked(r); ok || err != nil {
+			return err // f.mu released
+		}
 	}
 	wasShelved, wasDone := r.a.ShelvedAt, r.a.DoneAt
 	if o.deliberate {
@@ -360,6 +366,15 @@ func (f *Fleet) stopProcessIf(ctx context.Context, id string, keepDesired bool, 
 	f.processes.StopOwner(id)
 	proc, done := r.proc, r.done
 	if proc == nil {
+		if r.hostUnknown && !keepDesired {
+			// Its host may still run the agent: the owner's stop ends it there (hosting.go).
+			// No start meanwhile (hostStopping): it could make a second copy.
+			r.hostUnknown, r.hostStopping = false, true
+			f.saveAgentLocked(r)
+			f.mu.Unlock()
+			f.stopUnknownHost(id)
+			return
+		}
 		if !r.starting && r.a.State != model.StateStopped && r.a.State != model.StateError {
 			r.a.State = model.StateStopped
 		}
@@ -428,7 +443,11 @@ func (f *Fleet) specLocked(r *agentRec) (runner.Spec, error) {
 		AgentID: a.ID, Name: a.Name, Harness: a.Harness, Mode: a.Mode, Model: a.Model,
 		Cwd: a.Cwd, Env: env,
 	}
+	if f.hostedLocked(a) {
+		spec.HostDir, spec.HostExe, spec.HostToken = f.hostDir(a.ID), f.opts.HostExecutable, r.token
+	}
 	if a.Harness != model.HarnessClaude {
+		spec.Env = append(spec.Env, f.accountEnvLocked(a)...)
 		spec = f.harnessSpecLocked(r, spec)
 		if err := f.guardSpecLocked(r, &spec); err != nil {
 			return runner.Spec{}, err
@@ -440,7 +459,7 @@ func (f *Fleet) specLocked(r *agentRec) (runner.Spec, error) {
 	// Both modes: the TUI takes the same flags, and its runner confirms the transcript.
 	// Claude's own state (.claude.json, sign-in, transcripts) lives in the daemon's folder,
 	// never the owner's shared ~/.claude.json; the runners refuse a claude without it.
-	cfgDir, err := f.opts.Paths.EnsureClaudeConfigDir()
+	cfgDir, err := f.claudeConfigDirLocked(a)
 	if err != nil {
 		return runner.Spec{}, err
 	}

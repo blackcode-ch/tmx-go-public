@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -19,7 +16,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// The owner's conversation with Companion (ARCHITECTURE.md "Head ↔ Companion: messages"): the JSON
+// The owner's conversation with Companion (DESIGN.md "Head ↔ Companion: messages"): the JSON
 // the UI is built against.
 
 type convEntry struct {

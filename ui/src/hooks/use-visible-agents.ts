@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useMemo } from "react";
 import { agentVisible } from "@/lib/active-agents";
 import { useStore } from "@/lib/store";

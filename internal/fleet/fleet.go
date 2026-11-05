@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package fleet is the daemon's orchestrator: the in-memory registry of agents, projects
 // and approvals (backed by the store), process lifecycle through injected runners,
-// hierarchy and policy, mail, approvals, and the event bus. See ARCHITECTURE.md.
+// hierarchy and policy, mail, approvals, and the event bus. See DESIGN.md.
 //
 // Concurrency: one mutex (Fleet.mu) guards all in-memory state and is held while writing
 // the store and publishing on the bus (both quick, neither blocks). It is never held while
@@ -16,6 +13,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -36,7 +34,8 @@ func (f *Fleet) Paths() config.Paths { return f.opts.Paths }
 
 // Options configures a Fleet. Store, Paths and Runners are required.
 type Options struct {
-	AutoShelve *bool // nil = enabled; trusted config, never agent input
+	Supervisor *string // trusted config: nil = architect, empty = unique-head fallback
+	AutoShelve *bool   // nil = enabled; trusted config, never agent input
 	Store      *store.Store
 	Paths      config.Paths
 	Runners    map[model.Mode]runner.Runner
@@ -51,12 +50,15 @@ type Options struct {
 	ClaudeCommand string // "" = claude on PATH
 	HeadHarness   string // "" = claude; chat-capable harness for the head agent
 	Executable    string // tmx binary for agents' mcp.json; "" = os.Executable()
+	// HostExecutable is the tmx that terminal agents' session hosts run (`tmx host`): they
+	// outlive the daemon (hosting.go). "" = no hosts: agents end with the daemon.
+	HostExecutable string
 	// Policy seeds the built-in profiles when the store has none yet (config.json "policy";
 	// zero = model.DefaultPolicy()). Afterwards the profiles in the store are authoritative.
 	Policy    model.Policy
 	Guard     *guard.Settings // nil = guard.DefaultSettings() (on for everyone)
 	SaveGuard func(guard.Settings) error
-	P2P       p2p.Node // the peer-to-peer node (ARCHITECTURE.md "Peer-to-peer network"); nil = off
+	P2P       p2p.Node // the peer-to-peer node (DESIGN.md "Peer-to-peer network"); nil = off
 	Logger    *slog.Logger
 	// Resources is resource control: the launch queue's limits and the brakes (nil = none).
 	Resources Resources
@@ -64,10 +66,20 @@ type Options struct {
 	Suspend func(pid int, stop bool) ([]sysinfo.Proc, error)
 	// Discover finds agents started outside tmx (discover/adopt); nil = the real machine.
 	Discover *discover.Scanner
+	// AgentBypass: Claude agents with the guard hook run in bypass mode (guard.go); nil = on.
+	AgentBypass *bool
+	// FleetAuthorities are "name@host" senders whose peer mail counts as the owner's standing
+	// order (authority.go); nil = DefaultFleetAuthorities.
+	FleetAuthorities []string
+	// Accounts are the harnesses' named accounts (internal/accounts); nil = one account each.
+	Accounts AccountHomes
 }
 
 // Fleet is the orchestrator. Create with New, then Start; Close on shutdown.
 type Fleet struct {
+	hostRetry       time.Duration                  // hosting.go
+	stopHost        func(dir string) (bool, error) // hosting.go
+	authorities     map[string]bool                // authority.go
 	processes       *processes.Registry
 	processRequests map[string]ownedProcessRequest
 	opts            Options
@@ -78,6 +90,8 @@ type Fleet struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+
+	cardRouteWarnings map[string]bool // once per orphaned card per daemon run; guarded by mu
 
 	mu                sync.Mutex
 	closed            bool
@@ -94,7 +108,7 @@ type Fleet struct {
 	companionMsg CompanionMessenger // sends the head's messages to Companion (companion.go); nil = none
 	whatsapp     CompanionDecider   // decides approvals of kind whatsapp (whatsapp.go); nil = none
 
-	rateLimited func(model.Harness, runner.RateLimit) // ratelimit.go; nil = none
+	rateLimited func(model.Harness, string, runner.RateLimit) // ratelimit.go; nil = none
 
 	peer peerState // mail to and from the fleet's other machines (peermail.go)
 }
@@ -107,8 +121,16 @@ type agentRec struct {
 	done     chan struct{} // closed when the current process's event loop ends
 	starting bool          // a runner.Start is in flight
 	stopping bool          // a stop was requested; the exit becomes "stopped"
-	token    string
-	seq      int64
+	// detaching: the daemon is stopping and left the process running in its session host
+	// (runner.Detacher): its end is not an exit.
+	detaching bool
+	// hostUnknown: whether its session host still runs could not be told (hosting.go); it is
+	// not started again (two copies on one conversation) until that is settled.
+	hostUnknown  bool
+	hostRetrying bool // a retryHost loop is waiting
+	hostStopping bool // stopUnknownHost runs: no start until it is done
+	token        string
+	seq          int64
 	// sessionConfirmed: the harness reported SessionID, so the conversation exists and is
 	// resumed; otherwise a pre-assigned SessionID is passed as a new conversation's id.
 	sessionConfirmed bool
@@ -164,14 +186,19 @@ func New(opts Options) (*Fleet, error) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	f := &Fleet{
-		processes: processes.New(),
-		opts:      opts, st: opts.Store, log: opts.Logger, bus: newBus(),
+		hostRetry: hostRetry, stopHost: stopHost, // hosting.go
+		authorities: normalizeAuthorities(opts.FleetAuthorities),
+		processes:   processes.New(),
+		opts:        opts, st: opts.Store, log: opts.Logger, bus: newBus(),
 		ctx: ctx, cancel: cancel,
 		profiles: map[string]*model.Profile{},
 		agents:   map[string]*agentRec{},
 		projects: map[string]*model.Project{},
 		tokens:   map[string]string{},
 		perms:    map[string]permRequest{},
+	}
+	if opts.HostExecutable != "" { // agents' tools outlive the daemon too (processes/hosted.go)
+		f.processes.EnableHosts(opts.HostExecutable, filepath.Join(opts.Paths.Home, "processes"))
 	}
 	agents, err := f.st.ListAgents()
 	if err != nil {
@@ -224,8 +251,9 @@ func (f *Fleet) P2P() p2p.Node { return f.opts.P2P }
 func (f *Fleet) Subscribe() *Sub    { return f.bus.Subscribe() }
 func (f *Fleet) Unsubscribe(s *Sub) { f.bus.Unsubscribe(s) }
 
-// Close stops every process (keeping desired=running, so the next daemon resumes them)
-// and waits for their event loops.
+// Close stops every process (keeping desired=running, so the next daemon resumes them) and
+// waits for their event loops. A process in a session host (runner.Detacher) is left
+// running instead: the next daemon reattaches to it (DESIGN.md "Restarts").
 func (f *Fleet) Close(ctx context.Context) error {
 	f.mu.Lock()
 	if f.closed {
@@ -234,14 +262,24 @@ func (f *Fleet) Close(ctx context.Context) error {
 	}
 	f.closed = true
 	var ids []string
+	var detach []runner.Detacher
 	for id, r := range f.agents {
-		if r.proc != nil {
-			ids = append(ids, id)
+		if r.proc == nil {
+			continue
 		}
+		if d, ok := r.proc.(runner.Detacher); ok && f.hostedLocked(r.a) {
+			r.detaching = true
+			detach = append(detach, d)
+			continue
+		}
+		ids = append(ids, id)
 	}
 	f.mu.Unlock()
+	for _, d := range detach {
+		d.Detach()
+	}
 	var wg sync.WaitGroup
-	f.processes.Close()
+	f.processes.Detach() // agents' tools in session hosts run on (processes/hosted.go)
 	for _, id := range ids {
 		wg.Add(1)
 		go func() {

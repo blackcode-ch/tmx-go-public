@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package api is the daemon's HTTP + WebSocket server (ARCHITECTURE.md "API"): owner and agent
+// Package api is the daemon's HTTP + WebSocket server (DESIGN.md "API"): owner and agent
 // bearer-token auth, CORS for the Wails origins and the daemon's own, JSON errors, the
 // event and terminal sockets, and the embedded UI at /.
 package api
@@ -27,6 +24,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 	"github.com/blackcode-ch/tmx-go/internal/peers"
 	"github.com/blackcode-ch/tmx-go/internal/recorder"
+	"github.com/blackcode-ch/tmx-go/internal/recworker"
 	"github.com/blackcode-ch/tmx-go/internal/resources"
 	"github.com/blackcode-ch/tmx-go/internal/slots"
 	"github.com/blackcode-ch/tmx-go/internal/summarize"
@@ -46,6 +44,7 @@ type Options struct {
 	OwnerToken     string
 	Port           int           // the daemon's port, for the allowed own origin
 	Shutdown       func()        // POST /api/shutdown (owner); nil = route answers 501
+	Restart        func()        // POST /api/fleet-ops/restart (head, leads): stop and start again; nil = 501
 	Gate           *gate.Gate    // the owner gate; nil = none (gated actions just go ahead)
 	Chats          *chat.Service // chats with other tmx installs; nil or without a node = p2p off (503)
 	P2P            p2p.Node      // the peer-to-peer node; nil = off
@@ -64,6 +63,7 @@ type Options struct {
 	Voice *transcribe.Service // /api/voice, /api/transcribe, /api/transcripts; nil = 501
 
 	Summaries *summarize.Service // /api/recordings/{id}/summary, /api/summaries...; nil = 501
+	RecWorker *recworker.Service // POST /api/recordings/{id}/process (the report worker); nil = 501
 	WhatsApp  *whatsapp.Service  // /api/whatsapp...; nil = 501
 	Accounts  *accounts.Service  // /api/accounts...; nil = 501
 	Peers     *peers.Client      // the Python fleet interop (peers.go); nil = no peer routes
@@ -78,6 +78,7 @@ type Server struct {
 	owner          string
 	port           int
 	stop           func()
+	selfRestart    func() // fleetops.go
 	gate           *gate.Gate
 	chats          *chat.Service
 	p2p            p2p.Node
@@ -96,6 +97,7 @@ type Server struct {
 	voice     *transcribe.Service
 	rec       *recorder.Service
 	sum       *summarize.Service
+	recw      *recworker.Service
 	wa        *whatsapp.Service
 	accounts  *accounts.Service
 	peers     *peers.Client
@@ -107,7 +109,7 @@ func New(o Options) *Server {
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
 	}
-	s := &Server{f: o.Fleet, owner: o.OwnerToken, port: o.Port, stop: o.Shutdown, gate: o.Gate, log: o.Logger,
+	s := &Server{f: o.Fleet, owner: o.OwnerToken, port: o.Port, stop: o.Shutdown, selfRestart: o.Restart, gate: o.Gate, log: o.Logger,
 		res: o.Resources, slots: o.Slots, chats: o.Chats, p2p: o.P2P, p2pLogs: o.P2PLog, companion: o.Companion, uploads: o.Uploads, saveP2PName: o.SaveP2PName, updater: o.Updater,
 		rec: o.Recorder}
 	s.voice = o.Voice
@@ -116,16 +118,21 @@ func New(o Options) *Server {
 	s.trustedHosts = append([]string(nil), o.TrustedHosts...)
 	s.wireGate() // safety.go: gate.updated events
 	s.sum = o.Summaries
+	s.recw = o.RecWorker
 	s.wa = o.WhatsApp
 	s.accounts = o.Accounts
 	s.peers = o.Peers
-	s.peerMux = s.peerRoutes()
+	s.peerMux = s.peerProtocolRoutes()
 	s.initDevices()
+	if s.gate != nil && s.pin != nil {
+		s.gate.SetPINCheck(s.pin.IsSet) // #187: the PIN answers every confirmation, also at the machine
+	}
 	if s.f != nil {
 		s.recoveryNotice = s.f.OwnerRecoveryNotice
 	}
 	mux := http.NewServeMux()
 	s.deviceRoutes(mux)
+	s.fleetOpsRoutes(mux) // fleetops.go
 	s.routes(mux)
 	s.handler = s.guard(mux)
 	return s

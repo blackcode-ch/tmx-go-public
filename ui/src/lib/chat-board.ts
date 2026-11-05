@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Chat boards (ARCHITECTURE.md "Chat boards"): each chat's topics, their logs and each topic's latest
+// Chat boards (DESIGN.md "Chat boards"): each chat's topics, their logs and each topic's latest
 // messages (GET /api/chats/{id}/board), kept current from the chat.* events. Topics, moves and
 // logs are shared with the chat's members; the order of the strings is yours alone.
 import { create } from "zustand";

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -99,5 +96,13 @@ func (s *Store) NextPeerAttempt() (int64, error) {
 func (s *Store) SetPeerAttempt(localID string, attempts int, next int64, lastErr string) error {
 	_, err := s.db.Exec(`UPDATE peer_messages SET attempts=?, next_attempt_at=?, last_error=? WHERE local_id=?`,
 		attempts, next, lastErr, localID)
+	return err
+}
+
+// putPeerMapping participates in the caller's transaction so owner decisions
+// cannot commit without the durable peer outbox entry needed to deliver them.
+func putPeerMapping(tx *sql.Tx, p PeerMessage) error {
+	_, err := tx.Exec(`INSERT INTO peer_messages (`+peerCols+`) VALUES (?,?,?,?,?,?,?,?)`,
+		p.LocalID, p.Peer, p.WireID, p.Direction, p.SHA256, p.Attempts, p.NextAttemptAt, p.LastError)
 	return err
 }

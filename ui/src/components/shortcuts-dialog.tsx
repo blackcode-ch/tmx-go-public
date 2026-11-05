@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { MOD, ui, useUI } from "@/lib/ui";
@@ -18,9 +15,9 @@ const GROUPS: { title: string; items: [string, string[]][] }[] = [
   {
     title: "Go to",
     items: [
-      ["Overview", ["G", "O"]],
+      ["Home", ["G", "O"]],
       ["Needs you", ["G", "I"]],
-      ["Board", ["G", "B"]],
+      ["Matrix", ["G", "M"]],
       ["The head", ["G", "H"]],
       ["Settings", ["G", "S"]],
     ],
@@ -48,7 +45,7 @@ export function ShortcutsDialog() {
   const open = useUI((s) => s.shortcuts);
   return (
     <Dialog open={open} onOpenChange={(v) => ui.openShortcuts(v)}>
-      <DialogContent className="sm:max-w-[560px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <DialogContent className="sm:max-w-[35rem]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>Single-key shortcuts work when you're not typing.</DialogDescription>

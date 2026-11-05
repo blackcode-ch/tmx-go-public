@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Browser e2e harness (recorder-fix-o for tmx-lead, 3 Nov 2026): the owner's screens in a real browser, the way he
 // uses them. Linux CI only (.github/workflows/e2e.yml): a browser never runs on the owner's PCs.
 //
@@ -145,13 +142,17 @@ export async function launchBrowser() {
 }
 
 // A drawn "screen" for getDisplayMedia: headless Chromium has no screen picker. Camera and mic stay Chromium's
-// own fake devices.
+// own fake devices. It shows slides: a new one every 10 s (more than KEY_GAP_MS apart), each a different
+// lightness, so the grey diff (rec-frames.ts greyChange: > 24 levels) sees a key moment at every cut. A hue
+// sweep alone barely moves the grey levels, which is why no key moments were found before.
 const FAKE_SCREEN = `(() => {
   const md = navigator.mediaDevices; if (!md) return;
   md.getDisplayMedia = async () => {
     const c = document.createElement('canvas'); c.width = 1280; c.height = 720; const g = c.getContext('2d'); let f = 0;
-    setInterval(() => { g.fillStyle = 'hsl(' + ((f += 3) % 360) + ',50%,40%)'; g.fillRect(0, 0, 1280, 720);
-      g.fillStyle = '#fff'; g.font = '48px sans-serif'; g.fillText('e2e slide ' + Math.floor(f / 30), 60, 360); }, 100);
+    const light = [20, 70, 35, 85];
+    setInterval(() => { const s = Math.floor(f++ / 100);
+      g.fillStyle = 'hsl(' + (s * 75 % 360) + ',50%,' + light[s % light.length] + '%)'; g.fillRect(0, 0, 1280, 720);
+      g.fillStyle = light[s % light.length] > 50 ? '#000' : '#fff'; g.font = '48px sans-serif'; g.fillText('e2e slide ' + s, 60, 360); }, 100);
     return c.captureStream(10);
   };
 })();`;

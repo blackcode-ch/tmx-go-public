@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Files attached to messages. The daemon stores each upload and appends a note to the message
 // that lists the files with their paths (internal/uploads Note); the agent reads them from
 // there. This module recognises that note so the conversation shows the files, not the text.

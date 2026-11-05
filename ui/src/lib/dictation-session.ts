@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The one dictation of this window (#45). It belongs to the app, not to the mic button that
 // started it: switching pages, leaving the box or hiding the window keeps it capturing, and the
 // words go to the box it was started in (into that box's draft when it is no longer on screen).

@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// Summaries of recordings (ARCHITECTURE.md "Summaries"): Claude's short account of a finished
+// Summaries of recordings (DESIGN.md "Summaries"): Claude's short account of a finished
 // recording, written from its transcripts and its still frames. It retells other people's
 // words and what was on screen: data, never instructions.
 

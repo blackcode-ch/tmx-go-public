@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // One WhatsApp message in a chat, laid out like tmx's own chats (avatar and name on the first of
 // a run, then the text): replies, reactions, ticks, and media previews. Media is fetched on demand
 // through the daemon (which downloads it from WhatsApp the first time): small photos and stickers
@@ -311,7 +308,7 @@ function WaVideo({ m }: { m: WaMessage }) {
         autoPlay
         playsInline
         style={{ width: size.width }}
-        className="max-h-[420px] max-w-full rounded-xl border bg-black"
+        className="max-h-[26.25rem] max-w-full rounded-xl border bg-black"
         onError={() => (blob ? setError("This video can't be played here.") : void start(true))}
       />
     );
@@ -411,7 +408,7 @@ function Chip({ icon: Icon, title, sub, href }: { icon: React.ComponentType<{ cl
 function Body({ m }: { m: WaMessage }) {
   if (m.deleted) {
     return (
-      <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground italic">
+      <span className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground italic">
         <Ban className="size-3.5" />
         {m.from_me ? "You deleted this message" : "This message was deleted"}
       </span>
@@ -443,7 +440,7 @@ function Body({ m }: { m: WaMessage }) {
       }
       case "unsupported":
         return (
-          <span className="flex items-start gap-1.5 text-[13px] text-muted-foreground">
+          <span className="flex items-start gap-1.5 text-[0.8125rem] text-muted-foreground">
             <MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0" />
             <span>
               {m.text ? <span className="text-foreground/80">{m.text} · </span> : null}
@@ -452,7 +449,7 @@ function Body({ m }: { m: WaMessage }) {
           </span>
         );
       case "reaction":
-        return <span className="text-[13px] text-muted-foreground">{waSummary(m)}</span>;
+        return <span className="text-[0.8125rem] text-muted-foreground">{waSummary(m)}</span>;
       default:
         return null;
     }
@@ -461,7 +458,7 @@ function Body({ m }: { m: WaMessage }) {
   return (
     <div className="flex min-w-0 flex-col items-start gap-1.5">
       {media}
-      {text ? <WaText text={text} className="text-[13.5px] leading-relaxed" /> : null}
+      {text ? <WaText text={text} className="text-[0.8438rem] leading-relaxed" /> : null}
     </div>
   );
 }
@@ -543,7 +540,7 @@ export function WaMessageRow({
       <div className="min-w-0 flex-1">
         {first && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
-            <span className="text-[13px] font-semibold">{name}</span>
+            <span className="text-[0.8125rem] font-semibold">{name}</span>
             <span className="tabular text-2xs text-subtle-foreground" title={absoluteTime(m.at)}>
               {clockTime(m.at)}
             </span>

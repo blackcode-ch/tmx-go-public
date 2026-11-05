@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package summarize
 
 import (
@@ -313,6 +310,9 @@ func (s *Service) runOne(x model.RecordingSummary) {
 	}
 	if again {
 		cur.State = model.SummaryTranscribing
+	} else if why, ok := s.madeHere[cur.RecordingID]; ok { // which path made it, so a broken worker is seen
+		delete(s.madeHere, cur.RecordingID)
+		cur.Note = strings.TrimSpace("Made by the daemon: " + why + ". " + cur.Note)
 	}
 	if err := s.saveLocked(cur); err != nil {
 		s.log.Warn("summaries: save", "id", cur.RecordingID, "err", err)
@@ -347,7 +347,9 @@ func (s *Service) make(ctx context.Context, x model.RecordingSummary) outcome {
 		return outcome{state: model.SummarySkipped, err: in.nothingSaid(r), note: note}
 	}
 	m := s.model()
+	s.takeWrote("")
 	sum, parts, err := s.write(ctx, r, in, m)
+	m = s.takeWrote(m) // the local model, for a clinic recording or summaries.backend "local"
 	if err != nil {
 		return outcome{state: model.SummaryFailed, err: err.Error(), note: note}
 	}

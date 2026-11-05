@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -21,7 +18,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/transcribe"
 )
 
-// Summaries of recordings (ARCHITECTURE.md "Summaries"): the daemon's service, and tmx rec summary.
+// Summaries of recordings (DESIGN.md "Summaries"): the daemon's service, and tmx rec summary.
 
 // newSummaries makes the daemon's summary service: Claude (config claude_command) writes a
 // summary of every finished recording from its transcripts (voice) and frames; settings live in
