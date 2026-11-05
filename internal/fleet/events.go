@@ -38,6 +38,7 @@ func (f *Fleet) handleEvent(r *agentRec, proc runner.Process, ev runner.Event) (
 	if r.proc != proc || f.agents[r.a.ID] != r {
 		return false // a stale process (restarted or removed agent)
 	}
+	f.observeTasksLocked(r, ev)
 	switch ev.Kind {
 	case runner.EvMailDelivery:
 		if ev.Delivery == "submitted" || ev.Delivery == "unconfirmed" {
@@ -120,6 +121,7 @@ func (f *Fleet) handleExit(r *agentRec, proc runner.Process, code int, err error
 		r.proc = nil
 		return
 	}
+	f.observeTasksLocked(r, runner.Event{Kind: runner.EvExit})
 	f.processes.StopOwner(r.a.ID)
 	if ids, receiptErr := f.st.PendingMailReceipts(r.a.ID); receiptErr == nil {
 		f.mailReceiptLocked(r.a.ID, ids, "unconfirmed")

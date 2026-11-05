@@ -389,6 +389,9 @@ func (f *Fleet) mailLineLocked(m model.Message) string {
 }
 
 func (f *Fleet) markDeliveredLocked(r *agentRec, msgs []model.Message) bool {
+	if !f.armTasksLocked(r, msgs) {
+		return false
+	}
 	now := model.Now()
 	ids := make([]string, len(msgs))
 	for i, m := range msgs {
@@ -507,6 +510,7 @@ func (f *Fleet) sendMail(proc runner.Process, text string, msgs []model.Message)
 }
 
 func (f *Fleet) mailReceiptLocked(to string, ids []string, receipt string) {
+	f.taskSubmissionLocked(to, ids, receipt)
 	for _, id := range ids {
 		m, err := f.st.GetMessage(id)
 		if err != nil || m.To != to || m.State == model.MsgRead {

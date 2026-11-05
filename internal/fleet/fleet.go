@@ -34,6 +34,7 @@ func (f *Fleet) Paths() config.Paths { return f.opts.Paths }
 
 // Options configures a Fleet. Store, Paths and Runners are required.
 type Options struct {
+	Tasks      *config.TaskConfig
 	Supervisor *string // trusted config: nil = architect, empty = unique-head fallback
 	AutoShelve *bool   // nil = enabled; trusted config, never agent input
 	Store      *store.Store
@@ -205,6 +206,9 @@ func New(opts Options) (*Fleet, error) {
 		return nil, err
 	}
 	if err := f.st.RecoverMailReceipts(); err != nil {
+		return nil, err
+	}
+	if err := f.st.RecoverTasks(); err != nil {
 		return nil, err
 	}
 	for _, a := range agents {
