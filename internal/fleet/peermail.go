@@ -103,9 +103,12 @@ func (f *Fleet) peerTargetLocked(to string) (string, error) {
 		}
 		to = name + "@" + host
 	}
-	name, host, ok := strings.Cut(to, "@")
+	name, host, ok, err := DecodeAgentAddress(to)
+	if err != nil {
+		return "", err
+	}
 	if !ok {
-		return to, nil
+		return name, nil
 	}
 	host = strings.ToLower(host)
 	if host == f.selfLocked() {

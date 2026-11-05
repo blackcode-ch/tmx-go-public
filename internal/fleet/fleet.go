@@ -389,6 +389,14 @@ func (f *Fleet) Timeline(idOrName string, after int64, limit int) ([]model.Timel
 }
 
 func (f *Fleet) resolveLocked(idOrName string) (*agentRec, error) {
+	name, host, qualified, err := DecodeAgentAddress(idOrName)
+	if err != nil {
+		return nil, err
+	}
+	if qualified && host != f.selfLocked() {
+		return nil, errf(KindNotFound, "agent %q belongs to another machine", idOrName)
+	}
+	idOrName = name
 	if r, ok := f.agents[idOrName]; ok {
 		return r, nil
 	}
