@@ -1,10 +1,10 @@
 # Public CI for the scrubbed tmx-go snapshot. Runs on GitHub's free hosted runners only (never
-# self-hosted). Triggers: the mirror bot's pushes (main and pr/<N> snapshot branches) and
+# self-hosted). Triggers: the mirror bot's pushes (main and fleet-pr/<N> snapshot branches) and
 # outside PRs, which get no secrets (there are none here) and need maintainer approval to run.
 name: public CI
 on:
   push:
-    branches: [main, "pr/**"]
+    branches: [main, "fleet-pr/**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -92,3 +92,54 @@ jobs:
       - name: make app (unsigned)
         run: make app WAILS="$WAILS" SIGN_IDENTITY=-
       - run: codesign --verify --deep --strict build/bin/tmxg.app
+
+  p2p-interop:
+    name: P2P interop (pinned fleet baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout immutable public fleet baseline
+        uses: actions/checkout@v4
+        with:
+          repository: blackcode-ch/tmx-go-public
+          ref: 0a6f2cb4bb3020d7a69460f96cac0da9bdabb00c
+          path: theirs
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Select the public baseline in the test harness
+        # Queue snapshots may predate this workflow. Change only the test's exact
+        # expected checkout SHA; keep its checkout verification and test logic.
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("internal/p2p/interop_test.go")
+          text = p.read_text()
+          old = 'const pinnedCommit = "0c36197f03a09ef1fa3899c42de0a8e8d8541831"'
+          new = 'const pinnedCommit = "0a6f2cb4bb3020d7a69460f96cac0da9bdabb00c"'
+          if text.count(old) != 1:
+              raise SystemExit("Unrecognized interop test pin; review the public baseline")
+          p.write_text(text.replace(old, new))
+          PY
+      - name: Pairing, messages and files in both directions
+        env:
+          TMX_P2P_INTEROP: "1"
+          TMX_P2P_PINNED_CHECKOUT: ${{ github.workspace }}/theirs
+        run: go test -count=1 -timeout=5m -v -run 'TestInteropOursToPinned|TestInteropPinnedToOurs' ./internal/p2p/
+      - name: Current inviter admits delayed baseline joiners
+        env:
+          TMX_P2P_INTEROP: "1"
+          TMX_P2P_PINNED_CHECKOUT: ${{ github.workspace }}/theirs
+        # The baseline predates full-lifetime invite admission. Its own five-minute
+        # inviter case is deliberately excluded; current inviter cases must pass.
+        run: go test -count=1 -timeout=10m -v -run 'TestInteropLateJoinAdmissionWindow/^our_invite' ./internal/p2p/
+      - name: Record baseline scope
+        if: always()
+        run: |
+          echo 'Peer baseline: public 0a6f2cb, source e033901, P2P equivalent to fleet fdff3fa4.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'This checks fleet regression compatibility, not current upstream compatibility.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Both-direction pairing/message/file; current-side 30-second and five-minute delayed invite admission.' >> "$GITHUB_STEP_SUMMARY"
