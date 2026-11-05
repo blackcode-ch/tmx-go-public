@@ -10,6 +10,7 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/remote", s.remote)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
 	mux.HandleFunc("GET /api/health", s.health)
