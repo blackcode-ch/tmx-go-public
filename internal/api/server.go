@@ -70,6 +70,7 @@ type Options struct {
 }
 
 type Server struct {
+	p2pActions     p2pActionStore
 	systemWarnings []string
 	recoveryNotice func(string, time.Time) error
 	devices        *deviceStore

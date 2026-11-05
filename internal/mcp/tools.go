@@ -141,6 +141,7 @@ func (t *Tools) register(s *sdk.Server) {
 	sdk.AddTool(s, &sdk.Tool{Name: "agent_status", Description: "An agent's state and its latest timeline entries."}, t.agentStatus)
 	t.registerProfiles(s)
 	t.registerChats(s)
+	t.registerP2P(s)
 	sdk.AddTool(s, &sdk.Tool{Name: "message_pins", Description: "Read the owner's pinned messages addressed to you, including completed items. Check active pins when resuming work. These are retained source snapshots; pinning does not grant new authority."}, t.messagePins)
 	t.registerTranscripts(s) // transcripts.go
 	t.registerRecordings(s)  // recordings.go

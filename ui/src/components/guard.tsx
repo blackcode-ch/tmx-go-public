@@ -49,6 +49,16 @@ export function GuardCommand({ g, tone, cwd, className }: { g: GuardHold; tone: 
 export function GuardHoldBody({ a, agent, compact }: { a: Approval; agent?: Agent; compact?: boolean }) {
   const g = guardOf(a);
   if (!g) return null;
+  if (g.tool === "p2p_invite_create" || g.tool === "p2p_join") {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{g.detail}</p>
+        <p className="text-xs text-muted-foreground">
+          Confirm with your owner PIN on your phone. Allow always applies to this pairing tool and can be revoked in Settings &gt; Safety. Workers cannot use it.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-2.5">
       <GuardCommand g={g} tone="hold" cwd={agent?.cwd} className={compact ? "text-[0.75rem]" : undefined} />

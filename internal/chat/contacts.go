@@ -15,6 +15,7 @@ import (
 
 // InviteRequest is POST /api/invites.
 type InviteRequest struct {
+	MaxUses int            `json:"max_uses,omitempty"`
 	Kind    p2p.InviteKind `json:"kind"`               // dm | group
 	GroupID string         `json:"group_id,omitempty"` // group invites: the chat ID
 	TTLMs   int64          `json:"ttl_ms,omitempty"`   // 0 = default (24 hours)
@@ -24,7 +25,7 @@ func (s *Service) CreateInvite(req InviteRequest) (p2p.Invite, error) {
 	if !s.Enabled() {
 		return p2p.Invite{}, ErrOff
 	}
-	opts := p2p.InviteOptions{Kind: req.Kind, TTLMillis: req.TTLMs}
+	opts := p2p.InviteOptions{Kind: req.Kind, TTLMillis: req.TTLMs, MaxUses: req.MaxUses}
 	switch req.Kind {
 	case p2p.InviteDM:
 	case p2p.InviteGroup:

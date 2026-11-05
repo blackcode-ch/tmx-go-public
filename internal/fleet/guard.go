@@ -169,6 +169,13 @@ func (f *Fleet) guardInfo(req HoldRequest, outcome guard.Outcome) (model.GuardHo
 // Hold records a tool call the guard held (agent only): a pending Approval of kind guard in
 // Needs you, and the agent waits for it.
 func (f *Fleet) Hold(c Caller, req HoldRequest) (model.Approval, error) {
+	if req.Rule == guard.RuleP2PInvite || req.Rule == guard.RuleP2PJoin {
+		return model.Approval{}, errf(KindForbidden, "use the dedicated pairing tools")
+	}
+	return f.hold(c, req)
+}
+
+func (f *Fleet) hold(c Caller, req HoldRequest) (model.Approval, error) {
 	if c.Owner {
 		return model.Approval{}, errf(KindForbidden, "only an agent's guard hook holds calls")
 	}
