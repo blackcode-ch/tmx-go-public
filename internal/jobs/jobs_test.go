@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package jobs
 
 import (
@@ -158,7 +155,19 @@ func TestGovernorDiesDuringAuditCancelIndependent(t *testing.T) {
 	if err != nil || v.State != "cancelling" || time.Since(started) > 100*time.Millisecond {
 		t.Fatal("cancel blocked", v, err)
 	}
-	if _, err = m.SubmitAudit(Identity{"agent", "agent", "bg"}, false, 3, bytesReader("abc")); !errors.Is(err, ErrDegraded) {
+	// Cancel just signalled m.dirty (line 408 in jobs.go), which wakes releaseWorker into a
+	// blocking m.mutation.Lock()+persist()+Unlock() in the background - a real race against
+	// this SubmitAudit's own non-blocking TryLock (jobs.go:313), genuinely busy on a slow CI
+	// runner, not a test bug. ErrBusy's own contract is "retry with the same identity".
+	deadline := time.Now().Add(time.Second)
+	for {
+		_, err = m.SubmitAudit(Identity{"agent", "agent", "bg"}, false, 3, bytesReader("abc"))
+		if !errors.Is(err, ErrBusy) || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !errors.Is(err, ErrDegraded) {
 		t.Fatal(err)
 	}
 	if !m.Degraded() {

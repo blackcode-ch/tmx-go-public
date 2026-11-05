@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package peers
 
 import (
@@ -15,7 +12,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/config"
 )
 
-// Moving a machine from the Python tmx daemon to this one (ARCHITECTURE.md "Python fleet interop",
+// Moving a machine from the Python tmx daemon to this one (DESIGN.md "Python fleet interop",
 // the switch runbook): the fleet's other machines already hold a pair token for this machine and
 // keep sending it, so this daemon must know it. ImportPython copies the machine's own Python
 // pair tokens (for the configured peers only) into this daemon's secrets, inside tmx: nobody
@@ -80,6 +77,9 @@ func ImportPython(cfg config.Config, p config.Paths, pyHome string) ([]Imported,
 		row := Imported{Name: peer.Name}
 		tok, _ := pyTokens[peer.Name]["token"].(string)
 		role, _ := pyTokens[peer.Name]["role"].(string)
+		if role == "" {
+			role = "full" // Python's own default when role is absent (r.get("role") or "full")
+		}
 		cur := tokens.For(peer.Name)
 		switch {
 		case tok == "":

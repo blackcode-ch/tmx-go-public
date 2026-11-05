@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -10,7 +7,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// WhatsAppConfig is config.json "whatsapp" (ARCHITECTURE.md "WhatsApp"); zero fields take the defaults.
+// WhatsAppConfig is config.json "whatsapp" (DESIGN.md "WhatsApp"); zero fields take the defaults.
 type WhatsAppConfig struct {
 	// Enabled: false turns the service off (every WhatsApp route answers 503); nil = off. While no
 	// account is linked the service makes no connection at all.

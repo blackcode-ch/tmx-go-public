@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Overview: what Companion is doing for tmx (active tasks and the ones that ended in the last day).
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +18,7 @@ export function CompanionStrip() {
     <section className="overflow-hidden rounded-xl border bg-card" aria-label="Companion tasks">
       <div className="flex h-10 items-center gap-2 border-b px-4">
         <Sparkles className="size-3.5 text-brand" />
-        <h2 className="text-[13px] font-medium">Companion</h2>
+        <h2 className="text-[0.8125rem] font-medium">Companion</h2>
         <span className="tabular text-xs text-muted-foreground">{active > 0 ? `${active} active` : "nothing running"}</span>
         <Button variant="ghost" size="xs" className="ml-auto text-muted-foreground" asChild>
           <a href={href(paths.settings()) + "?section=companion"}>

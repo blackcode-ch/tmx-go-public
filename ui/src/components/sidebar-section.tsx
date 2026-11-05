@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // A collapsible group heading in the sidebar (Chats, WhatsApp): the chevron and the name open and
 // close it; what it holds can show next to the name while it is closed (unread counts), and
 // actions (a + button) sit at the end, outside the toggle.

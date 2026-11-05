@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package model
 
-// The board (ARCHITECTURE.md "Board"): the head's conversation as strings of cards, one string per
+// The board (DESIGN.md "Board"): the head's conversation as strings of cards, one string per
 // thread (topic). A card is one turn: what started it (the owner's message, or mail) and
 // what the head did and said.
 
@@ -86,7 +83,7 @@ type Board struct {
 	Entries  []ThreadEntry `json:"entries"`
 }
 
-// A thread's log (ARCHITECTURE.md "Board"): short lines worth keeping, filed by the owner, the head
+// A thread's log (DESIGN.md "Board"): short lines worth keeping, filed by the owner, the head
 // or the project's agents. Append-only: a correction is a new entry that names the one it
 // corrects. Kept forever (cards follow the head's timeline, which is trimmed).
 const (
@@ -99,7 +96,7 @@ const (
 // LogKinds are the kinds of log entries.
 var LogKinds = []string{LogDecision, LogAction, LogInfo, LogLink}
 
-// Event kinds (the Matrix, ARCHITECTURE.md "Matrix"): what an agent appends to a thread on purpose,
+// Event kinds (the Matrix, DESIGN.md "Matrix"): what an agent appends to a thread on purpose,
 // so that a thread's history is its events, not its chatter. Threads take these and LogKinds;
 // chat topics, shared with other installs, keep LogKinds only.
 const (
@@ -137,6 +134,8 @@ type ThreadEntry struct {
 // ProjectSection is the owner's daily project report. Needs are checklist items,
 // never approvals or board cards. It is independent of the project's lifecycle status.
 type ProjectSection struct {
+	PreviewDir  string          `json:"preview_dir,omitempty"` // imported metadata, not permission to serve files
+	Origin      *ImportOrigin   `json:"origin,omitempty"`
 	FinalOutput []ProjectOutput `json:"final_output"`
 	ProjectID   string          `json:"project_id"`
 	Slug        string          `json:"slug"`

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 // ProductName isolates the fleet binary, service and MCP namespace from Python tmx.

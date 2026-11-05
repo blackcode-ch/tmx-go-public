@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package jobs runs bounded, cancellable daemon work away from control handlers.
 // Adapters must authenticate the caller and authorize the input before submission;
 // completing an audit never grants permission to place, release or execute content.

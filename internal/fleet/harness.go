@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -86,7 +83,7 @@ func harnessProfileOK(h model.Harness, prof model.Profile) error {
 // profile gives the permission mode (a read-only profile runs as "plan": Codex's read-only
 // sandbox on macOS and Linux, untrusted approvals on Windows where Codex has no sandbox;
 // opencode with edits and shell denied) and the instructions; its Claude tool lists and the
-// guard's hook do not apply (see ARCHITECTURE.md "Harnesses").
+// guard's hook do not apply (see DESIGN.md "Harnesses").
 func (f *Fleet) harnessSpecLocked(r *agentRec, spec runner.Spec) runner.Spec {
 	a := r.a
 	if a.Harness == model.HarnessShell {

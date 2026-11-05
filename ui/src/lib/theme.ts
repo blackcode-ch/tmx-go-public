@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Theme: system (default), light or dark. The class on <html> is set before first paint by the
 // inline script in index.html; this keeps it in sync afterwards.
 import { useSyncExternalStore } from "react";

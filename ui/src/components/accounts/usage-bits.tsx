@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Small pieces of the Usage page (pages/usage.tsx): a harness's mark, a quota bar, the install
 // hint, and the sidebar's dot for a quota that is almost used up.
 import { AlertTriangle, ExternalLink } from "lucide-react";
@@ -18,7 +15,7 @@ export function HarnessMark({ harness, label, muted, className }: { harness: str
     <span
       aria-hidden
       className={cn(
-        "flex size-9 shrink-0 items-center justify-center rounded-[9px] text-[13px] font-semibold tracking-tight transition-[filter,opacity] duration-200",
+        "flex size-9 shrink-0 items-center justify-center rounded-[9px] text-[0.8125rem] font-semibold tracking-tight transition-[filter,opacity] duration-200",
         muted && "opacity-80 grayscale",
         className,
       )}
@@ -50,11 +47,11 @@ export function LimitRow({ limit, now }: { limit: AccountLimit; now: number }) {
   return (
     <div data-limit={limit.id}>
       <div className="flex items-baseline gap-3">
-        <span className="min-w-0 flex-1 truncate text-[13px] text-foreground/90" title={limit.label}>
+        <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-foreground/90" title={limit.label}>
           {limit.label}
         </span>
         <span className="tabular shrink-0 text-xs text-muted-foreground">
-          <span className={cn("text-[13px] font-semibold", TONE_TEXT[tone])}>{p}%</span> used
+          <span className={cn("text-[0.8125rem] font-semibold", TONE_TEXT[tone])}>{p}%</span> used
         </span>
       </div>
       <div
@@ -100,7 +97,7 @@ export function InstallHint({ text, label }: { text: string; label: string }) {
             e.preventDefault();
             tr.openExternal(t);
           }}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[12.5px] text-brand hover:underline"
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1 text-[0.7812rem] text-brand hover:underline"
         >
           <span className="truncate">{shown}</span>
           <ExternalLink className="size-3 shrink-0" aria-hidden />
@@ -111,7 +108,7 @@ export function InstallHint({ text, label }: { text: string; label: string }) {
   }
   return (
     <div className="flex min-w-0 items-start gap-1 rounded-lg border bg-code py-1 pr-1 pl-3">
-      <code className="min-w-0 flex-1 py-[3px] font-mono text-[12px] leading-[18px] [overflow-wrap:anywhere]">
+      <code className="min-w-0 flex-1 py-[3px] font-mono text-[0.75rem] leading-[1.125rem] [overflow-wrap:anywhere]">
         <span className="text-subtle-foreground select-none">$ </span>
         {t}
       </code>

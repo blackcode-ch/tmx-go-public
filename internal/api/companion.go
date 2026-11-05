@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -19,7 +16,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Companion (ARCHITECTURE.md "Companion"): the owner's settings and task routes, agents' hand-offs,
+// Companion (DESIGN.md "Companion"): the owner's settings and task routes, agents' hand-offs,
 // and the link routes Companion itself reads through `tmx mcp --companion`.
 
 // LinkNotice starts every answer of the link routes.
@@ -548,12 +545,14 @@ func (s *Server) linkChatMessages(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) linkMessage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Body string `json:"body"`
+		Body    string `json:"body"`
+		To      string `json:"to,omitempty"`
+		RetryID string `json:"retry_id,omitempty"`
 	}
 	if !decode(w, r, &req) {
 		return
 	}
-	m, err := s.f.CompanionMessage(req.Body)
+	m, err := s.f.CompanionSend(fleet.SendRequest{To: req.To, Body: req.Body, RetryID: req.RetryID})
 	if err != nil {
 		writeErr(w, err)
 		return

@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -13,7 +13,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Companion, the owner's desktop agent app (ARCHITECTURE.md "Companion"), touches the fleet in three
+// Companion, the owner's desktop agent app (DESIGN.md "Companion"), touches the fleet in three
 // ways: approvals of kind companion (an agent's hand-off, Companion's questions), mail from
 // Companion (task outcomes, and messages it sends the head through `tmx mcp --companion`), and
 // a read-only view. The task logic lives in internal/companion; it decides companion
@@ -33,7 +33,7 @@ func (f *Fleet) SetCompanion(d CompanionDecider) {
 }
 
 // CompanionMessenger sends the head's message to Companion (internal/companion: a task of
-// kind message; ARCHITECTURE.md "Head ↔ Companion: messages"). replyTo: the head's message
+// kind message; DESIGN.md "Head ↔ Companion: messages"). replyTo: the head's message
 // Companion asked about (body answers it); "" = a new message. Its errors go back to the
 // caller as they are.
 type CompanionMessenger func(agentID, body, replyTo string) (model.CompanionTask, error)
@@ -230,32 +230,97 @@ const CompanionLabel = "[Companion · a message from the owner's desktop assista
 // labelled mail: the label, then the message quoted line by line (peertext). At most 20 per
 // 10 minutes.
 func (f *Fleet) CompanionMessage(body string) (model.Message, error) {
-	body = strings.TrimSpace(body)
+	return f.CompanionSend(SendRequest{Body: body})
+}
+
+// CompanionSend accepts mail only from the authenticated link handler. An empty
+// recipient preserves the legacy head default. Companion remains a distinct mail
+// party, with no owner standing or access to reserved or remote destinations.
+func (f *Fleet) CompanionSend(req SendRequest) (model.Message, error) {
+	body := strings.TrimSpace(req.Body)
 	if body == "" {
 		return model.Message{}, errf(KindInvalid, "the message is empty")
 	}
 	if len(body) > MaxBodyBytes-len(CompanionLabel)-1 {
 		return model.Message{}, errf(KindInvalid, "the message is longer than %d KB", MaxBodyBytes>>10)
 	}
-	f.mu.Lock()
-	h := f.headLocked()
-	if h == nil {
-		f.mu.Unlock()
-		return model.Message{}, errf(KindNotFound, "tmx has no head agent yet")
+	if len(req.RetryID) > 128 || strings.TrimSpace(req.RetryID) != req.RetryID || req.ReplyTo != "" || req.ThreadID != "" {
+		return model.Message{}, errf(KindInvalid, "invalid link message retry_id or unsupported reply/thread")
 	}
-	// Only Companion's own messages count (not the replies to the head's messages, nor task reports).
-	recent, err := f.st.ListMessages(store.MessageFilter{From: model.CompanionParty, To: h.a.ID, BodyPrefix: CompanionLabel + "\n", Limit: MaxPerWindow})
-	n, since := 0, model.Now()-RateWindow.Milliseconds()
+	req.To = strings.TrimSpace(req.To)
+	f.mu.Lock()
+	to, err := f.peerTargetLocked(req.To)
+	if err != nil {
+		f.mu.Unlock()
+		return model.Message{}, err
+	}
+	if IsPeer(to) || ReservedAgentName(to) {
+		f.mu.Unlock()
+		return model.Message{}, errf(KindForbidden, "Companion link messages require a local fleet agent")
+	}
+	var r *agentRec
+	if to == "" {
+		r = f.headLocked()
+		if r == nil {
+			err = errf(KindNotFound, "tmx has no head agent yet")
+		}
+	} else {
+		r, err = f.resolveLocked(to)
+	}
+	if err != nil {
+		f.mu.Unlock()
+		return model.Message{}, err
+	}
+	retryHash := ""
+	if req.RetryID != "" {
+		encoded, _ := json.Marshal(req)
+		retryHash = fmt.Sprintf("%x", sha256.Sum256(encoded))
+		prior, err := f.st.MessageByRetry(model.CompanionParty, req.RetryID)
+		if err == nil {
+			same := prior.RetryHash == retryHash && prior.To == r.a.ID
+			f.mu.Unlock()
+			if !same {
+				return model.Message{}, errf(KindConflict, "retry_id was already used for a different message or recipient")
+			}
+			return prior, nil
+		}
+		if !errors.Is(err, store.ErrNotFound) {
+			f.mu.Unlock()
+			return model.Message{}, err
+		}
+	}
+	// Keep the link's total budget independent of how many agents it can reach.
+	// Task reports use the same party but not this label and retain their own path.
+	recent, err := f.st.ListMessages(store.MessageFilter{From: model.CompanionParty, BodyPrefix: CompanionLabel + "\n", Limit: MaxPerWindow})
+	if err != nil {
+		f.mu.Unlock()
+		return model.Message{}, err
+	}
+	n := 0
 	for _, m := range recent {
-		if m.CreatedAt >= since {
+		if m.CreatedAt >= model.Now()-RateWindow.Milliseconds() {
 			n++
 		}
 	}
-	if err == nil && n >= MaxPerWindow {
+	if n >= MaxPerWindow {
 		f.mu.Unlock()
-		return model.Message{}, errf(KindTooMany, "Companion sent the head %d messages in the last 10 minutes; wait before sending more", n)
+		return model.Message{}, errf(KindTooMany, "Companion sent %d messages in the last 10 minutes; wait before sending more", n)
 	}
-	id := h.a.ID
+	m := model.Message{ID: model.NewID(), From: model.CompanionParty, To: r.a.ID,
+		Body: peertext.Under(CompanionLabel, body, MaxBodyBytes), State: model.MsgQueued,
+		CreatedAt: model.Now(), RetryID: req.RetryID, RetryHash: retryHash, Receipt: "queued"}
+	m.ReceiptAt = m.CreatedAt
+	if err := f.checkLimitsLocked(m); err != nil {
+		f.mu.Unlock()
+		return model.Message{}, err
+	}
+	if err := f.st.PutMessage(m); err != nil {
+		f.mu.Unlock()
+		return model.Message{}, err
+	}
+	f.bus.Publish(model.BusEvent{Type: model.EvMessageCreated, AgentID: m.To, Data: m})
+	f.refreshQueuedLocked(r)
 	f.mu.Unlock()
-	return f.DeliverCompanion(id, peertext.Under(CompanionLabel, body, MaxBodyBytes))
+	f.tryDeliver(m.To)
+	return f.message(m.ID)
 }

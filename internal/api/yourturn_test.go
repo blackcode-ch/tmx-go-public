@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -8,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/blackcode-ch/tmx-go/internal/api/apitest"
+	"github.com/blackcode-ch/tmx-go/internal/fleet"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
@@ -68,4 +66,52 @@ func TestYourTurnThrowawayCardJourney(t *testing.T) {
 		t.Fatalf("lost or duplicate words: answers=%d late=%d", answers, late)
 	}
 	t.Log("late dictated words delivered once as correspondence; original decision intact; agent forbidden")
+}
+
+// Project-state uses the helper to create cards; the owner sees and answers them
+// through the same HTTP routes as ask_owner, without a second decision mechanism.
+func TestYourTurnProjectCardJourney(t *testing.T) {
+	d := apitest.New(t)
+	p, err := d.Fleet.CreateProject(fleet.OwnerCaller, fleet.ProjectRequest{Name: "Throwaway questions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	asker := fleet.Caller{AgentID: p.LeadID}
+	req := fleet.ProjectCardRequest{AskRequest: fleet.AskRequest{Question: "Which project name?", Category: "naming"}, Urgent: true}
+	card, err := d.Fleet.AskProjectOwner(asker, p.ID, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := client{t: t, base: d.URL, token: d.OwnerToken}
+	var cards []model.Approval
+	if status := owner.do("GET", "/api/approvals", nil, &cards); status != 200 || len(cards) != 1 || cards[0].Card.ProjectID != p.ID {
+		t.Fatalf("project card list: %d %+v", status, cards)
+	}
+	req.ID = card.ID
+	req.Question = "Revised project question?"
+	changed, err := d.Fleet.AskProjectOwner(asker, p.ID, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	words := map[string]any{"decision": "answer", "answer": "Keep these words", "free_text": true, "version": card.Version, "answer_id": "project-words"}
+	if status := owner.do("POST", "/api/approvals/"+card.ID, words, nil); status != 409 {
+		t.Fatalf("stale project answer: %d", status)
+	}
+	words["version"] = changed.Version
+	var result model.Approval
+	if status := owner.do("POST", "/api/approvals/"+card.ID, words, &result); status != 200 || result.Answer != "Keep these words" {
+		t.Fatalf("reviewed project answer: %d %+v", status, result)
+	}
+	t.Log("project card listed; stale answer refused; reviewed words accepted through existing owner route")
+}
+
+func TestYourTurnSupervisorConfigurationVisible(t *testing.T) {
+	d := apitest.New(t)
+	owner := client{t: t, base: d.URL, token: d.OwnerToken}
+	var status struct {
+		Supervisor string `json:"supervisor"`
+	}
+	if code := owner.do("GET", "/api/peers", nil, &status); code != 200 || status.Supervisor != "architect" {
+		t.Fatalf("supervisor: %d %+v", code, status)
+	}
 }

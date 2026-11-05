@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -164,5 +161,26 @@ func TestP2PConfigDefaults(t *testing.T) {
 	}
 	if cfg.P2P.On() || cfg.P2P.MDNSOn() || cfg.P2P.NATPortMapOn() || cfg.P2P.DHTOn() || len(cfg.P2P.Relays) != 1 {
 		t.Fatalf("parsed: %+v", cfg.P2P)
+	}
+}
+
+func TestSupervisorConfigPreservesExplicitEmpty(t *testing.T) {
+	p := testPaths(t)
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Supervisor != nil {
+		t.Fatal("absent supervisor should retain the default marker")
+	}
+	for _, name := range []string{"", "design-owner"} {
+		cfg.Supervisor = &name
+		if err = Save(p, cfg); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err := Load(p)
+		if err != nil || loaded.Supervisor == nil || *loaded.Supervisor != name {
+			t.Fatalf("supervisor round trip: %+v %v", loaded.Supervisor, err)
+		}
 	}
 }

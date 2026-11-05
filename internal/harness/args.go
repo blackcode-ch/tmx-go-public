@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package harness
 
 import (
@@ -96,6 +93,23 @@ func TerminalCommand(spec runner.Spec) (Command, error) {
 		}
 		c.Args = append(c.Args, spec.ExtraArgs...)
 		c.Env = append(c.Env, "PI_SKIP_VERSION_CHECK=1", "PI_TELEMETRY=0")
+	case model.HarnessGemini:
+		// Gemini CLI's TUI: plan mode is its read-only mode; otherwise it asks before edits
+		// and commands (default), or edits files by itself (auto_edit) under a bypass profile.
+		switch {
+		case spec.PermissionMode == "plan":
+			c.Args = append(c.Args, "--approval-mode", "plan")
+		case bypass(spec):
+			c.Args = append(c.Args, "--approval-mode", "auto_edit")
+		}
+		if spec.Model != "" {
+			c.Args = append(c.Args, "--model", spec.Model)
+		}
+		c.Args = append(c.Args, spec.ExtraArgs...)
+		if spec.InitialPrompt != "" {
+			// --prompt-interactive: runs the first message, then stays in the TUI
+			c.Args = append(c.Args, "-i", spec.InitialPrompt)
+		}
 	case "agy", "antigravity":
 		// Antigravity's terminal TUI. MCP/permissions are managed by agy itself; tmx
 		// passes the model when one is chosen and any extra args.

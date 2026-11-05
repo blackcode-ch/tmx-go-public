@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // AI accounts in the mock daemon (the Usage page): GET /api/accounts, refresh, sign-in, cancel
 // and sign-out. A sign-in is a fake process with a terminal (replay first, then live, as the
 // daemon's socket does) that "succeeds" after a few seconds, or soon after a pasted code.
@@ -28,6 +25,8 @@ const LABEL: Record<string, string> = { claude: "Claude", codex: "Codex", antigr
 function blank(harness: string, installed: boolean): AccountStatus {
   return {
     harness,
+    name: "default",
+    launch_default: true,
     label: LABEL[harness] ?? harness,
     installed,
     connected: false,

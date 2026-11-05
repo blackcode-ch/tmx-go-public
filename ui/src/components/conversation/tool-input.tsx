@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { CheckCircle2, Circle, CircleDot } from "lucide-react";
 import { asInput, langFromPath } from "@/lib/tools";
 import { relPath } from "@/lib/format";

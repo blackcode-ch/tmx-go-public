@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -201,7 +198,7 @@ export function ResourceSettings() {
               </Row>
             ))}
           <p className="py-3 text-xs text-muted-foreground">
-            Agents run heavy commands through <code className="rounded border bg-muted px-1 font-mono text-[11px]">tmx slot -- …</code>, which
+            Agents run heavy commands through <code className="rounded border bg-muted px-1 font-mono text-[0.6875rem]">tmx slot -- …</code>, which
             waits for a free slot of its kind.
           </p>
         </div>

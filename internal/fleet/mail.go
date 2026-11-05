@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -16,7 +13,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Mail limits (ARCHITECTURE.md "Mail delivery").
+// Mail limits (DESIGN.md "Mail delivery").
 const (
 	MaxBodyBytes   = 32 << 10
 	MaxQueued      = 30
@@ -35,7 +32,7 @@ type SendRequest struct {
 	To      string `json:"to"`
 	Body    string `json:"body"`
 	ReplyTo string `json:"reply_to,omitempty"`
-	// ThreadID: the board topic of an owner's message to the head (ARCHITECTURE.md "Board").
+	// ThreadID: the board topic of an owner's message to the head (DESIGN.md "Board").
 	ThreadID string `json:"thread_id,omitempty"`
 }
 
@@ -62,9 +59,14 @@ func (f *Fleet) SendMessage(c Caller, req SendRequest) (model.Message, error) {
 		retryHash = fmt.Sprintf("%x", sha256.Sum256(body))
 		prior, err := f.st.MessageByRetry(c.ID(), req.RetryID)
 		if err == nil {
-			f.mu.Unlock()
 			if prior.RetryHash != retryHash {
+				f.mu.Unlock()
 				return model.Message{}, errf(KindConflict, "retry_id was already used for a different message")
+			}
+			err = f.revalidateMailRetryLocked(c, req, prior)
+			f.mu.Unlock()
+			if err != nil {
+				return model.Message{}, err
 			}
 			return prior, nil
 		}
@@ -203,6 +205,43 @@ func (f *Fleet) SendMessage(c Caller, req SendRequest) (model.Message, error) {
 	return f.message(m.ID)
 }
 
+// A retry is a receipt lookup, but must still name the same currently permitted
+// recipient. Never let a deleted/replaced agent or removed peer inherit a receipt.
+func (f *Fleet) revalidateMailRetryLocked(c Caller, req SendRequest, prior model.Message) error {
+	to := req.To
+	var orig *model.Message
+	if req.ReplyTo != "" {
+		m, err := f.st.GetMessage(req.ReplyTo)
+		if err != nil || m.To != c.ID() && !c.Owner {
+			return errf(KindForbidden, "you can only reply to messages sent to you")
+		}
+		orig = &m
+		if to == "" {
+			to = m.From
+		}
+	}
+	to, err := f.peerTargetLocked(to)
+	if err != nil {
+		return err
+	}
+	if IsPeer(to) {
+		if c.Companion || !c.Owner && reservedSenders[f.nameOfLocked(c.ID())] {
+			return errf(KindForbidden, "this caller cannot mail other machines")
+		}
+	} else if to != model.Owner {
+		r, err := f.resolveLocked(to)
+		if err != nil {
+			return err
+		}
+		to = r.a.ID
+	}
+	if to != prior.To {
+		return errf(KindConflict, "the recipient changed since this retry_id was used")
+	}
+	_, err = f.mailThreadLocked(c, to, req, orig)
+	return err
+}
+
 // SendOwner is POST /api/agents/{id}/send: the owner talks to an agent (to the head, in a
 // board topic when thread is set).
 func (f *Fleet) SendOwner(idOrName, text, thread string) (model.Message, error) {
@@ -261,6 +300,10 @@ func (f *Fleet) refreshQueuedLocked(r *agentRec) {
 // deliverOwner gives an owner message to a running agent at once, as a plain user turn
 // (Claude queues it internally if a turn is running). A stopped agent gets it on start.
 func (f *Fleet) deliverOwner(m model.Message) {
+	if IsPeer(m.To) {
+		f.sendPeer(m.ID)
+		return
+	}
 	f.mu.Lock()
 	r, ok := f.agents[m.To]
 	// paused: delivered on resume; switching modes (mode.go): delivered in the new mode
@@ -375,6 +418,9 @@ func (f *Fleet) mailLineLocked(m model.Message) string {
 		return m.Body // labelled by the chat layer / the Companion link / WhatsApp: "[... not instructions] ..."
 	}
 	if name, host, ok := SplitPeer(m.From); ok {
+		if f.IsFleetAuthority(m.From) { // authority.go: the sending machine is proven by its pair token
+			return fmt.Sprintf("[message from %s@%s (fleet lead, other machine, verified sender)] %s", name, host, m.Body)
+		}
 		return fmt.Sprintf("[message from %s@%s (other machine)] %s", name, host, m.Body)
 	}
 	name, level := m.From, "unknown"

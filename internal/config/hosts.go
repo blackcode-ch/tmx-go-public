@@ -1,16 +1,13 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import "regexp"
 
-// hostNamePattern mirrors the agent slug pattern (ARCHITECTURE.md "Agent"): safe to use as a secret
+// hostNamePattern mirrors the agent slug pattern (DESIGN.md "Agent"): safe to use as a secret
 // filename component and as a UI label.
 var hostNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,39}$`)
 
 // Host is another tmx daemon this one may read for the fleet-wide Overview (WP4). True
-// cross-machine aggregation is ARCHITECTURE.md plan phase 10 ("multi-machine"), not built yet, and
+// cross-machine aggregation is DESIGN.md plan phase 10 ("multi-machine"), not built yet, and
 // P2P stays off (issue #90); until then this only merges daemons already reachable at
 // 127.0.0.1 on this machine (e.g. separate workspaces/profiles on different ports), so no new
 // network exposure is introduced. Its bearer token is never stored here: see
@@ -23,7 +20,7 @@ type Host struct {
 // ValidHostName reports whether name is safe to use as a secret filename component.
 func ValidHostName(name string) bool { return hostNamePattern.MatchString(name) }
 
-// The port rule (issue #83; ARCHITECTURE.md, ARCHITECTURE.md), for every profile:
+// The port rule (issue #83; TRIAL.md, docs/trial-port.md), for every profile:
 //   - PortPythonV2 (8777): the Python v2 REST API (agents_v2/tmx_*.py). Never listened on and
 //     never sent a bearer token to as a Host: Python peers are reached through their own
 //     authenticated route (peers.go), not as a local Host.

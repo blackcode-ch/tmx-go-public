@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // How the UI reaches the daemon. One interface, three implementations:
 //
 //  - http:   fetch + WebSocket. Browser mode (the daemon serves the page; token from #token=)
@@ -45,9 +42,10 @@ export function agentTerminalPath(agentId: string): string {
   return `/api/agents/${encodeURIComponent(agentId)}/terminal`;
 }
 
-/** The socket of a harness's sign-in (the AI accounts page's Connect). */
-export function loginTerminalPath(harness: string): string {
-  return `/api/accounts/${encodeURIComponent(harness)}/login/terminal`;
+/** The socket of a harness account's sign-in (the AI accounts page's Connect). */
+export function loginTerminalPath(harness: string, account?: string): string {
+  const q = account && account !== "default" ? `?account=${encodeURIComponent(account)}` : "";
+  return `/api/accounts/${encodeURIComponent(harness)}/login/terminal${q}`;
 }
 
 /** The agent whose terminal a socket path names, or null for any other terminal. */

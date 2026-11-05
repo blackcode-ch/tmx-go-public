@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -10,7 +7,7 @@ import (
 )
 
 // External mail: messages from outside this machine (chats with other people's tmx, see
-// internal/chat and ARCHITECTURE.md "Chats") reach a local agent as ordinary mail whose sender is
+// internal/chat and DESIGN.md "Chats") reach a local agent as ordinary mail whose sender is
 // "chat:<chat id>" and whose body is already labelled as external. It is delivered like
 // agent mail (when the agent is idle) and never carries any right: the agent reads it as a
 // user turn and every tool call still goes through approvals and the guard.

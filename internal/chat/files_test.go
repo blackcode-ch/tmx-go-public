@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -164,7 +161,7 @@ func TestMentions(t *testing.T) {
 		}
 		return false
 	})
-	m, err := alex.svc.Send(owner, gid, "@Bo can you book it? @cleo/helper check the trains. mail me at x@bo.example")
+	m, err := alex.svc.Send(owner, gid, "@Bo can you book it? @cleo/helper check the trains. mail me at x@bo.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +208,7 @@ func TestParseMentions(t *testing.T) {
 		"@alex hi":                 "a/",
 		"hi @Alex Weber!":          "aw/",
 		"@Alex/head and @alex":     "a/head,a/",
-		"mail@alex.example":        "",
+		"mail@alex.com":            "",
 		"@Alexander":               "",
 		"(@Alex)":                  "a/",
 		"@Alex @Alex @Alex":        "a/",

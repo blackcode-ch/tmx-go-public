@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Fake fleet for ?mock=1. Realistic enough to design against and to screenshot.
 import { derivePolicy } from "../profiles";
 import type { Agent, Approval, DiscoveredAgent, GuardHold, Message, Policy, Profile, Project, SafetyInfo, Thread, ThreadEntry, TimelineEntry } from "../types";
@@ -178,7 +175,7 @@ export interface MockWorld {
   approvals: Map<string, Approval>;
   messages: Message[];
   timelines: Map<string, TimelineBuilder>;
-  /** the board's threads (ARCHITECTURE.md "Board") */
+  /** the board's threads (DESIGN.md "Board") */
   threads: Thread[];
   /** the threads' logs */
   entries: ThreadEntry[];
@@ -464,7 +461,7 @@ export function buildWorld(scenario: string): MockWorld {
   entry("e1b0c2d3e4f5a603", "p-pbl7n2c4ka", "decision", "Invoices link to Stripe-hosted pages; no PDF renderer of our own.", "billing-lead", 22);
   entry("e1b0c2d3e4f5a604", "t-landing", "decision", "One page: hero, three feature cards, pricing, email sign-up. No stock photos.", "owner", 79);
   entry("e1b0c2d3e4f5a605", "t-landing", "info", "Tone: plain, short sentences, no superlatives.", "head", 78);
-  entry("e1b0c2d3e4f5a606", "p-pdc5v7x9za", "link", "Search options compared by docs-lead", "docs-lead", 20, { link: "ARCHITECTURE.md" });
+  entry("e1b0c2d3e4f5a606", "p-pdc5v7x9za", "link", "Search options compared by docs-lead", "docs-lead", 20, { link: "docs/search-options.md" });
   entry("e1b0c2d3e4f5a607", "t-hiring", "decision", "Hire one senior Go engineer, remote, CET overlap.", "owner", 33);
   entry("e1b0c2d3e4f5a608", "t-hiring", "decision", "Hire two: one Go, one front-end.", "owner", 12, { corrects: "e1b0c2d3e4f5a607" });
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package skill holds SKILL.md: how AI agents (Claude Code, Codex, ...) set up tmx on a
 // server, join chats and use the CLI. `tmx skill` prints it, `tmx skill install` writes it
 // as a Claude Code skill, and the daemon serves it at GET /skill.md.

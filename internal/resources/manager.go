@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package resources is the daemon's resource control (ARCHITECTURE.md "Resources"): it samples
+// Package resources is the daemon's resource control (DESIGN.md "Resources"): it samples
 // every agent's process tree and the machine every few seconds, keeps the day's write
 // accounting, admits starts for the launch queue, and brakes (pauses) an agent's tree that
 // breaks its daily write budget or memory cap, or writes the most while the disk is

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -32,6 +29,8 @@ const (
 func (s *Server) safetyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/safety", s.ownerOnly(s.getSafety))
 	mux.HandleFunc("PUT /api/safety/guard", s.ownerOnly(s.putGuard))
+	mux.HandleFunc("DELETE /api/safety/guard/always/{id}", s.ownerOnly(s.revokeAlways))
+	mux.HandleFunc("PUT /api/safety/guard/rules/{id}", s.ownerOnly(s.putRuleState))
 	mux.HandleFunc("GET /api/gate", s.ownerOnly(s.getGate))
 	mux.HandleFunc("PUT /api/gate", s.ownerOnly(s.putGate))
 	mux.HandleFunc("PUT /api/gate/grace", s.ownerOnly(s.putGrace))
@@ -42,16 +41,68 @@ func (s *Server) safetyRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/guard/holds", s.agentOnly(s.postHold))
 	mux.HandleFunc("GET /api/guard/holds/{id}", s.agentOnly(s.waitHold))
 	mux.HandleFunc("DELETE /api/guard/holds/{id}", s.agentOnly(s.cancelHold))
+	mux.HandleFunc("POST /api/guard/holds/{id}/withdraw", s.agentOnly(s.withdrawHold))
+	mux.HandleFunc("POST /api/guard/holds/withdraw", s.agentOnly(s.withdrawHolds))
 	mux.HandleFunc("POST /api/guard/blocks", s.agentOnly(s.postBlock))
 	mux.HandleFunc("GET /api/guard/policy", s.agentOnly(s.getGuardPolicy))
 }
 
 // getGuardPolicy exposes only the host browser capability to authenticated hooks.
 // Mutations remain on the owner-only, owner-gated guard settings route.
+// It also gives the owner's rule switches, which the hook applies to each call.
 func (s *Server) getGuardPolicy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
-		AllowBrowserAutomation bool `json:"allow_browser_automation"`
-	}{s.f.GuardSettings().AllowBrowserAutomation})
+		AllowBrowserAutomation bool                     `json:"allow_browser_automation"`
+		States                 map[string]guard.Outcome `json:"states"`
+	}{s.f.GuardSettings().AllowBrowserAutomation, s.f.GuardStates()})
+}
+
+// RuleView is one row of Settings > Safety > Rules: the rule, its current state and whether it
+// has a switch (fixed carve-outs do not).
+type RuleView struct {
+	guard.Rule
+	State      guard.Outcome `json:"state"`
+	Switchable bool          `json:"switchable"`
+}
+
+func (s *Server) ruleViews() []RuleView {
+	states := s.f.GuardStates()
+	var out []RuleView
+	for _, r := range guard.Rules() {
+		out = append(out, RuleView{Rule: r, State: states[r.ID], Switchable: true})
+	}
+	for _, r := range guard.FixedRules() {
+		out = append(out, RuleView{Rule: r, State: r.Outcome})
+	}
+	return out
+}
+
+// putRuleState: PUT /api/safety/guard/rules/{id} {state}. The owner only, with a fresh proof
+// every time (the PIN on a phone, at the machine the PIN or Windows Hello), whichever way it goes.
+func (s *Server) putRuleState(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		State guard.Outcome `json:"state"`
+	}
+	if !decode(w, r, &req) {
+		return
+	}
+	id := r.PathValue("id")
+	rule, ok := guard.RuleByID(id)
+	if !ok || rule.Fixed || !guard.ValidState(req.State) {
+		writeError(w, http.StatusBadRequest, "unknown or fixed rule, or a state other than block, hold or allow")
+		return
+	}
+	if !s.requireOwner(w, r, gate.Action{Reason: "set the guard rule “" + rule.Name + "” to " + string(req.State),
+		Key: actionKey(r, map[string]any{"id": id, "state": req.State}), Always: true, Fresh: true}) {
+		return
+	}
+	c, _ := caller(r)
+	out, err := s.f.SetRuleState(c, id, req.State)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"guard": out, "rules": s.ruleViews()})
 }
 
 func (s *Server) agentOnly(h http.HandlerFunc) http.HandlerFunc {
@@ -142,7 +193,7 @@ func short(s string, n int) string {
 // SafetyInfo is GET /api/safety.
 type SafetyInfo struct {
 	Guard  guard.Settings `json:"guard"`
-	Rules  []guard.Rule   `json:"rules"`
+	Rules  []RuleView     `json:"rules"`
 	Gate   gate.Status    `json:"gate"`
 	Levels []model.Level  `json:"levels"`
 }
@@ -154,6 +205,7 @@ func (s *Server) gateStatus(r *http.Request) gate.Status {
 	st := s.gate.StatusForSession(gateCaller(r), r.Header.Get(GraceHeader))
 	if !localHost(r.Host) {
 		st.Method, st.MethodLabel, st.GraceUntil = "pin", "Your owner PIN", 0
+		st.HelloShortcut = false // Windows Hello is offered only at the machine itself (#187)
 		st.Available = s.pin != nil && s.pin.IsSet() && s.pin.Err() == nil && s.devices != nil
 		st.Unavailable = ""
 		if !st.Available {
@@ -164,7 +216,7 @@ func (s *Server) gateStatus(r *http.Request) gate.Status {
 }
 
 func (s *Server) getSafety(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, SafetyInfo{Guard: s.f.GuardSettings(), Rules: guard.Rules(), Gate: s.gateStatus(r),
+	writeJSON(w, http.StatusOK, SafetyInfo{Guard: s.f.GuardSettings(), Rules: s.ruleViews(), Gate: s.gateStatus(r),
 		Levels: []model.Level{model.LevelHead, model.LevelLead, model.LevelWorker}})
 }
 
@@ -362,6 +414,29 @@ func (s *Server) cancelHold(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ap)
 }
 
+// withdrawHold: the agent takes back one of its own pending holds (it won't run the command).
+func (s *Server) withdrawHold(w http.ResponseWriter, r *http.Request) {
+	c, _ := caller(r)
+	ap, err := s.f.WithdrawHold(c, r.PathValue("id"))
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ap)
+}
+
+// withdrawHolds: the agent takes back all its pending holds.
+func (s *Server) withdrawHolds(w http.ResponseWriter, r *http.Request) {
+	c, _ := caller(r)
+	out := []model.Approval{}
+	for _, ap := range s.f.PendingHolds(c) {
+		if done, err := s.f.WithdrawHold(c, ap.ID); err == nil {
+			out = append(out, done)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) postBlock(w http.ResponseWriter, r *http.Request) {
 	var req fleet.HoldRequest
 	if !decode(w, r, &req) {
@@ -381,7 +456,7 @@ func (s *Server) gateDecide(w http.ResponseWriter, r *http.Request, id string, r
 	if err == nil && ap.Tool == fleet.ToolProcessStart && req.Decision == "allow" {
 		return s.RequireOwner(w, r, "start the agent's requested command", map[string]any{"id": id, "req": req})
 	}
-	if err != nil || ap.Kind != model.ApprovalGuard || req.Decision != "allow" {
+	if err != nil || ap.Kind != model.ApprovalGuard || (req.Decision != "allow" && req.Decision != fleet.DecisionAllowAlways) {
 		return true
 	}
 	var info model.GuardHold
@@ -394,7 +469,39 @@ func (s *Server) gateDecide(w http.ResponseWriter, r *http.Request, id string, r
 	if a, err := s.f.Agent(ap.AgentID); err == nil {
 		name = a.Name
 	}
+	// The owner, 3 Nov 22:30: no PIN to allow something already allowed once (same rule, tool and
+	// exact command). The card still waits for the owner's own tap; only the proof is skipped.
+	if req.Decision == "allow" && s.f.AllowedBefore(ap) {
+		return true
+	}
+	if req.Decision == fleet.DecisionAllowAlways {
+		// A standing allow outlives this hold: always a fresh proof (Windows Hello or the PIN),
+		// even with the gate off or inside the grace window. Only the owner's own session gets here.
+		who := "any agent"
+		if req.Scope == "agent" {
+			who = "agents like " + name
+		}
+		return s.requireOwner(w, r, gate.Action{Reason: "always allow “" + short(info.Command, 70) + "” for " + who,
+			Key: actionKey(r, map[string]any{"id": id, "req": req}), Always: true, Fresh: true})
+	}
 	return s.RequireOwner(w, r, "allow “"+short(what, 70)+"” for "+name, map[string]any{"id": id, "req": req})
+}
+
+// revokeAlways: DELETE /api/safety/guard/always/{id} ends one standing allow. Like setting one,
+// it needs a fresh owner proof.
+func (s *Server) revokeAlways(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !s.requireOwner(w, r, gate.Action{Reason: "revoke an Allow always of the guard",
+		Key: actionKey(r, map[string]string{"id": id}), Always: true, Fresh: true}) {
+		return
+	}
+	c, _ := caller(r)
+	out, err := s.f.RevokeAlways(c, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // gatePolicy asks the gate when a level newly gets bypassPermissions.

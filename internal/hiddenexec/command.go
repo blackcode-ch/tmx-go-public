@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package hiddenexec is the single entry point for child process construction.
 // Windows children never allocate a console window; other platforms retain exec semantics.
 package hiddenexec

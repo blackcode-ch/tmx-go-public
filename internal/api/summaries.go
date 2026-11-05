@@ -1,16 +1,14 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/summarize"
 )
 
-// Summaries of recordings (ARCHITECTURE.md "Summaries"). Reading a summary is like reading the
+// Summaries of recordings (DESIGN.md "Summaries"). Reading a summary is like reading the
 // recording: the owner and this machine's agents (MCP recording_summary); asking for a new one
 // and the settings are the owner's. Without the service every route answers 501.
 func (s *Server) summaryRoutes(mux *http.ServeMux) {
@@ -81,4 +79,29 @@ func (s *Server) putSummarySettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, st)
+}
+
+// POST /api/peer/summarize-local (the peer mux: a fleet peer's pair token) → summarize.PeerAnswer: a peer without
+// room for Ollama has this daemon's own local model write its summary (summaries.via_peer there,
+// summaries.serve_peers here). It is forwarded to this machine's loopback Ollama only.
+func (s *Server) peerSummarizeLocal(w http.ResponseWriter, r *http.Request) {
+	if s.sum == nil {
+		writeError(w, http.StatusNotFound, "this daemon makes no summaries")
+		return
+	}
+	var in summarize.PeerGenerate
+	if !decodeMax(w, r, &in, summarize.PeerMaxBody) {
+		return
+	}
+	text, err := s.sum.ServePeer(r.Context(), peerOf(r).name, in)
+	switch {
+	case errors.Is(err, summarize.ErrPeerForbidden):
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, summarize.ErrPeerInvalid):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeError(w, http.StatusBadGateway, err.Error())
+	default:
+		writeJSON(w, http.StatusOK, summarize.PeerAnswer{Response: text})
+	}
 }

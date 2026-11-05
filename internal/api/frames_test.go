@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -67,6 +64,18 @@ func TestRecordingFrames(t *testing.T) {
 	body, _ := json.Marshal(map[string]string{"data": base64.StdEncoding.EncodeToString(jpg)})
 	if s, b, _ := raw(t, "PUT", frames+"1500", d.OwnerToken, body, asJSON); s != 200 || !strings.Contains(string(b), "f-000001500.jpg") {
 		t.Fatalf("bridge frame: %d %s", s, b)
+	}
+	// a key moment (the screen changed): ?key=1, or {key: true} through the bridge; a retry replaces the JPEG
+	if s, b, _ := raw(t, "PUT", frames+"1500?key=1", d.OwnerToken, jpg, asJPEG); s != 200 || !strings.Contains(string(b), `"key":true`) {
+		t.Fatalf("key frame: %d %s", s, b)
+	}
+	body, _ = json.Marshal(map[string]any{"data": base64.StdEncoding.EncodeToString(jpg), "key": true})
+	if s, b, _ := raw(t, "PUT", frames+"0", d.OwnerToken, body, asJSON); s != 200 || !strings.Contains(string(b), `"key":true`) {
+		t.Fatalf("bridge key frame: %d %s", s, b)
+	}
+	var keyed model.Recording
+	if s := owner.do("GET", "/api/recordings/"+rec.ID, nil, &keyed); s != 200 || len(keyed.Frames) != 2 || !keyed.Frames[0].Key || !keyed.Frames[1].Key {
+		t.Fatalf("key frames in the recording: %d %+v", s, keyed.Frames)
 	}
 	// type and size
 	for _, c := range []struct {

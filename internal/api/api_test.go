@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -193,10 +190,10 @@ func TestProjectAgentAndApprovalRoutes(t *testing.T) {
 	}
 	lead := client{t: t, base: d.URL, token: d.AgentToken(t, "alpha-lead")}
 	var w model.Agent
-	if s := lead.do("POST", "/api/agents", map[string]string{"name": "w1"}, &w); s != 201 || w.Model != "claude-sonnet-5-5" {
+	if s := lead.do("POST", "/api/agents", map[string]string{"name": "w1"}, &w); s != 201 || w.Model != "claude-sonnet-5" {
 		t.Fatalf("lead launch: %d %+v", s, w)
 	}
-	if s := lead.do("POST", "/api/agents", map[string]string{"name": "w2", "model": "claude-opus-5-5"}, nil); s != 403 {
+	if s := lead.do("POST", "/api/agents", map[string]string{"name": "w2", "model": "unsupported-model"}, nil); s != 403 {
 		t.Fatalf("wrong model: %d", s)
 	}
 	worker := client{t: t, base: d.URL, token: d.AgentToken(t, "w1")}

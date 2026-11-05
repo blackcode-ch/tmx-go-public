@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package whatsapp links the owner's own WhatsApp account to the daemon as a companion device,
 // the way WhatsApp Web and Desktop are linked (a QR code scanned on the phone, or a pairing
-// code typed on it), and keeps its chats in tmx's database (ARCHITECTURE.md "WhatsApp").
+// code typed on it), and keeps its chats in tmx's database (DESIGN.md "WhatsApp").
 //
 // The connection is go.mau.fi/whatsmeow (MPL-2.0) behind the small Client interface below, so
 // the service and its tests never touch WhatsApp itself: meow.go adapts whatsmeow, watest has a

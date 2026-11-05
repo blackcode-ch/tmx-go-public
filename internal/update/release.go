@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package update
 
 import (
@@ -28,6 +25,22 @@ func VerifyRelease(keys []config.FleetKey, require []string, repo, tag string, s
 		return err
 	}
 	return verifySums(FleetSignatureContext, repo, tag, sums, sig, ks)
+}
+
+// SignExtraLine is SignReleaseLine for an on-demand extra (FleetExtraSignatureContext), such as the
+// voice engine's release: "<id>:ed25519:<base64>" over repo, tag and these SHA256SUMS bytes.
+func SignExtraLine(id string, key ed25519.PrivateKey, repo, tag string, sums []byte) string {
+	sig := ed25519.Sign(key, signatureMessage(FleetExtraSignatureContext, repo, tag, sums))
+	return id + ":" + config.KeyEd25519 + ":" + base64.StdEncoding.EncodeToString(sig)
+}
+
+// VerifyExtra checks an extra's SHA256SUMS.sig exactly as Updater.VerifySums does on a daemon.
+func VerifyExtra(keys []config.FleetKey, require []string, repo, tag string, sums, sig []byte) error {
+	ks, err := newKeySet(keys, require)
+	if err != nil {
+		return err
+	}
+	return verifySums(FleetExtraSignatureContext, repo, tag, sums, sig, ks)
 }
 
 // KeysOK reports whether the pinned key set and require policy are valid, i.e. updates are not

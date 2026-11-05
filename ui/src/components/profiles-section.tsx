@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Settings → Profiles: the agent types, each opening the profile editor.
 import { useMemo } from "react";
 import { ChevronRight, Eye, Plus } from "lucide-react";
@@ -14,7 +11,7 @@ import { useStore } from "@/lib/store";
 import type { Profile } from "@/lib/types";
 
 function Tag({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex h-[18px] items-center rounded-[5px] bg-muted px-1.5 text-2xs font-medium text-muted-foreground">{children}</span>;
+  return <span className="inline-flex h-[1.125rem] items-center rounded-[5px] bg-muted px-1.5 text-2xs font-medium text-muted-foreground">{children}</span>;
 }
 
 function ProfileRow({ p, users }: { p: Profile; users: number }) {
@@ -26,7 +23,7 @@ function ProfileRow({ p, users }: { p: Profile; users: number }) {
     >
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <span className="truncate text-[13px] font-semibold">{p.name}</span>
+          <span className="truncate text-[0.8125rem] font-semibold">{p.name}</span>
           <span className="font-mono text-2xs text-subtle-foreground">{p.slug}</span>
           {p.built_in && <Tag>Built-in</Tag>}
           {p.modified && <Tag>Edited</Tag>}
@@ -41,11 +38,11 @@ function ProfileRow({ p, users }: { p: Profile; users: number }) {
       </div>
       <div className="hidden shrink-0 items-center gap-3 text-xs text-muted-foreground sm:flex">
         <LevelBadge level={p.level} />
-        <span className="w-[92px] truncate" title={p.model}>
+        <span className="w-[5.75rem] truncate" title={p.model}>
           {modelName(p.model)}
           {extra > 0 && <span className="text-subtle-foreground"> +{extra}</span>}
         </span>
-        <span className="tabular w-[64px] text-right">{users ? plural(users, "agent") : "unused"}</span>
+        <span className="tabular w-[4rem] text-right">{users ? plural(users, "agent") : "unused"}</span>
       </div>
       <ChevronRight className="size-4 shrink-0 text-subtle-foreground transition-transform duration-150 group-hover:translate-x-0.5" />
     </a>

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Voice in the mock daemon: /api/voice, /api/transcribe and /api/transcripts. Ready by default
 // (engine and Base model downloaded); add &voice=off for a machine where voice is not set up yet
 // (Set up then simulates the downloads), &voice=none for a daemon without voice (older release).

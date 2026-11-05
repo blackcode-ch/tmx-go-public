@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -12,7 +9,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// tmx mode NAME [chat|terminal] [--start]: show or switch the mode an agent runs in (ARCHITECTURE.md
+// tmx mode NAME [chat|terminal] [--start]: show or switch the mode an agent runs in (DESIGN.md
 // "Switching live"). terminal is the harness's own screen (screen and tui say the same).
 func cmdMode(e *env, args []string) error {
 	fs := newFlags("mode")

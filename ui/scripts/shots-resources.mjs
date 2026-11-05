@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Screenshots of the resource-control screens (mock data): node scripts/shots-resources.mjs [filter]
 // Same harness as shots.mjs.
 // Serves ui/dist (only) on 127.0.0.1, drives Playwright's bundled Chromium headless, writes

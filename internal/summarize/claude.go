@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package summarize
 
 import (
@@ -51,6 +48,7 @@ type ask struct {
 	frames int    // frames it may read; 0 = no tools at all
 	model  string
 	paths  []string // the frames' paths relative to dir (the local model gets them as images)
+	clinic bool     // patient data: local models only
 }
 
 // turns is the run's --max-turns: one per frame (Claude may read several at once), and a few
@@ -129,11 +127,48 @@ func parseResult(out []byte) (result, bool) {
 
 var unknownOptRx = regexp.MustCompile(`unknown option '(--[a-z-]+)'`)
 
-// run runs claude once and returns its answer's text.
+// run writes one answer with the model that fits (the owner, 3 Nov: "we care only about performance"): the cheap
+// cloud model by default, and a configured local model (summaries.local_url or via_peer) when the cloud model is not
+// available; with summaries.backend "local" the local model first and the cloud model when there is no local route. A clinic recording (patient data, nLPD) is the one exception:
+// local models only, and without one it fails with the reason.
 func (s *Service) run(ctx context.Context, a ask) (string, error) {
-	if s.local() { // the default: client recordings are summarised on this machine only (local.go)
-		return s.runLocal(ctx, a)
+	if a.clinic {
+		text, err := s.runLocal(ctx, a)
+		if err != nil {
+			return "", fmt.Errorf("a clinic recording is summarized by local models only (patient data, nLPD), and %w", err)
+		}
+		s.wrote(s.localModel())
+		return text, nil
 	}
+	if s.local() {
+		text, err := s.runLocal(ctx, a)
+		if err == nil {
+			s.wrote(s.localModel())
+			return text, nil
+		}
+		s.log.Info("summaries: no local model, the cloud model writes it", "err", err)
+		text, cerr := s.runClaude(ctx, a)
+		if cerr != nil {
+			return "", fmt.Errorf("%v; and the cloud model: %w", err, cerr)
+		}
+		return text, nil
+	}
+	text, err := s.runClaude(ctx, a)
+	if err == nil || !s.localConfigured() {
+		return text, err
+	}
+	s.log.Info("summaries: the cloud model is not available, the local model writes it", "err", err)
+	text, lerr := s.runLocal(ctx, a)
+	if lerr != nil {
+		return "", fmt.Errorf("%v; and the local model: %w", err, lerr)
+	}
+	s.wrote(s.localModel())
+	return text, nil
+}
+
+// runClaude runs claude once and returns its answer's text.
+func (s *Service) runClaude(ctx context.Context, a ask) (string, error) {
+	s.wrote(a.model)
 	path, err := claude.LookPath(runner.Spec{Command: s.o.Claude})
 	if err != nil {
 		return "", fmt.Errorf("Claude Code is needed to write summaries: %w (or set config.json claude_command)", err)
@@ -240,7 +275,7 @@ func (s *Service) write(ctx context.Context, r model.Recording, in input, m stri
 	frames := len(in.frames)
 	parts, dropped := split(in.lines, r.DurationMS, MaxChars, MaxParts)
 	if len(parts) <= 1 && dropped < 0 {
-		text, err := s.run(ctx, ask{dir: r.Dir, system: systemPrompt(frames), prompt: singlePrompt(r, in), frames: frames, model: m, paths: framePaths(in)})
+		text, err := s.run(ctx, ask{dir: r.Dir, clinic: r.Clinic(), system: systemPrompt(frames), prompt: singlePrompt(r, in), frames: frames, model: m, paths: framePaths(in)})
 		if err != nil {
 			return model.RecordingSummary{}, 1, err
 		}
@@ -249,7 +284,7 @@ func (s *Service) write(ctx context.Context, r model.Recording, in input, m stri
 	}
 	sums := make([]model.RecordingSummary, len(parts))
 	for i, c := range parts {
-		text, err := s.run(ctx, ask{dir: r.Dir, system: partSystemPrompt, prompt: partPrompt(r, in, c, i, len(parts)), model: m})
+		text, err := s.run(ctx, ask{dir: r.Dir, clinic: r.Clinic(), system: partSystemPrompt, prompt: partPrompt(r, in, c, i, len(parts)), model: m})
 		if err == nil {
 			sums[i], err = parseAnswer(text)
 		}
@@ -257,7 +292,7 @@ func (s *Service) write(ctx context.Context, r model.Recording, in input, m stri
 			return model.RecordingSummary{}, len(parts), fmt.Errorf("part %d of %d: %w", i+1, len(parts), err)
 		}
 	}
-	text, err := s.run(ctx, ask{dir: r.Dir, system: systemPrompt(frames), prompt: combinePrompt(r, in, parts, sums, dropped), frames: frames, model: m, paths: framePaths(in)})
+	text, err := s.run(ctx, ask{dir: r.Dir, clinic: r.Clinic(), system: systemPrompt(frames), prompt: combinePrompt(r, in, parts, sums, dropped), frames: frames, model: m, paths: framePaths(in)})
 	if err != nil {
 		return model.RecordingSummary{}, len(parts), fmt.Errorf("combining the %d parts: %w", len(parts), err)
 	}

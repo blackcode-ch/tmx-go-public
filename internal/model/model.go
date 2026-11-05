@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package model holds the types shared by the daemon, the API, the CLI and (mirrored in
-// ui/src/lib/types.ts) the UI. JSON names are the contract; see ARCHITECTURE.md.
+// ui/src/lib/types.ts) the UI. JSON names are the contract; see DESIGN.md.
 package model
 
 import (
@@ -34,6 +31,7 @@ const (
 	HarnessCodex    Harness = "codex"
 	HarnessOpenCode Harness = "opencode"
 	HarnessPi       Harness = "pi"
+	HarnessGemini   Harness = "gemini"
 )
 
 type Mode string
@@ -53,7 +51,7 @@ const (
 	StateStopped  AgentState = "stopped"
 	StateExited   AgentState = "exited"
 	StateError    AgentState = "error"
-	// Resource control (ARCHITECTURE.md "Resources"):
+	// Resource control (DESIGN.md "Resources"):
 	StateQueued AgentState = "queued" // waits for capacity (max agents, free RAM); starts in order
 	StatePaused AgentState = "paused" // its process tree is suspended by a brake; PausedReason says why
 )
@@ -66,13 +64,16 @@ const Owner = "owner"
 const CompanionParty = "companion"
 
 type Agent struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	ProjectID      string     `json:"project_id,omitempty"`
-	ParentID       string     `json:"parent_id,omitempty"`
-	Level          Level      `json:"level"`
-	Profile        string     `json:"profile"` // profile slug; "" in old rows = the built-in of the level
-	Harness        Harness    `json:"harness"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	ProjectID string  `json:"project_id,omitempty"`
+	ParentID  string  `json:"parent_id,omitempty"`
+	Level     Level   `json:"level"`
+	Profile   string  `json:"profile"` // profile slug; "" in old rows = the built-in of the level
+	Harness   Harness `json:"harness"`
+	// Account is the harness account the agent runs as (internal/accounts; "" = the
+	// harness's usual home, as before there were several).
+	Account        string     `json:"account,omitempty"`
 	Mode           Mode       `json:"mode"`
 	Model          string     `json:"model"`
 	Cwd            string     `json:"cwd"`
@@ -98,7 +99,7 @@ type Agent struct {
 	PausedReason string `json:"paused_reason,omitempty"` // state paused: write_budget | memory | disk
 	PausedDetail string `json:"paused_detail,omitempty"` // state paused: a sentence for the owner
 	PausedAt     int64  `json:"paused_at,omitempty"`
-	// Live mode switch (ARCHITECTURE.md "Switching live"); kept in memory, not in the store, so a
+	// Live mode switch (DESIGN.md "Switching live"); kept in memory, not in the store, so a
 	// daemon restart brings the agent back in the mode it was launched in.
 	HomeMode    Mode `json:"home_mode,omitempty"`    // set while switched: the mode it was launched in
 	PendingMode Mode `json:"pending_mode,omitempty"` // it switches to this mode when its current turn ends
@@ -137,7 +138,7 @@ type Project struct {
 	ProgressRun       string        `json:"progress_run,omitempty"`
 }
 
-// Progress tracking (ARCHITECTURE.md "Progress"): a checklist-backed percent complete per project,
+// Progress tracking (DESIGN.md "Progress"): a checklist-backed percent complete per project,
 // stored with an optimistic version so two writers never silently clobber each other, plus
 // enough recent samples (kept by the store) to derive a conservative ETA. Mirrors the Python
 // reference contract (ratelimits/tmx/src/tmx/progress.py) field for field.
@@ -525,7 +526,7 @@ const (
 	ApprovalGuard      ApprovalKind = "guard" // a tool call the dangerous-command guard held; Input is a GuardHold
 	// ApprovalBrake: an agent was paused by a resource brake; decisions resume | raise | deny.
 	ApprovalBrake ApprovalKind = "brake"
-	// ApprovalCompanion: about a task for Companion (ARCHITECTURE.md "Companion"). Tool
+	// ApprovalCompanion: about a task for Companion (DESIGN.md "Companion"). Tool
 	// ToolCompanionTask: an agent wants to hand a task over (allow | deny; Input is a
 	// CompanionApprovalInput with the exact text). Tool ToolCompanionMessage: the head's
 	// message to Companion reads like it asks Companion to act (allow | deny; the exact text,
@@ -617,7 +618,7 @@ type TimelineEntry struct {
 	Input     json.RawMessage `json:"input,omitempty"`
 	IsError   bool            `json:"is_error,omitempty"`
 	Meta      map[string]any  `json:"meta,omitempty"`
-	// ThreadID: the board topic (ARCHITECTURE.md "Board") of a head's entry; "" = general.
+	// ThreadID: the board topic (DESIGN.md "Board") of a head's entry; "" = general.
 	ThreadID string `json:"thread_id,omitempty"`
 }
 
@@ -638,9 +639,9 @@ func DefaultPolicy() Policy {
 	return Policy{Levels: map[Level]LevelPolicy{
 		LevelHead: {Model: "claude-opus-5-5", AllowedModels: []string{"claude-opus-5-5"},
 			PermissionMode: "auto", CanCreateProjects: true, CanLaunch: []Level{LevelLead, LevelWorker}},
-		LevelLead: {Model: "claude-sonnet-5-5", AllowedModels: []string{"claude-sonnet-5-5"},
+		LevelLead: {Model: "claude-opus-5-5", AllowedModels: []string{"claude-opus-5-5", "claude-sonnet-5"},
 			PermissionMode: "auto", CanLaunch: []Level{LevelWorker}},
-		LevelWorker: {Model: "claude-sonnet-5-5", AllowedModels: []string{"claude-sonnet-5-5"},
+		LevelWorker: {Model: "claude-sonnet-5", AllowedModels: []string{"claude-sonnet-5", "claude-opus-5-5", "claude-haiku-4-5-20251001"},
 			PermissionMode: "auto"},
 	}}
 }

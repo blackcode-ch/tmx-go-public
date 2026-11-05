@@ -1,13 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package peertext prepares text that someone other than tmx and the owner wrote (another
 // person or their agent in a chat, a WhatsApp contact, Companion) for an agent to read.
 // tmx frames what it gives agents with its own labels at the start of a line ("[chat ...]",
 // "[message from ...]", "[WhatsApp ...]"); the other side must never be able to write a line
 // that looks like one, nor end a label early. So a value that goes inside a label (a name, a
 // chat or topic title, a file name) passes through Field, and a body through Quote, which
-// starts every line of it with Marker. ARCHITECTURE.md "Agents in chats".
+// starts every line of it with Marker. DESIGN.md "Agents in chats".
 package peertext
 
 import (

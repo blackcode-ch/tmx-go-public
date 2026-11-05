@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package screen keeps a virtual terminal (github.com/charmbracelet/x/vt) fed by an agent's
 // pty output, and reads states, menus and questions off it (Classify), a port of v2's
-// detect.py. See ARCHITECTURE.md "Screen detection".
+// detect.py. See DESIGN.md "Screen detection".
 package screen
 
 import (

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package term
 
 import (
@@ -61,7 +58,7 @@ func newGuardedTestProcess(t *testing.T) (*process, *blockingPty) {
 // newTestProcess is a Claude harness process around pt, with no program behind it.
 func newTestProcess(t *testing.T, pt pty.Pty) *process {
 	t.Helper()
-	p := &process{pty: pt, events: make(chan runner.Event, 64), ring: newRing(1 << 16), state: model.StateIdle}
+	p := &process{c: &localConduit{pt: pt}, events: make(chan runner.Event, 64), ring: newRing(1 << 16), state: model.StateIdle}
 	info, _ := harness.Get(model.HarnessClaude)
 	p.w = &watcher{p: p, info: info, scr: screen.New(80, 24, nil), gateAt: map[string]time.Time{}, ready: true}
 	t.Cleanup(p.w.scr.Close)
@@ -256,7 +253,7 @@ func (s stuckPty) Write(b []byte) (int, error) {
 // hold up the output reader through those answers (the screen's lock, and p.mu behind it).
 func TestQueryAnswersDoNotStallTheOutput(t *testing.T) {
 	pt := stuckPty{newBlockingPty()}
-	p := &process{pty: pt, events: make(chan runner.Event, 64), done: make(chan struct{})}
+	p := &process{c: &localConduit{pt: pt}, events: make(chan runner.Event, 64), done: make(chan struct{})}
 	info, _ := harness.Get(model.HarnessClaude)
 	p.w = newWatcher(p, info, runner.Spec{}, harness.Command{}, 80, 24)
 	t.Cleanup(func() {
@@ -277,7 +274,7 @@ func TestQueryAnswersDoNotStallTheOutput(t *testing.T) {
 // that write, or a shell not reading its input (a paste still going in) is never signalled.
 func TestStopDoesNotWaitOnABackedUpShell(t *testing.T) {
 	pt := stuckPty{newBlockingPty()}
-	p := &process{pty: pt, shell: true, cmd: &pty.Cmd{}, done: make(chan struct{})}
+	p := &process{c: &localConduit{pt: pt, cmd: &pty.Cmd{}}, shell: true, done: make(chan struct{})}
 	p.wmu.Lock() // the owner's paste, stuck inside pty.Write
 	t.Cleanup(func() {
 		close(pt.release)
@@ -369,7 +366,7 @@ func TestNonOwnerKeyRefusedWhileAMenuIsComing(t *testing.T) {
 func TestShellRefusesNonOwnerInput(t *testing.T) {
 	bp := newBlockingPty()
 	close(bp.release)
-	p := &process{pty: bp, shell: true}
+	p := &process{c: &localConduit{pt: bp}, shell: true}
 	for _, b := range []string{"echo pwned\r", "\x03", "\x1b"} {
 		if err := p.Write([]byte(b), false); err != runner.ErrOwnerOnly {
 			t.Fatalf("non-owner %q into a shell: err = %v, want ErrOwnerOnly", b, err)

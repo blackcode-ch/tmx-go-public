@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build windows && !gatesim
 
 package gate
@@ -13,7 +10,7 @@ package gate
 // (windows.security.credentials.ui.h, UserConsentVerifierInterop.h, asyncinfo.h, roapi.h; as
 // mirrored in github.com/microsoft/win32metadata), and the two parameterized IIDs were also
 // recomputed from their WinRT signatures (hello_test.go). Unverified on real hardware until
-// someone runs it on Windows 10/11 (ARCHITECTURE.md "Safety").
+// someone runs it on Windows 10/11 (DESIGN.md "Safety").
 //
 // The dialog: a process without a window (the daemon) gets the Hello dialog behind other
 // windows when it uses the plain IUserConsentVerifierStatics. Windows 11 (build 22000+) offers

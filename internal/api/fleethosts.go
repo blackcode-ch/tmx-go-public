@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -16,9 +13,10 @@ import (
 
 	"github.com/blackcode-ch/tmx-go/internal/config"
 	"github.com/blackcode-ch/tmx-go/internal/model"
+	"github.com/blackcode-ch/tmx-go/internal/peers"
 )
 
-// Fleet-wide Overview aggregation (WP4). True cross-machine aggregation is ARCHITECTURE.md plan
+// Fleet-wide Overview aggregation (WP4). True cross-machine aggregation is DESIGN.md plan
 // phase 10 ("multi-machine"), not built yet, and P2P stays off (issue #90): this merges only
 // daemons configured in config.json "hosts", read over the same 127.0.0.1 loopback every
 // daemon already listens on (api/server.go Listen) - no new network exposure. Everything a
@@ -27,8 +25,10 @@ import (
 // renders it as plain text.
 
 // hostTimeout bounds every call to another host so one unreachable daemon never stalls the
-// Overview.
-const hostTimeout = 2 * time.Second
+// Overview. A var, not a const, only so a test can widen it for its own slow CI environment
+// (transcribe_hosts_test.go, under go test -race: see that test's own comment) - production
+// code never changes it, and hostClient's own Timeout below is still fixed at this value.
+var hostTimeout = 2 * time.Second
 
 // hostClient never follows a redirect: a 3xx from a configured host would otherwise resend our
 // Authorization bearer token wherever that host points, off this machine's loopback if it
@@ -42,11 +42,18 @@ func (s *Server) fleetHostRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/fleet/hosts", s.ownerOnly(s.fleetHosts))
 }
 
-// HostSummary is one configured host's merged terminal/chat/resources/state, as far as it
-// answered within hostTimeout.
+// HostSummary is one configured host's or paired peer's merged terminal/chat/resources/state,
+// as far as it answered within hostTimeout. Kind tells the UI which: a "host" is a same-machine
+// loopback daemon (CPU/mem/disk/head activity, all precise - same process family, same model
+// package); a "peer" is a real other machine (DESIGN.md "Peer-to-peer network" / Python fleet
+// interop) - only what GET /api/sessions already carries (ONE FLEET, 3 Nov: Python peers are in
+// scope too, as full rows), so a peer row never has CPU/mem/disk and its Running/Paused/NeedsYou
+// counts are a best-effort read of each session's display state string, not the precise
+// model.AgentState enum a same-process host gets.
 type HostSummary struct {
+	Kind       string  `json:"kind"` // "host" or "peer"
 	Name       string  `json:"name"`
-	Port       int     `json:"port"`
+	Port       int     `json:"port,omitempty"` // "host" only
 	Reachable  bool    `json:"reachable"`
 	Error      string  `json:"error,omitempty"`
 	Machine    string  `json:"machine,omitempty"`
@@ -61,6 +68,10 @@ type HostSummary struct {
 	HeadName   string  `json:"head_name,omitempty"`
 	HeadState  string  `json:"head_state,omitempty"`
 	HeadLine   string  `json:"head_line,omitempty"` // latest head activity, clamped plain text
+	// Paired is a "peer" row only: whether this machine and that peer have each other's pair
+	// token (false = configured but never completed the handshake, e.g. a stale config.json
+	// entry) - it can be Reachable without being Paired, or the reverse if a token just rotated.
+	Paired bool `json:"paired,omitempty"`
 }
 
 func (s *Server) fleetHosts(w http.ResponseWriter, r *http.Request) {
@@ -79,11 +90,16 @@ func (s *Server) fleetHosts(w http.ResponseWriter, r *http.Request) {
 		}(i, h)
 	}
 	wg.Wait()
+	if s.peers != nil {
+		for _, st := range s.peers.Statuses() {
+			out = append(out, peerHostSummary(st))
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"hosts": out})
 }
 
 func (s *Server) fetchHost(ctx context.Context, h config.Host) HostSummary {
-	out := HostSummary{Name: h.Name, Port: h.Port}
+	out := HostSummary{Kind: "host", Name: h.Name, Port: h.Port}
 	if !config.ValidHostName(h.Name) {
 		out.Error = "invalid host name"
 		return out
@@ -144,6 +160,32 @@ func (s *Server) fetchHost(ctx context.Context, h config.Host) HostSummary {
 		out.CPU = res.Sample.Machine.CPU
 		out.MemFreeMB = res.Sample.Machine.MemFree / (1 << 20)
 		out.DiskFreeGB = float64(res.Sample.Machine.DiskFree) / (1 << 30)
+	}
+	return out
+}
+
+// peerHostSummary converts a Python-fleet-interop peer's last reading (peers.Client.Statuses,
+// polled every 10 s over the pair-token API, already clamped there) into the same shape a
+// loopback host answers in, so the Overview can show every machine - Go or Python - in one
+// list. Running/Paused/NeedsYou come from each session's display state string (Go peers answer
+// pythonState's mapping: "dialog" for waiting, "exited" for stopped/error; a real Python peer
+// answers its own detector's words) - a best-effort read, not the precise model.AgentState enum
+// a same-process host gets from its own Snapshot.
+func peerHostSummary(st peers.Status) HostSummary {
+	out := HostSummary{Kind: "peer", Name: st.Name, Machine: st.Name, Reachable: st.OK, Paired: st.Paired, Error: st.Error}
+	if !st.OK {
+		return out
+	}
+	out.Agents = len(st.Sessions)
+	for _, sess := range st.Sessions {
+		switch sess.State {
+		case "dialog":
+			out.NeedsYou++
+		case "paused":
+			out.Paused++
+		case "working", "starting", "waiting":
+			out.Running++
+		}
 	}
 	return out
 }

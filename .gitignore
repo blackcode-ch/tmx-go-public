@@ -18,6 +18,10 @@
 # Except the product icon: Wails makes the .icns/.ico from build/appicon.png (`make icon`).
 !/build/appicon.png
 !/ui/public/apple-touch-icon.png
+# And the PWA manifest icons (`make icon`): installability needs these served from the UI.
+!/ui/public/icon-192.png
+!/ui/public/icon-512.png
+!/ui/public/icon-512-maskable.png
 # And the README's hero screenshot (chosen by the owner to show as it is).
 !/docs/images/board.png
 

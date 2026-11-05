@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// A chat's board (ARCHITECTURE.md "Chat boards"): the chat's messages as cards on strings, one string
+// A chat's board (DESIGN.md "Chat boards"): the chat's messages as cards on strings, one string
 // per topic, on the same canvas as the head's board. Everyone in the chat shares the topics,
 // which message is on which, and the topics' logs; the order of the strings is yours.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -101,7 +98,7 @@ export function ChatBoardView({ chat, composer }: { chat: Chat; composer: TopicC
         {!board ? (
           <div className="flex flex-1 items-start gap-10 p-10">
             {!error ? (
-              [0, 1, 2].map((i) => <Skeleton key={i} className="h-72 w-[296px] rounded-xl" />)
+              [0, 1, 2].map((i) => <Skeleton key={i} className="h-72 w-[18.5rem] rounded-xl" />)
             ) : (
               <EmptyState icon={TriangleAlert} title="The board did not load" className="mx-auto w-full max-w-md">
                 {error}
@@ -376,7 +373,7 @@ function MessageCard({ card, selected, onOpen }: { card: ChatCard; selected: boo
         </div>
         <div className="mt-1.5 space-y-1">
           {card.messages.map((x) => (
-            <p key={x.id} className={cn("text-[13px] leading-snug [overflow-wrap:anywhere] whitespace-pre-line", card.messages.length > 1 ? "line-clamp-2" : "line-clamp-4")}>
+            <p key={x.id} className={cn("text-[0.8125rem] leading-snug [overflow-wrap:anywhere] whitespace-pre-line", card.messages.length > 1 ? "line-clamp-2" : "line-clamp-4")}>
               {plainText(x.body) || (x.files?.length ? "(attachment)" : "")}
             </p>
           ))}
@@ -521,14 +518,14 @@ function PanelMessage({ chat, m, first }: { chat: Chat; m: ChatMessage; first: b
       <PersonAvatar name={m.sender === "me" ? "You" : m.sender_name || "?"} className={cn(m.sender_agent && "ring-2 ring-brand/40 ring-offset-1 ring-offset-background")} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pb-0.5">
-          <span className="text-[13px] font-semibold">{senderName(m)}</span>
+          <span className="text-[0.8125rem] font-semibold">{senderName(m)}</span>
           <SenderBadge m={m} />
           <span className="tabular text-2xs text-subtle-foreground" title={absoluteTime(m.at)}>
             {clockTime(m.received_at || m.at)}
           </span>
           {m.sender === "me" && <DeliveryState m={m} />}
         </div>
-        {m.body.trim() && <Markdown text={withMentionLinks(chat, m)} className="text-[13.5px] leading-relaxed [overflow-wrap:anywhere]" />}
+        {m.body.trim() && <Markdown text={withMentionLinks(chat, m)} className="text-[0.8438rem] leading-relaxed [overflow-wrap:anywhere]" />}
         {m.files && m.files.length > 0 && <AttachmentList files={m.files.map(asAttached)} loadImage={loaderFor(chat.id)} className="justify-start pt-1.5" />}
       </div>
     </div>

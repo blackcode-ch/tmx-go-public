@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Headless check of src/lib/dictation-session.ts (#45: a dictation survives page switches):
 // node scripts/dictation-check.mjs [out-dir]
 // Bundles the module with Vite (sonner swapped for a shim that records toasts; lib/voice and
