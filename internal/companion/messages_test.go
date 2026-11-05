@@ -243,11 +243,14 @@ func TestHeadMessageThatActsWaitsForOwner(t *testing.T) {
 	}
 
 	// Outward words alone are everyday chat: no approval (Companion's own gate guards sending).
-	chat, err := d.Companion.SendHeadMessage(head, "Did you send the contract to the client?", "")
+	// Use an independent service: this allowed chat may send before cancellation, and
+	// must not change the send count used below to check denial of the money request.
+	chatDaemon, _ := connected(t)
+	chat, err := chatDaemon.Companion.SendHeadMessage(chatDaemon.Fleet.HeadID(), "Did you send the contract to the client?", "")
 	if err != nil || chat.Effects != model.EffectsOutward || chat.State != model.CompanionQueued || chat.ApprovalID != "" {
 		t.Fatalf("outward chat: %+v %v", chat, err)
 	}
-	if _, err := d.Companion.Cancel(chat.ID, ""); err != nil {
+	if _, err := chatDaemon.Companion.Cancel(chat.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 

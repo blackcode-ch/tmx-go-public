@@ -141,15 +141,8 @@ func newHarness(t *testing.T, g *fakeGitHub, pub, version, exe, goos string, des
 		GH: func() string { return "" },
 	})
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	t.Cleanup(func() {
-		cancel()
-		<-done // Stop writes before TempDir cleanup removes the staged binary.
-	})
-	go func() {
-		defer close(done)
-		h.u.Run(ctx)
-	}()
+	t.Cleanup(cancel)
+	go h.u.Run(ctx)
 	return h
 }
 

@@ -117,6 +117,9 @@ func (s *Server) companionRoutes(mux *http.ServeMux) {
 	l := func(h http.HandlerFunc) http.HandlerFunc { return on(s.companionOnly(h)) }
 	mux.HandleFunc("GET "+linkPrefix+"fleet", l(s.linkFleet))
 	mux.HandleFunc("GET "+linkPrefix+"needs", l(s.linkNeeds))
+	mux.HandleFunc("GET "+linkPrefix+"health", l(s.linkHealth))
+	mux.HandleFunc("GET "+linkPrefix+"projects", l(s.linkProjects))
+	mux.HandleFunc("GET "+linkPrefix+"turns", l(s.linkTurns))
 	mux.HandleFunc("GET "+linkPrefix+"chats", l(s.linkChats))
 	mux.HandleFunc("GET "+linkPrefix+"chats/{id}/messages", l(s.linkChatMessages))
 	mux.HandleFunc("POST "+linkPrefix+"message", l(s.linkMessage))

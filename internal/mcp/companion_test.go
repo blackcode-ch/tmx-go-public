@@ -143,7 +143,7 @@ func TestCompanionMode(t *testing.T) {
 	for _, tl := range res.Tools {
 		names = append(names, tl.Name)
 	}
-	if got := strings.Join(sorted(names), ","); got != "tmx_chat_read,tmx_chats,tmx_fleet,tmx_message_head,tmx_needs_you" {
+	if got := strings.Join(sorted(names), ","); got != "tmx_chat_read,tmx_chats,tmx_fleet,tmx_health,tmx_message_head,tmx_needs_you,tmx_projects,tmx_your_turn" {
 		t.Fatalf("tools: %s", got)
 	}
 	// Without the token (not installed): a clear error, no request.
@@ -154,6 +154,11 @@ func TestCompanionMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := mustOK(t, cs, "tmx_fleet", nil)
+	for tool, field := range map[string]string{"tmx_health": "your_turn", "tmx_projects": "projects", "tmx_your_turn": "your_turn"} {
+		if result := mustOK(t, cs, tool, nil); !strings.HasPrefix(result, LinkPrefix) || !strings.Contains(result, `"`+field+`"`) {
+			t.Fatalf("%s: %s", tool, result)
+		}
+	}
 	if !strings.HasPrefix(out, LinkPrefix) || !strings.Contains(out, `"head": "head"`) {
 		t.Fatalf("fleet: %s", out)
 	}

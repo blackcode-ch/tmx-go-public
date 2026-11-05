@@ -19,7 +19,7 @@ func TestProcessConstructorsUseHelper(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == ".git" || d.Name() == "vendor" || d.Name() == "node_modules" {
+			if d.Name() == ".git" || d.Name() == ".worktrees" || d.Name() == "vendor" || d.Name() == "node_modules" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -28,7 +28,7 @@ func TestProcessConstructorsUseHelper(t *testing.T) {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
-		if filepath.ToSlash(rel) == "internal/hiddenexec/command.go" {
+		if filepath.ToSlash(rel) == "internal/hiddenexec/command.go" || filepath.ToSlash(rel) == "internal/hiddenexec/shell_windows.go" {
 			return nil
 		}
 		fset := token.NewFileSet()

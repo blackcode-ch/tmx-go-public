@@ -10,7 +10,6 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
-	s.messagePinRoutes(mux)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
 	mux.HandleFunc("GET /api/health", s.health)
