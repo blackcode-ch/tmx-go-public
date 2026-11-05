@@ -1,0 +1,76 @@
+# A CGO-enabled darwin/arm64 headless binary from the scrubbed snapshot, as an artifact (tmx-lead,
+# 4 Nov). A CGO_ENABLED=0 build (`make headless`, a cross-compile) leaves out the macOS owner gate
+# (internal/gate/auth_darwin.go needs cgo + LocalAuthentication); this one has it.
+#
+# TEST BUILD ONLY. The scrub rewrites a few identifiers in shipped code (fleet authority defaults,
+# the owner-only JSON tag, an MCP tool name, a project-card keyword), so this binary is NOT
+# wire-compatible with the private fleet build and must not join the fleet. Use it to check that the
+# owner gate builds and works on Apple Silicon.
+#
+# No signing here: the fleet release key never comes to public CI. The log prints the SHA-256; a
+# signer works from that hash on a private machine (`tmx release sign-extra`) if it is ever shipped.
+name: macOS CGO build
+on:
+  push:
+    branches: [fleet/main]   # mirror bot snapshots only: no artifact from outside PRs
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: macos-cgo-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  runner-lock:
+    # Same rule as ci.yml: GitHub-hosted runners only. The pattern is split so this line can't match
+    # itself; only grep rc 1 (ran, no match) passes, rc 0 (a match) and rc 2+ (no dir) fail.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: fail if any workflow here names a self-hosted runner
+        run: |
+          set +e
+          grep -rlE 'runs-on:.*self-h[o]sted' .github/workflows/
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+  build:
+    needs: runner-lock
+    runs-on: macos-15   # GitHub-hosted, Apple Silicon (arm64)
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: make deps
+      - run: make ui
+      - name: build (CGO_ENABLED=1, darwin/arm64, headless)
+        run: |
+          # Version = the private commit this snapshot was made from (the mirror's commit trailer).
+          priv=$(git log -1 --format=%B | sed -n 's/^Private-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+          ver="snapshot-${priv:0:12}"; [ -n "$priv" ] || ver="snapshot-$(git rev-parse --short=12 HEAD)"
+          mkdir -p bin
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -trimpath \
+            -ldflags "-s -w -X $(go list -m)/internal/config.Version=$ver" -o bin/tmxg .
+          echo "VERSION=$ver" >> "$GITHUB_ENV"
+      - name: check the owner gate is compiled in
+        run: |
+          file bin/tmxg | grep -q 'arm64'
+          otool -L bin/tmxg | grep -q 'LocalAuthentication.framework'
+          # auth_other.go's message must not be in the binary (that file builds only without cgo).
+          if strings bin/tmxg | grep -q 'owner confirmation is built only for'; then
+            echo "::error::the no-cgo owner-gate stub is in the binary"; exit 1
+          fi
+          HOME="$RUNNER_TEMP/h" bin/tmxg version || true   # throwaway HOME; no daemon on this runner
+      - name: SHA-256 (sign from this hash, off CI)
+        run: |
+          cd bin && shasum -a 256 tmxg | tee tmxg.sha256
+          echo "### tmxg darwin/arm64 (CGO, TEST BUILD, $VERSION)" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$(cut -d' ' -f1 tmxg.sha256)\`" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tmxg-darwin-arm64-cgo-TESTBUILD-${{ env.VERSION }}
+          path: |
+            bin/tmxg
+            bin/tmxg.sha256
+          retention-days: 14
+          if-no-files-found: error

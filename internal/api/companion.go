@@ -28,6 +28,9 @@ const linkPrefix = "/api/companion/link/"
 // companionAllowed is the Companion caller's whole right set: reads of the link views and one
 // message route. Everything else answers 403 before any handler runs.
 func companionAllowed(r *http.Request) bool {
+	if r.Method == http.MethodGet && (r.URL.Path == "/api/fleet" || r.URL.Path == "/api/sessions") {
+		return true
+	}
 	if !strings.HasPrefix(r.URL.Path, linkPrefix) {
 		return false
 	}
@@ -376,16 +379,21 @@ func (s *Server) gateCompanion(w http.ResponseWriter, r *http.Request, ap model.
 // --- the link views (Companion reads) ---
 
 type linkAgent struct {
-	Name           string `json:"name"`
-	Level          string `json:"level"`
-	Project        string `json:"project,omitempty"`
-	Parent         string `json:"parent,omitempty"`
-	State          string `json:"state"`
-	Role           string `json:"role,omitempty"`
-	Model          string `json:"model,omitempty"`
-	MailWaiting    int    `json:"mail_waiting,omitempty"`
-	PausedReason   string `json:"paused_reason,omitempty"`
-	LastActivityAt int64  `json:"last_activity_at,omitempty"`
+	ID             string   `json:"id"`
+	Host           string   `json:"host"`
+	Machine        string   `json:"machine"`
+	Rooms          []string `json:"rooms"`
+	Online         bool     `json:"online"`
+	Name           string   `json:"name"`
+	Level          string   `json:"level"`
+	Project        string   `json:"project,omitempty"`
+	Parent         string   `json:"parent,omitempty"`
+	State          string   `json:"state"`
+	Role           string   `json:"role,omitempty"`
+	Model          string   `json:"model,omitempty"`
+	MailWaiting    int      `json:"mail_waiting,omitempty"`
+	PausedReason   string   `json:"paused_reason,omitempty"`
+	LastActivityAt int64    `json:"last_activity_at,omitempty"`
 }
 
 type linkProject struct {
@@ -403,6 +411,9 @@ func (s *Server) linkFleet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	if s.peers != nil {
+		snap.Machine = s.peers.Machine()
+	}
 	names := map[string]string{}
 	for _, a := range snap.Agents {
 		names[a.ID] = a.Name
@@ -413,9 +424,23 @@ func (s *Server) linkFleet(w http.ResponseWriter, r *http.Request) {
 	}
 	agents := []linkAgent{}
 	for _, a := range snap.Agents {
-		agents = append(agents, linkAgent{Name: a.Name, Level: string(a.Level), Project: pname[a.ProjectID], Parent: names[a.ParentID],
+		agents = append(agents, linkAgent{ID: a.ID, Host: snap.Machine, Machine: snap.Machine, Rooms: []string{}, Online: true, Name: a.Name, Level: string(a.Level), Project: pname[a.ProjectID], Parent: names[a.ParentID],
 			State: string(a.State), Role: short(a.Role, 80), Model: a.Model, MailWaiting: a.Queued, PausedReason: a.PausedReason,
 			LastActivityAt: a.LastActivityAt})
+	}
+	machines := []map[string]any{{"name": snap.Machine, "online": true}}
+	if s.peers != nil {
+		for _, peer := range s.peers.Statuses() {
+			machines = append(machines, map[string]any{"name": peer.Name, "online": peer.OK})
+			for _, a := range peer.Sessions {
+				id := a.ID
+				if id == "" {
+					id = a.Name + "@" + peer.Name
+				}
+				agents = append(agents, linkAgent{ID: id, Name: a.Name, Host: peer.Name, Machine: peer.Name, Rooms: a.Rooms,
+					Online: peer.OK, State: a.State, Project: a.Project, Role: a.Role, MailWaiting: a.QueuedMessages})
+			}
+		}
 	}
 	projects := []linkProject{}
 	for _, p := range snap.Projects {
@@ -435,7 +460,7 @@ func (s *Server) linkFleet(w http.ResponseWriter, r *http.Request) {
 		head = snap.Head.Name
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"notice": LinkNotice, "machine": snap.Machine, "head": head,
-		"projects": projects, "agents": agents, "needs_you": len(snap.Approvals)})
+		"machines": machines, "projects": projects, "agents": agents, "needs_you": len(snap.Approvals)})
 }
 
 func (s *Server) linkNeeds(w http.ResponseWriter, r *http.Request) {
