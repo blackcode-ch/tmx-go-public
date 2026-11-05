@@ -3,10 +3,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -164,7 +166,7 @@ func TestPairPhoneWithPIN(t *testing.T) {
 	deviceResponse(t, f.request(t, "POST", "/api/pair/pin", deviceTestHost, map[string]string{"pin": testPIN}, late, false), 400)
 }
 
-// Wrong PINs slow down, never lock out; the owner at the machine clears it at once.
+// Wrong PINs slow down, never lock out for good; the owner at the machine clears it at once.
 func TestPINBackoffNeverALockout(t *testing.T) {
 	f := newDeviceFixture(t)
 	f.setPIN(t, testPIN)
@@ -178,11 +180,12 @@ func TestPINBackoffNeverALockout(t *testing.T) {
 	if w.Header().Get("Retry-After") == "" || v["wait_s"] == nil {
 		t.Fatal("no wait given")
 	}
-	// The paired device is another source: the pairing storm doesn't block the owner's phone.
+	// Unknown sources share a wait, but an already-paired phone remains able to sign in.
 	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/session", deviceTestHost, map[string]string{"pin": testPIN}, cookie, false), 200)
 	// A browser can't clear the waits; the owner at the machine can.
 	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/clear", deviceTestHost, nil, cookie, false), 403)
 	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/clear", "localhost", nil, nil, true), 200)
+	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/session", deviceTestHost, map[string]string{"pin": testPIN}, cookie, false), 200)
 	deviceResponse(t, f.request(t, "POST", "/api/pair/pin", deviceTestHost, map[string]string{"pin": testPIN}, claim, false), 200)
 	// And without clearing, the wait ends by itself.
 	_, claim = f.start(t)
@@ -292,4 +295,106 @@ func TestParallelPairGuesses(t *testing.T) {
 	if wrong.Load() > 5 || wrong.Load()+waited.Load() != 60 {
 		t.Fatalf("checked %d, waited %d", wrong.Load(), waited.Load())
 	}
+}
+
+// A local client's UI nonce is its own choice: a fresh one per guess is never a fresh source.
+func TestLocalPINSourceIgnoresTheNonce(t *testing.T) {
+	src := func(nonce string) string {
+		r, _ := http.NewRequest("POST", "http://localhost/api/gate/confirmations/x/pin", nil)
+		r.RemoteAddr = "127.0.0.1:5000"
+		r.Header.Set(UISessionHeader, nonce)
+		return pinSource(r, "")
+	}
+	if a, b := src(strings.Repeat("a", 64)), src(strings.Repeat("b", 64)); a != b || a != "local" {
+		t.Fatalf("local sources %q, %q", a, b)
+	}
+}
+
+// Rotating UI nonces and restarting the store cannot replenish the guess budget.
+func TestPINFreshNoncesStayThrottledAcrossRestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "owner-pin.json")
+	now := time.Now()
+	s := &Server{pin: ownerpin.Open(path), log: slog.New(slog.DiscardHandler)}
+	s.pin.Now = func() time.Time { return now }
+	if _, err := s.pin.Set(testPIN); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20; i++ {
+		if i == 10 {
+			s = &Server{pin: ownerpin.Open(path), log: slog.New(slog.DiscardHandler)}
+			s.pin.Now = func() time.Time { return now }
+		}
+		r := httptest.NewRequest("POST", "http://localhost/api/gate/confirmations/x/pin", nil)
+		r.RemoteAddr = "127.0.0.1:5000"
+		r.Header.Set(UISessionHeader, fmt.Sprintf("%064x", i+1))
+		w := httptest.NewRecorder()
+		if s.verifyPIN(w, pinSource(r, ""), "000000") {
+			t.Fatal("wrong PIN accepted")
+		}
+		want := http.StatusTooManyRequests
+		if i < ownerpin.GlobalFree {
+			want = http.StatusForbidden
+		}
+		if w.Code != want {
+			t.Fatalf("guess %d: status %d, want %d", i+1, w.Code, want)
+		}
+		if want == http.StatusTooManyRequests && w.Header().Get("Retry-After") == "" {
+			t.Fatalf("guess %d: missing retry delay", i+1)
+		}
+	}
+	// A different source after restart must share the persisted machine-wide wait.
+	w := httptest.NewRecorder()
+	if s.verifyPIN(w, "pair:another-host", testPIN) || w.Code != http.StatusTooManyRequests {
+		t.Fatalf("fresh source bypassed machine backoff: %d", w.Code)
+	}
+}
+
+// The phone keeps the same PIN-only session request, isolated from unpaired attackers.
+func TestPairedPhonePINSignInIsolatedAndFinite(t *testing.T) {
+	f := newDeviceFixture(t)
+	f.setPIN(t, testPIN)
+	phone := f.paired(t)
+	other := f.paired(t)
+	signin := func(cookie *http.Cookie, pin string, want int) {
+		t.Helper()
+		deviceResponse(t, f.request(t, "POST", "/api/gate/pin/session", deviceTestHost, map[string]string{"pin": pin}, cookie, false), want)
+	}
+	restart := func() {
+		f.s.pin = ownerpin.Open(filepath.Join(f.paths.SecretsDir(), "owner-pin.json"))
+		f.s.pin.Now = func() time.Time { return f.now }
+	}
+	signin(phone, testPIN, 200)
+	for i := 0; i < 20; i++ {
+		if i == 10 {
+			restart()
+		}
+		r := httptest.NewRequest("POST", "http://localhost/api/pair/pin", nil)
+		r.RemoteAddr = "127.0.0.1:5000"
+		r.Header.Set(UISessionHeader, fmt.Sprintf("%064x", i+1))
+		w := httptest.NewRecorder()
+		f.s.verifyPIN(w, pinSource(r, ""), "000000")
+		want := 403
+		if i >= ownerpin.GlobalFree {
+			want = 429
+		}
+		if w.Code != want {
+			t.Fatalf("unpaired guess %d: %d want %d", i, w.Code, want)
+		}
+		signin(phone, testPIN, 200) // This must not reset the attacker's persisted wait.
+	}
+	for i := 0; i < 3; i++ {
+		signin(phone, "000000", 403)
+	}
+	f.now = f.now.Add(time.Minute)
+	signin(phone, testPIN, 200)
+	for i := 0; i < ownerpin.GlobalFree; i++ {
+		signin(phone, "000000", 403)
+	}
+	signin(phone, testPIN, 429)
+	signin(other, testPIN, 200)
+	restart()
+	signin(phone, testPIN, 429)
+	signin(other, testPIN, 200)
+	f.now = f.now.Add(ownerpin.GlobalFirstWait + time.Second)
+	signin(phone, testPIN, 200)
 }

@@ -70,14 +70,17 @@ func atMachine(r *http.Request) bool {
 	return ok && c.Owner && !c.Companion && c.AgentID == "" && localRequest(r) && validUISession(r.Header.Get(UISessionHeader))
 }
 
-// pinSource is who the backoff counts against: one paired device, all pairing browsers of a
-// host together (a cookie is free to drop), or the local UI.
+// pinSource is who the per-source backoff counts against: one paired device, all pairing
+// browsers of a host together (a cookie is free to drop), or the local UI (every local client
+// together: its nonce is the client's choice, so it never makes a new source). All sources
+// without an authenticated paired device share the persisted machine bucket. Paired
+// devices have independent persisted buckets; other callers cannot slow their sign-in.
 func pinSource(r *http.Request, device string) string {
 	switch {
 	case device != "":
 		return "browser:" + requestHost(r) + ":" + device
 	case localRequest(r):
-		return "local:" + gateCaller(r)
+		return "local"
 	default:
 		return "pair:" + requestHost(r)
 	}

@@ -17,6 +17,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/peers", s.ownerOnly(s.peerStatus))
 	mux.HandleFunc("POST /api/peers/{name}/rotate", s.ownerOnly(s.peerRotate))
 	mux.HandleFunc("GET /api/snapshot", s.snapshot)
+	mux.HandleFunc("GET /api/fleet", s.fleetRoster)
+	mux.HandleFunc("GET /api/sessions", s.peerSessions)
 	mux.HandleFunc("POST /api/shutdown", s.ownerOnly(s.shutdown))
 
 	mux.HandleFunc("POST /api/projects", s.createProject)
