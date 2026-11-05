@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -15,7 +12,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Summaries of the owner's recordings (ARCHITECTURE.md "Summaries"), written by Claude from the
+// Summaries of the owner's recordings (DESIGN.md "Summaries"), written by Claude from the
 // transcripts and still frames. Read-only here: the owner asks for a new one in the app.
 
 // SummaryNote heads a summary: it retells other people's words.

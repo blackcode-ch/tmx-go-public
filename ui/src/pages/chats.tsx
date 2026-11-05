@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Chats home: every chat with other people's tmx, the contacts, open invites; the empty state
 // explains how to start (send someone an invite).
 import { useEffect, useMemo, useState } from "react";
@@ -12,9 +9,12 @@ import { MentionBadge, UnreadBadge } from "@/components/chat/sidebar-chats";
 import { EmptyState, PageBody, PageHeader, PageTitle, Section } from "@/components/page";
 import { useNow } from "@/hooks/use-now";
 import { relativeTime } from "@/lib/format";
+import { api } from "@/lib/api";
 import type { Invite } from "@/lib/chat-types";
 import { chatApi, chatUI, expiresIn, previewLine, sortedChats, useChats } from "@/lib/chats";
+import { savedVsLiveBanner, shouldPollP2P } from "@/lib/p2p-format";
 import { href, navigate, paths } from "@/lib/router";
+import type { P2PStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function ChatsPage() {
@@ -26,11 +26,42 @@ export function ChatsPage() {
   const people = useMemo(() => Object.values(contacts).sort((a, b) => a.name.localeCompare(b.name)), [contacts]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const inviteOpen = useChats((s) => s.invite.open);
+  const [p2pStatus, setP2PStatus] = useState<P2PStatus | null>(null);
   useNow(30_000);
 
   useEffect(() => {
     if (enabled) chatApi.invites().then((l) => setInvites((l ?? []).filter((i) => !i.revoked && i.expires_at > Date.now())), () => undefined);
   }, [enabled, inviteOpen]);
+
+  // Only relevant off-screen (banner shows while enabled === false too, since a saved "on" can
+  // still be waiting on a restart); errors (e.g. not the owner) just leave the banner unshown.
+  useEffect(() => {
+    let active = true;
+    const load = () => { void api.getP2P().then((s) => { if (active) setP2PStatus(s); }, () => {}); };
+    load();
+    const onFocus = () => load();
+    const onVisible = () => { if (document.visibilityState === "visible") load(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shouldPollP2P(p2pStatus)) return;
+    let active = true;
+    const timer = setInterval(() => {
+      void api.getP2P().then((s) => { if (active) setP2PStatus(s); }, () => {});
+    }, 5000);
+    return () => { active = false; clearInterval(timer); };
+    // Only re-arm when restart_to_apply itself flips, not on every status refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p2pStatus?.restart_to_apply]);
+
+  const p2pBanner = p2pStatus ? savedVsLiveBanner(p2pStatus) : null;
 
   const actions =
     enabled !== false ? (
@@ -49,11 +80,12 @@ export function ChatsPage() {
       <PageHeader actions={actions}>
         <PageTitle>Chats</PageTitle>
       </PageHeader>
-      <PageBody width="max-w-[820px]">
+      <PageBody width="max-w-[51.25rem]">
         {enabled === false ? (
           <EmptyState icon={Unplug} title="Peer-to-peer is off">
             Chats connect your tmx directly with other people's. This tmx runs without it right now.
             {offMessage && <p className="mt-2 text-xs text-subtle-foreground">{offMessage}</p>}
+            {p2pBanner && <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">{p2pBanner}</p>}
           </EmptyState>
         ) : list.length === 0 && people.length === 0 ? (
           <EmptyState
@@ -96,7 +128,7 @@ export function ChatsPage() {
                         <ChatAvatar chat={c} size="lg" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <span className={cn("truncate text-[13.5px]", c.unread > 0 ? "font-semibold" : "font-medium")}>{c.name}</span>
+                            <span className={cn("truncate text-[0.8438rem]", c.unread > 0 ? "font-semibold" : "font-medium")}>{c.name}</span>
                             {c.kind === "group" && <span className="text-2xs text-subtle-foreground">group</span>}
                             {c.status !== "active" && (
                               <span className="text-2xs text-subtle-foreground">{c.status === "pending" ? "joining" : c.status}</span>
@@ -132,7 +164,7 @@ export function ChatsPage() {
                     <li key={p.peer_id} className="flex items-center gap-3 px-4 py-2.5">
                       <PersonAvatar name={p.name} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium">{p.name}</div>
+                        <div className="truncate text-[0.8125rem] font-medium">{p.name}</div>
                         <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
                           <ReachDot r={p.reachability} />
                           {reachLabel(p.reachability)}
@@ -164,7 +196,7 @@ export function ChatsPage() {
               <Section title="Open invites">
                 <ul className="divide-y overflow-hidden rounded-xl border bg-card">
                   {invites.map((i) => (
-                    <li key={i.id} className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
+                    <li key={i.id} className="flex items-center gap-3 px-4 py-2.5 text-[0.8125rem]">
                       <QrCode className="size-4 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">
                         {i.kind === "group" ? `Group “${i.group_name}”` : "One person"}

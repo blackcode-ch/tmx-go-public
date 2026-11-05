@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package update keeps tmx current from its GitHub releases (ARCHITECTURE.md "Updates"): it checks
+// Package update keeps tmx current from its GitHub releases (DESIGN.md "Updates"): it checks
 // the release channel, downloads this machine's file, verifies the release signature and the
 // file's checksum, and swaps it in once no agent is in the middle of something, then restarts
 // the daemon on the new binary.
@@ -60,7 +57,7 @@ type Status struct {
 	NeedsToken bool     `json:"needs_token,omitempty"` // the releases are not visible without a GitHub token
 	HasToken   bool     `json:"has_token"`
 	CheckedAt  int64    `json:"checked_at,omitempty"`
-	// Probation: the installed version is still on its post-swap health probation (ARCHITECTURE.md
+	// Probation: the installed version is still on its post-swap health probation (DESIGN.md
 	// "Updates"); LastUpdate: how the last probation ended (confirmed, rolled back and why).
 	Probation  string                    `json:"probation,omitempty"`
 	DrillArmed bool                      `json:"drill_armed,omitempty"` // the next install fails its probation on purpose

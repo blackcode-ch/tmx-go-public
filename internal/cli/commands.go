@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -68,24 +65,27 @@ func cmdLs(e *env, args []string) error {
 
 func cmdProject(e *env, args []string) error {
 	if len(args) == 0 {
-		return usageErr("usage: tmx project new|ls|rm ...")
+		return usageErr("usage: tmx project new|ls|rm|import ...")
 	}
 	switch args[0] {
+	case "import":
+		return cmdProjectImport(e, args[1:])
 	case "new":
 		fs := newFlags("project new")
 		folder := fs.String("folder", "", "project folder (default <workspace>/<slug>)")
 		brief := fs.String("brief", "", "what the project is for")
 		harness := fs.String("harness", "", "lead harness: claude (default) or codex")
+		mdl := fs.String("model", "", "lead model (default: profile default)")
 		pos, err := parse(fs, args[1:])
 		if err != nil {
 			return err
 		}
 		if len(pos) == 0 {
-			return usageErr("usage: tmx project new NAME [--folder DIR] [--brief TEXT] [--harness claude|codex]")
+			return usageErr("usage: tmx project new NAME [--folder DIR] [--brief TEXT] [--harness claude|codex] [--model M]")
 		}
 		return withOwner(e, func(c *client.Client, cx context.Context) error {
 			var p model.Project
-			req := map[string]string{"name": strings.Join(pos, " "), "folder": *folder, "brief": *brief, "harness": *harness}
+			req := map[string]string{"name": strings.Join(pos, " "), "folder": *folder, "brief": *brief, "harness": *harness, "model": *mdl}
 			if err := c.Post(cx, "/api/projects", req, &p); err != nil {
 				return err
 			}
@@ -130,7 +130,7 @@ func cmdProject(e *env, args []string) error {
 			return nil
 		})
 	}
-	return usageErr("unknown project command %q (new, ls, rm)", args[0])
+	return usageErr("unknown project command %q (new, ls, rm, import)", args[0])
 }
 
 func cmdRun(e *env, args []string) error {
@@ -141,6 +141,7 @@ func cmdRun(e *env, args []string) error {
 	mdl := fs.String("model", "", "model (default: the profile's)")
 	mode := fs.String("mode", "", "chat or terminal")
 	harness := fs.String("harness", "", "claude, codex, opencode, pi or shell")
+	account := fs.String("account", "", "the harness account it runs as (default: the harness's default for new agents)")
 	prompt := fs.String("prompt", "", "first message")
 	role := fs.String("role", "", "short role")
 	brief := fs.String("brief", "", "standing brief")
@@ -152,10 +153,10 @@ func cmdRun(e *env, args []string) error {
 		return err
 	}
 	if len(pos) != 1 {
-		return usageErr("usage: tmx run NAME --project P [--profile P | --level worker] [--model M] [--mode M] [--harness H] [--prompt TEXT]")
+		return usageErr("usage: tmx run NAME --project P [--profile P | --level worker] [--model M] [--mode M] [--harness H] [--account A] [--prompt TEXT]")
 	}
 	req := map[string]string{"name": pos[0], "project_id": *project, "level": *level, "profile": *profile, "model": *mdl,
-		"mode": *mode, "harness": *harness, "prompt": *prompt, "role": *role, "brief": *brief, "cwd": *cwd}
+		"mode": *mode, "harness": *harness, "account": *account, "prompt": *prompt, "role": *role, "brief": *brief, "cwd": *cwd}
 	body := map[string]any{"no_wait": *noWait, "force": *force}
 	for k, v := range req {
 		if v != "" {

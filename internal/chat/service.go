@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Package chat is the chat layer between tmx installs (ARCHITECTURE.md "Chats"): contacts made
+// Package chat is the chat layer between tmx installs (DESIGN.md "Chats"): contacts made
 // by invite, DMs and groups, messages with delivery receipts and an offline outbox, and the
 // participation of a local agent in each chat. It builds only on p2p.Node, so it is tested
 // with p2ptest's in-memory network.
@@ -26,7 +23,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Limits (ARCHITECTURE.md "Chats").
+// Limits (DESIGN.md "Chats").
 const (
 	MaxBodyBytes    = 32 << 10
 	MaxGroupMembers = 20

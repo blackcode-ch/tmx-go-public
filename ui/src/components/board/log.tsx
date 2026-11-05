@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // A string's log on the board canvas (the head's threads and the chat topics): short lines
 // worth keeping (decision, action, info, link); append-only, a correction strikes the old line
 // through. Where a line is saved is the page's (onSave).

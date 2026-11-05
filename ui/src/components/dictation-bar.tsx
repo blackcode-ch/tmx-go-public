@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The dictation indicator (#45): a bar on every page while a dictation runs, with the elapsed
 // time, the box its words go to (a link back), Stop and Throw away. Shown on whatever page the
 // owner is on, so a dictation started elsewhere can always be stopped.
@@ -36,7 +33,7 @@ export function DictationBar() {
       role="status"
       aria-live="polite"
       data-dictation-bar
-      className="flex shrink-0 items-center gap-2.5 border-b border-state-error/30 bg-state-error/10 px-4 py-1.5 text-[13px] text-foreground md:px-6"
+      className="flex shrink-0 items-center gap-2.5 border-b border-state-error/30 bg-state-error/10 px-4 py-1.5 text-[0.8125rem] text-foreground md:px-6"
     >
       <span className="relative flex size-2.5 shrink-0" aria-hidden>
         {recording && <span className="absolute inline-flex size-full animate-ping rounded-full bg-state-error opacity-60" />}
@@ -44,7 +41,7 @@ export function DictationBar() {
       </span>
       <span className="shrink-0 font-medium">{recording ? "Dictating" : phase === "starting" ? "Waiting for the microphone…" : "Transcribing…"}</span>
       {recording && (
-        <span className="tabular shrink-0 font-mono text-[12.5px]" data-dictation-time>
+        <span className="tabular shrink-0 font-mono text-[0.7812rem]" data-dictation-time>
           {clock(elapsed)}
         </span>
       )}

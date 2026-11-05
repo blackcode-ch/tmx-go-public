@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -43,10 +40,10 @@ func TestAccountsCommand(t *testing.T) {
 	}
 	out, _, code = tmx(t, "accounts", "--json")
 	var p accounts.Payload
-	if code != 0 || json.Unmarshal([]byte(out), &p) != nil || len(p.Accounts) != 3 || !p.Accounts[0].Connected {
+	if code != 0 || json.Unmarshal([]byte(out), &p) != nil || len(p.Accounts) != 4 || !p.Accounts[0].Connected {
 		t.Fatalf("json: %d %s", code, out)
 	}
-	if _, _, code := tmx(t, "accounts", "refresh", "gemini"); code != 2 {
+	if _, _, code := tmx(t, "accounts", "refresh", "nope"); code != 2 {
 		t.Fatalf("unknown harness: %d", code)
 	}
 	if _, _, code := tmx(t, "accounts", "nope"); code != 2 {

@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Harness display helpers (ARCHITECTURE.md "Harnesses"): labels, the fallback list for when
+// Harness display helpers (DESIGN.md "Harnesses"): labels, the fallback list for when
 // /api/harnesses has not answered, and reading terminal menus off approvals.
 import type { Approval, Harness, HarnessInfo, TerminalMenu } from "./types";
 
@@ -11,6 +8,7 @@ export const HARNESS_LABEL: Record<Harness, string> = {
   opencode: "opencode",
   agy: "Gemini (Antigravity)",
   antigravity: "Antigravity",
+  gemini: "Gemini CLI",
   pi: "pi",
   shell: "Shell",
 };
@@ -25,6 +23,7 @@ export const FALLBACK_HARNESSES: HarnessInfo[] = [
   { name: "codex", label: "Codex", modes: ["chat", "terminal"], installed: false, structured: true, install: "npm i -g @openai/codex" },
   { name: "opencode", label: "opencode", modes: ["terminal"], installed: false, structured: false, install: "npm i -g opencode-ai" },
   { name: "agy", label: "Gemini (Antigravity)", modes: ["terminal"], installed: false, structured: false, install: "install agy CLI" },
+  { name: "gemini", label: "Gemini CLI", modes: ["terminal"], installed: false, structured: false, install: "npm i -g @google/gemini-cli" },
   { name: "pi", label: "pi", modes: ["terminal"], installed: false, structured: false, install: "npm i -g --ignore-scripts @earendil-works/pi-coding-agent" },
   { name: "shell", label: "Shell", modes: ["terminal"], installed: true, structured: false },
 ];

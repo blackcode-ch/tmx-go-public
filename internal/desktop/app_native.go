@@ -1,11 +1,8 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build desktop
 
 package desktop
 
-// The macOS app's native screen recording (ARCHITECTURE.md "Recorder", native capture; package
+// The macOS app's native screen recording (DESIGN.md "Recorder", native capture; package
 // nativerec): ScreenCaptureKit in this window process, bound to the page as
 // window.go.desktop.App.NativeRecord*. Changes reach the page as the Wails event
 // "tmx:native-rec" (a nativerec.Status). Elsewhere (Windows) Status says it is not supported and

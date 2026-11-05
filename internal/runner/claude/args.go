@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package claude
 
 import (
@@ -133,7 +130,7 @@ func rawEnv() []string {
 func BaseEnv() []string { return agentpolicy.FilterEnv(rawEnv()) }
 
 // BaseEnvUnfiltered is BaseEnv without the owner-credential denylist: only for the owner's own
-// shell (ARCHITECTURE.md "Safety"), which is the owner, not an agent, and needs their usual
+// shell (DESIGN.md "Safety"), which is the owner, not an agent, and needs their usual
 // gh/ssh/account environment.
 func BaseEnvUnfiltered() []string { return rawEnv() }
 
@@ -167,7 +164,7 @@ func MergeEnv(base []string, extra ...string) []string {
 }
 
 // MergeEnvUnfiltered is MergeEnv without the owner-credential denylist: only for the owner's
-// own shell (ARCHITECTURE.md "Safety").
+// own shell (DESIGN.md "Safety").
 func MergeEnvUnfiltered(base []string, extra ...string) []string {
 	return mergeDedup(base, extra...)
 }

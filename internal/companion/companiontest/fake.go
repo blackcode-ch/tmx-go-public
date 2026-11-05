@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package companiontest is a fake of Companion's local agent server for tests: the A2A v1
 // HTTP+JSON façade as Companion v0.17.1 implements it (api/a2a.py, core/auth_middleware.py):
 // agent card, /local/agents/me, message:send (returnImmediately), tasks/{id}, :cancel, the

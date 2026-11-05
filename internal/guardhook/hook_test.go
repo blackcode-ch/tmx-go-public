@@ -1,12 +1,11 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
+//go:build !windows || tmx_ci
+
+// On Windows only in CI (-tags tmx_ci), never on a dev PC: this file carries dangerous command
+// strings (kill-by-name), the class Defender flagged on 3 Nov. Matched as data; nothing is run.
 
 package guardhook
 
 import (
-	"bytes"
-	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -17,32 +16,6 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/guard"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
-
-func input(tool string, in map[string]any) string {
-	ti, _ := json.Marshal(in)
-	b, _ := json.Marshal(Input{SessionID: "s", Cwd: "", HookEventName: "PreToolUse", PermissionMode: "bypassPermissions",
-		ToolName: tool, ToolInput: ti, ToolUseID: "toolu_1"})
-	return string(b)
-}
-
-func run(t *testing.T, o Options, stdin string) *Decision {
-	t.Helper()
-	var out bytes.Buffer
-	if err := Run(context.Background(), strings.NewReader(stdin), &out, o); err != nil {
-		t.Fatal(err)
-	}
-	if out.Len() == 0 {
-		return nil
-	}
-	var res Output
-	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
-		t.Fatalf("hook output is not JSON: %q", out.String())
-	}
-	if res.HookSpecificOutput.HookEventName != "PreToolUse" {
-		t.Fatalf("event name: %+v", res)
-	}
-	return &res.HookSpecificOutput
-}
 
 func setup(t *testing.T) (*apitest.Daemon, Options) {
 	d := apitest.New(t)
@@ -74,7 +47,7 @@ func TestAllowIsSilentBlockIsDenied(t *testing.T) {
 		t.Fatalf("allowed write answered: %+v", dec)
 	}
 	dec := run(t, o, input("Bash", map[string]any{"command": "pkill node"}))
-	if dec == nil || dec.PermissionDecision != "deny" || !strings.Contains(dec.PermissionDecisionReason, "Kill processes by name") {
+	if dec == nil || dec.PermissionDecision != "deny" || !strings.Contains(dec.PermissionDecisionReason, "Kill tmx's own processes by name") { // node: the fixed carve-out
 		t.Fatalf("block: %+v", dec)
 	}
 	tl, _ := d.Fleet.Timeline("head", 0, 100)

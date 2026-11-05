@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -17,7 +14,7 @@ func TestRateLimitHook(t *testing.T) {
 	var mu sync.Mutex
 	var got []runner.RateLimit
 	var harnesses []model.Harness
-	f.SetRateLimitHook(func(h model.Harness, rl runner.RateLimit) {
+	f.SetRateLimitHook(func(h model.Harness, _ string, rl runner.RateLimit) {
 		mu.Lock()
 		defer mu.Unlock()
 		got, harnesses = append(got, rl), append(harnesses, h)

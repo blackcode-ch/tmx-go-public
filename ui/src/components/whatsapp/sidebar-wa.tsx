@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The sidebar's "WhatsApp" group: the latest chats with unread counts once linked; "Link
 // WhatsApp" before that. Hidden on a daemon without WhatsApp (or with it switched off). The store
 // loads with every snapshot (each (re)connect of the event stream).
@@ -15,7 +12,7 @@ import { WaAvatar, WaUnread } from "./wa-bits";
 const SHOWN = 5;
 
 const row =
-  "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring";
+  "flex h-7 items-center gap-2 rounded-md px-2 text-[0.8125rem] outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring";
 
 export function SidebarWhatsApp({ path, onNavigate, open, onToggle }: { path: string; onNavigate?: () => void; open: boolean; onToggle: () => void }) {
   const available = useWa((s) => s.available);
@@ -76,13 +73,13 @@ export function SidebarWhatsApp({ path, onNavigate, open, onToggle }: { path: st
             );
           })}
           {status.history?.syncing && (
-            <a href={href(paths.whatsapp())} onClick={onNavigate} className={cn(row, "text-[12.5px] text-muted-foreground")}>
+            <a href={href(paths.whatsapp())} onClick={onNavigate} className={cn(row, "text-[0.7812rem] text-muted-foreground")}>
               <Loader2 className="size-4 animate-spin" />
               Bringing in chats… {Math.round(status.history.progress ?? 0)}%
             </a>
           )}
           {list.length > shown.length ? (
-            <a href={href(paths.whatsapp())} onClick={onNavigate} className={cn(row, "text-[12.5px] text-muted-foreground hover:text-foreground")}>
+            <a href={href(paths.whatsapp())} onClick={onNavigate} className={cn(row, "text-[0.7812rem] text-muted-foreground hover:text-foreground")}>
               <MessageCircle className="size-4" />
               All WhatsApp chats
               <WaUnread n={hiddenUnread} className="ml-auto" />
@@ -90,7 +87,7 @@ export function SidebarWhatsApp({ path, onNavigate, open, onToggle }: { path: st
           ) : (
             list.length === 0 &&
             !status.history?.syncing && (
-              <a href={href(paths.whatsapp())} onClick={onNavigate} className={cn(row, "text-[12.5px] text-subtle-foreground")}>
+              <a href={href(paths.whatsapp())} onClick={onNavigate} className={cn(row, "text-[0.7812rem] text-subtle-foreground")}>
                 <MessageCircle className="size-4" />
                 No chats yet
               </a>

@@ -1,10 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, CircleDot, FolderClosed, Inbox, LayoutGrid, ListTree, Moon, Plus, Search, Settings, Sun, Waypoints } from "lucide-react";
+import { ChevronRight, CircleDot, FolderClosed, Inbox, LayoutGrid, ListTree, Moon, Plus, Search, Settings, Sun } from "lucide-react";
 import { SquareTerminal } from "lucide-react"; // an agent in its own screen (harness-screen.tsx)
-import { Gauge } from "lucide-react";
+import { Gauge, ListChecks } from "lucide-react";
 import { UsageDot } from "./accounts/usage-bits";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,6 +27,7 @@ import { SidebarWhatsApp } from "./whatsapp/sidebar-wa";
 import { ConnectionDot, ReconnectingPill } from "./connection";
 import { StateDot } from "./state";
 import { Truncate } from "./truncate";
+import { BrandMark } from "@/components/brand-mark";
 
 /** What an agent is doing now, from its latest meaningful timeline entry. */
 export function nowLine(entries: TimelineEntry[] | undefined, agent: Agent): string {
@@ -81,7 +79,7 @@ function NavItem({
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
+        "flex h-7 items-center gap-2 rounded-md px-2 text-[0.8125rem] text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
         active && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
       )}
     >
@@ -112,19 +110,19 @@ function AgentRow({
       aria-current={active ? "page" : undefined}
       title={`${agent.name} · ${STATE_LABEL[agent.state]}`}
       className={cn(
-        "relative flex h-7 items-center gap-2 rounded-md pr-2 text-[13px] text-sidebar-foreground/90 outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
+        "relative flex h-7 items-center gap-2 rounded-md pr-2 text-[0.8125rem] text-sidebar-foreground/90 outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
         active && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
-        depth === 1 ? "pl-[26px]" : "pl-[42px]",
+        depth === 1 ? "pl-[1.625rem]" : "pl-[2.625rem]",
       )}
     >
-      {guide && <span className="absolute top-0 bottom-0 left-[29px] w-px bg-sidebar-border" aria-hidden />}
+      {guide && <span className="absolute top-0 bottom-0 left-[1.8125rem] w-px bg-sidebar-border" aria-hidden />}
       <StateDot state={agent.state} />
       <span className="min-w-0 truncate">{agent.name}</span>
       {agent.harness === "claude" && agent.mode === "terminal" && (
         <SquareTerminal className="size-3 shrink-0 text-subtle-foreground" aria-label="in Claude Code's own screen" />
       )}
       {agent.harness !== "claude" && agent.harness !== "shell" && (
-        <span className="shrink-0 rounded-[4px] border border-sidebar-border px-1 font-mono text-[10px] leading-4 text-subtle-foreground" title={harnessLabel(agent.harness)}>
+        <span className="shrink-0 rounded-[4px] border border-sidebar-border px-1 font-mono text-[0.625rem] leading-4 text-subtle-foreground" title={harnessLabel(agent.harness)}>
           {agent.harness}
         </span>
       )}
@@ -174,7 +172,7 @@ function ProjectItem({
     <div>
       <div
         className={cn(
-          "group/proj flex h-7 items-center rounded-md text-[13px] transition-colors duration-150 hover:bg-sidebar-accent/70",
+          "group/proj flex h-7 items-center rounded-md text-[0.8125rem] transition-colors duration-150 hover:bg-sidebar-accent/70",
           active && "bg-sidebar-accent",
         )}
       >
@@ -218,7 +216,7 @@ function ProjectItem({
               guide={!!lead && i >= 0}
             />
           ))}
-          {all.length === 0 && <div className="py-1 pl-[26px] text-2xs text-subtle-foreground">No agents</div>}
+          {all.length === 0 && <div className="py-1 pl-[1.625rem] text-2xs text-subtle-foreground">No agents</div>}
         </div>
       )}
     </div>
@@ -250,10 +248,10 @@ function HeadCard({ path, onNavigate }: { path: string; onNavigate?: () => void 
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-foreground text-[10px] font-semibold text-background">
+        <span className="flex size-5 shrink-0 items-center justify-center rounded-[5px] bg-foreground text-[0.625rem] font-semibold text-background">
           {(label.match(/[\p{L}\p{N}]/u)?.[0] ?? "H").toUpperCase()}
         </span>
-        <span className="truncate text-[13px] font-medium">{label}</span>
+        <span className="truncate text-[0.8125rem] font-medium">{label}</span>
         <ModelBadge agent={head} className="ml-auto" />
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 pl-7 text-2xs text-muted-foreground">
@@ -302,8 +300,9 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className={cn("drag-region flex h-[52px] shrink-0 items-center gap-2 pr-2", desktopMac ? "pl-[94px]" : "pl-4")}>
-        <span className="min-w-0 truncate text-[13px] font-semibold tracking-tight">{machine || "tmx"}</span>
+      <div className={cn("drag-region flex h-[3.25rem] shrink-0 items-center gap-2 pr-2", desktopMac ? "pl-[5.875rem]" : "pl-4")}>
+        <BrandMark />
+        <span className="min-w-0 truncate text-[0.8125rem] font-semibold tracking-tight">{machine || "tmx"}</span>
         <ConnectionDot />
         <ReconnectingPill />
         <Tooltip>
@@ -323,9 +322,8 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
       {/* Below the head, everything scrolls as one: the main links, Chats, WhatsApp, Projects. */}
       <div className="scroll-thin mt-3 min-h-0 flex-1 overflow-y-auto pb-3" data-sidebar-scroll>
         <nav className="flex flex-col gap-px px-2" aria-label="Main">
-          <NavItem to={paths.overview()} icon={LayoutGrid} label="Overview" active={path === "/"} onNavigate={onNavigate} />
+          <NavItem to={paths.overview()} icon={LayoutGrid} label="Home" active={path === "/"} onNavigate={onNavigate} />
           <NavItem to={paths.matrix()} icon={ListTree} label="Matrix" active={path === paths.matrix()} onNavigate={onNavigate} />
-          <NavItem to={paths.board()} icon={Waypoints} label="Board" active={path === paths.board()} onNavigate={onNavigate} />
           <NavItem
             to={paths.inbox()}
             icon={Inbox}
@@ -334,7 +332,7 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
             onNavigate={onNavigate}
             right={
               pending > 0 ? (
-                <span className="tabular inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-state-waiting px-1.5 text-2xs font-semibold text-black/80">
+                <span className="tabular inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full bg-state-waiting px-1.5 text-2xs font-semibold text-black/80">
                   {pending}
                 </span>
               ) : undefined
@@ -349,6 +347,7 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
             right={recording ? <span className="size-2 animate-pulse rounded-full bg-state-error" aria-label="Recording" /> : undefined}
           />
           <NavItem to={paths.usage()} icon={Gauge} label="Usage" active={path === paths.usage()} onNavigate={onNavigate} right={<UsageDot />} />
+          <NavItem to={paths.features()} icon={ListChecks} label="Features" active={path === paths.features()} onNavigate={onNavigate} />
         </nav>
 
         <SidebarChats path={path} onNavigate={onNavigate} open={!collapsed[CHATS_SECTION]} onToggle={() => toggle(CHATS_SECTION)} />
@@ -383,7 +382,7 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
           <button
             type="button"
             onClick={() => ui.openNewProject(true)}
-            className="mt-1 flex h-7 w-full items-center gap-2 rounded-md px-2 text-[13px] text-muted-foreground outline-none hover:bg-sidebar-accent/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-1 flex h-7 w-full items-center gap-2 rounded-md px-2 text-[0.8125rem] text-muted-foreground outline-none hover:bg-sidebar-accent/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Plus className="size-4" />
             New project
@@ -478,7 +477,7 @@ export function Sidebar({ desktopMac }: { desktopMac?: boolean }) {
           document.body.style.userSelect = "none";
         }}
         onDoubleClick={() => setWidth(260)}
-        className="absolute top-0 -right-[3px] bottom-0 z-10 w-[6px] cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[2px] after:w-[2px] after:bg-transparent after:transition-colors after:duration-150 hover:after:bg-border-strong focus-visible:after:bg-ring"
+        className="absolute top-0 -right-[3px] bottom-0 z-10 w-[0.375rem] cursor-col-resize outline-none after:absolute after:inset-y-0 after:left-[2px] after:w-[2px] after:bg-transparent after:transition-colors after:duration-150 hover:after:bg-border-strong focus-visible:after:bg-ring"
       />
     </aside>
   );

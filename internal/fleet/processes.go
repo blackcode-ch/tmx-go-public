@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -75,7 +72,7 @@ type ProcessResult struct {
 func (f *Fleet) RequestProcess(c Caller, req ProcessRequest) (ProcessResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if c.Owner || c.Companion {
+	if c.Owner || c.Companion || c.Peer != "" {
 		return ProcessResult{}, errf(KindForbidden, "only agents request a tool launch")
 	}
 	r, err := f.callerRecLocked(c)
@@ -105,7 +102,8 @@ func (f *Fleet) RequestProcess(c Caller, req ProcessRequest) (ProcessResult, err
 	v := guard.CheckExec(guard.Context{OS: runtime.GOOS, Cwd: r.a.Cwd, Own: r.a.Cwd,
 		Workspace: f.opts.Workspace, StateDir: f.opts.Paths.Home, Home: home,
 		Temp: []string{os.TempDir()}, Env: os.Getenv, TmxNames: []string{f.opts.Executable},
-		AllowBrowserAutomation: f.safetyLocked().settings.AllowBrowserAutomation}, req.Command, req.Args)
+		AllowBrowserAutomation: f.safetyLocked().settings.AllowBrowserAutomation,
+		States:                 f.safetyLocked().settings.Effective()}, req.Command, req.Args)
 	if v.Outcome == guard.Block {
 		return ProcessResult{}, errf(KindForbidden, "%s", v.Message())
 	}

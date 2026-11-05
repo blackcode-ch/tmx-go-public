@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package devaudio captures the device's own sound (what its speakers play) for a recording in
-// the desktop window (ARCHITECTURE.md "Recorder", "Recording on each platform"). On Windows it is
+// the desktop window (DESIGN.md "Recorder", "Recording on each platform"). On Windows it is
 // WASAPI loopback of the default output device, in the window process, through COM without
 // cgo (wasapi_windows.go); there is none elsewhere (the macOS app records device audio with
 // ScreenCaptureKit, browsers through getDisplayMedia).

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -56,7 +53,7 @@ func (s *Service) agyProbe(path string, fn func(p *agyProbe)) agyProbe {
 var agyAuthHelpRx = regexp.MustCompile(`(?im)^\s*(agy\s+auth\s+)?login\b`)
 
 // agyHasAuth: does this agy have the `auth` subcommand (login, status, logout)?
-func (s *Service) agyHasAuth(ctx context.Context, path string) bool {
+func (s *scope) agyHasAuth(ctx context.Context, path string) bool {
 	if p := s.agyProbe(path, nil); p.authChecked {
 		return p.hasAuth
 	}
@@ -66,21 +63,21 @@ func (s *Service) agyHasAuth(ctx context.Context, path string) bool {
 	return has
 }
 
-func agyLogin(ctx context.Context, s *Service, path string) []string {
+func agyLogin(ctx context.Context, s *scope, path string) []string {
 	if s.agyHasAuth(ctx, path) {
 		return []string{"auth", "login"}
 	}
 	return nil // agy's own first-run sign-in
 }
 
-func agyLogout(ctx context.Context, s *Service, path string) []string {
+func agyLogout(ctx context.Context, s *scope, path string) []string {
 	if s.agyHasAuth(ctx, path) {
 		return []string{"auth", "logout"}
 	}
 	return []string{"-p", "/logout"}
 }
 
-func agyCheck(ctx context.Context, s *Service, path string) result {
+func agyCheck(ctx context.Context, s *scope, path string) result {
 	var res result
 	authKnown := false
 	if s.agyHasAuth(ctx, path) {

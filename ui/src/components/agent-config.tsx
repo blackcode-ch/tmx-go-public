@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Agent → Details: the owner edits role, brief, model and profile (PATCH /api/agents/{id}).
 // The daemon applies them at the agent's next start, so a running agent offers "Restart now".
 import { useEffect, useMemo, useState } from "react";
@@ -96,7 +93,7 @@ export function AgentConfig({ agent }: { agent: Agent }) {
   return (
     <section className="mb-8">
       <div className="mb-1 flex h-7 items-center gap-2">
-        <h2 className="text-[13px] font-medium">Configuration</h2>
+        <h2 className="text-[0.8125rem] font-medium">Configuration</h2>
         <span className="text-xs text-muted-foreground">Applies when the agent starts or restarts.</span>
       </div>
       <div className="divide-y border-y">
@@ -149,7 +146,7 @@ export function AgentConfig({ agent }: { agent: Agent }) {
               value={draft.model}
               onChange={(e) => setDraft((d) => ({ ...d, model: e.target.value.trim() }))}
               placeholder="The harness's default"
-              className="font-mono text-[12.5px] sm:w-72"
+              className="font-mono text-[0.7812rem] sm:w-72"
               spellCheck={false}
             />
           ) : (

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -63,7 +60,7 @@ func TestProjectSectionReplacementAndPersistence(t *testing.T) {
 		t.Fatalf("checklist created approvals: %v %v", approvals, err)
 	}
 	empty, emptyList := "", []string{}
-	sec, err = f.SetProjectSection(OwnerCaller, p.ID, ProjectSectionPatch{Status: &empty, Needs: &emptyList, Links: &emptyList})
+	sec, err = f.SetProjectSection(OwnerCaller, p.ID, ProjectSectionPatch{Status: &empty, Needs: &emptyList, Links: &emptyList, ReplaceLinks: true})
 	if err != nil || sec.Status != "" || len(sec.Needs) != 0 || len(sec.Links) != 0 {
 		t.Fatalf("clear: %+v %v", sec, err)
 	}
@@ -251,6 +248,23 @@ func TestProjectSectionWriteAuthority(t *testing.T) {
 	clear := ""
 	if _, err := f.SetProjectSection(OwnerCaller, p.ID, ProjectSectionPatch{Lead: &clear}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A peer machine (PeerCaller) has no agent record on this box (callerRecLocked returns nil for
+// it, same as the owner) but must never pass as a project member, lead or owner here - unlike
+// agent-operation routes, a peer is never owner-equivalent for a project's own content.
+func TestProjectSectionRefusesPeer(t *testing.T) {
+	_, f, p := sectionFixture(t)
+	status, lead, out := "from a peer", "lead", []model.ProjectOutput{{Path: "out/report.txt"}}
+	if _, err := f.SetProjectSection(PeerCaller("hosta"), p.ID, ProjectSectionPatch{Status: &status}); KindOf(err) != KindForbidden {
+		t.Fatalf("peer status write: %v", err)
+	}
+	if _, err := f.SetProjectSection(PeerCaller("hosta"), p.ID, ProjectSectionPatch{Lead: &lead}); KindOf(err) != KindForbidden {
+		t.Fatalf("peer lead write: %v", err)
+	}
+	if _, err := f.SetProjectSection(PeerCaller("hosta"), p.ID, ProjectSectionPatch{FinalOutput: &out}); KindOf(err) != KindForbidden {
+		t.Fatalf("peer final-output write: %v", err)
 	}
 }
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package companion
 
 import (
@@ -14,7 +11,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/peertext"
 )
 
-// Conversation messages (ARCHITECTURE.md "Head ↔ Companion: messages"). The head and the owner talk
+// Conversation messages (DESIGN.md "Head ↔ Companion: messages"). The head and the owner talk
 // with Companion in tmx's one conversation with it. A message is a CompanionTask of kind
 // message, so it shares the tasks' queue (one at a time, oldest first), sending, polling,
 // retries, key handling and recovery. Companion's reply goes back to whoever wrote: mail for

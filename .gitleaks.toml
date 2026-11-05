@@ -1,0 +1,26 @@
+# Published as .gitleaks.toml at the root of the public snapshot (public-scrub.sh copies it from the
+# reviewed fleet/main checkout, never from the PR being mirrored). It quiets third-party scans of the
+# snapshot on known non-secrets. Our own mirror guard does NOT use this file: public-mirror.yml passes
+# --config scripts/public-guard-gitleaks.toml explicitly, so an allow-list here can't hide anything from it.
+#
+# Why each entry exists: triage of a 198-row scan, 4 Nov 2026. 0 real, 47 fixtures/placeholders,
+# 151 code expressions (d.OwnerToken, struct fields, env-var names, regexes, rate-limiter "tokens").
+title = "tmx-go public snapshot"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "test fixtures, UI mocks and published constants; no real credentials"
+paths = [
+  '''(^|/)[^/]+_test\.go$''',               # Go tests: synthetic tokens/keys built by the test daemon
+  '''^internal/accounts/accountstest/''',   # fake account-status fixtures
+  '''^ui/src/lib/mock/''',                  # UI demo data (placeholder .env lines, "mock-token")
+  '''^ui/test/''',                          # UI unit tests ("test-owner")
+  '''^ui/e2e/''',                           # e2e harness reads a throwaway test daemon's token
+]
+regexTarget = "line"
+regexes = [
+  # SHA-256 fingerprint of the upstream PUBLIC signing key; it rejects that identity, it is not a secret.
+  '''^\s*const upstreamKeyHash = "[0-9a-f]{64}"\s*$''',
+]

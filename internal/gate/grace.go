@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package gate
 
 // The grace window, like sudo's timestamp: after the owner proves themselves (any successful

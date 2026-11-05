@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package cli is the entry point for every mode of the tmx binary: the daemon, the client
 // commands (over HTTP with the owner token), `tmx mcp` and `tmx app`.
 package cli
@@ -25,6 +22,7 @@ Daemon:
   tmx rollback                    restore previous binary and database (daemon must be stopped)
   tmx release keygen [--id ID]    the fleet release key (release machine only; prints the public key)
   tmx release sign TAG [--dry-run] check the release gates through gh, then sign the draft's SHA256SUMS
+  tmx release sign-extra TAG [--dry-run] sign the public mirror's voice-engine release (whisper-engine-vX.Y.Z) after its gates
   tmx peers import-python         move this machine's Python tmx pair tokens into this daemon (fingerprints only)
   tmx status                      is the daemon running?
   tmx open                        print the browser URL (with the owner token)
@@ -32,7 +30,8 @@ Daemon:
 
 Fleet:
   tmx ls                          head → projects → agents with state and model
-  tmx project new NAME [--folder DIR] [--brief TEXT] [--harness claude|codex]
+  tmx project import PROJECT --file FILE
+  tmx project new NAME [--folder DIR] [--brief TEXT] [--harness claude|codex] [--model M]
   tmx project ls
   tmx project rm NAME --yes       stops and removes its agents; the folder stays
   tmx run NAME --project P [--profile P | --level worker|lead] [--model M] [--mode chat|terminal]
@@ -91,7 +90,7 @@ Peer-to-peer (network diagnostics):
   tmx p2p join LINK               pair with the inviter
   tmx p2p name [NEW]              show or change the name people see in chats
   tmx update [check|now|status|auto on|off|channel stable|latest|token T]
-                                  updates from GitHub releases (ARCHITECTURE.md "Updates")
+                                  updates from GitHub releases (DESIGN.md "Updates")
   tmx p2p peers | invites | revoke ID | send PEER [TEXT] | log
 
 Recordings (of your own screen and microphone; they start only from the window):
@@ -153,6 +152,7 @@ func init() {
 		"rec":       cmdRec,      // rec.go
 		"accounts":  cmdAccounts, // accounts.go
 		"release":   cmdRelease,  // release.go
+		"host":      cmdHost,     // host.go: a terminal agent's session host
 	}
 	for name, fn := range map[string]cmdFunc{ // resource control (resources.go, slot.go)
 		"start": cmdStart, "resume": cmdResume, "exempt": cmdExempt, "resources": cmdResources,

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package release
 
 import (
@@ -8,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/blackcode-ch/tmx-go/internal/hiddenexec"
@@ -61,7 +59,21 @@ func (g Gh) Upload(ctx context.Context, url string, data []byte) error {
 	if !strings.HasPrefix(url, "https://uploads.github.com/") {
 		return errors.New("refusing an upload URL outside uploads.github.com")
 	}
-	_, err := g.run(ctx, data, "--method", "POST", "-H", "Content-Type: application/octet-stream", "--input", "-", url)
+	// From a file, not stdin: gh sends stdin chunked with no Content-Length, which
+	// uploads.github.com refuses (HTTP 400 "Bad Content-Length"). The data is public (a .sig).
+	f, err := os.CreateTemp("", "tmx-release-upload-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	_, err = g.run(ctx, nil, "--method", "POST", "-H", "Content-Type: application/octet-stream", "--input", f.Name(), url)
 	return err
 }
 

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -16,7 +13,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/transcribe"
 )
 
-// Voice transcription (ARCHITECTURE.md "Voice"). Owner only, except reading stored transcripts,
+// Voice transcription (DESIGN.md "Voice"). Owner only, except reading stored transcripts,
 // which every local agent may (MCP transcripts / transcript_read). Without the service every
 // route answers 501.
 func (s *Server) voiceRoutes(mux *http.ServeMux) {

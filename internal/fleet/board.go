@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -14,7 +11,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/peertext"
 )
 
-// The board (ARCHITECTURE.md "Board"): the head's conversation filed under threads (topics). Every
+// The board (DESIGN.md "Board"): the head's conversation filed under threads (topics). Every
 // head timeline entry carries the thread of the turn it belongs to. A turn's thread comes
 // from what started it: the topic the owner wrote in, the thread of mail (a project's lead
 // writes in its project's thread; a reply stays in the thread it answers), or General. A

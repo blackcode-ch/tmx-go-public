@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Small inputs of the profile editor: toggle chips, a token list, the instructions editor and
 // its live preview.
 import { useMemo, useRef, useState } from "react";
@@ -34,7 +31,7 @@ export function ToggleChip({
       title={title}
       onClick={locked ? undefined : onToggle}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[12.5px] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[0.7812rem] outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
         locked && "cursor-default",
         pressed
           ? "border-brand/35 bg-brand-soft text-foreground"
@@ -87,7 +84,7 @@ export function TokenField({
     <div>
       <div className="flex min-h-8 flex-wrap items-center gap-1.5 rounded-md border border-input px-1.5 py-1 focus-within:ring-2 focus-within:ring-ring dark:bg-input/20">
         {value.map((t) => (
-          <span key={t} className="inline-flex h-6 max-w-full items-center gap-1 rounded-[5px] bg-muted pr-0.5 pl-2 font-mono text-[11.5px]">
+          <span key={t} className="inline-flex h-6 max-w-full items-center gap-1 rounded-[5px] bg-muted pr-0.5 pl-2 font-mono text-[0.7188rem]">
             <span className="truncate">{t}</span>
             <button
               type="button"
@@ -117,7 +114,7 @@ export function TokenField({
           onBlur={add}
           placeholder={value.length ? "" : placeholder}
           spellCheck={false}
-          className="h-6 min-w-[140px] flex-1 bg-transparent px-1 font-mono text-[12px] outline-none placeholder:font-sans placeholder:text-[12.5px] placeholder:text-muted-foreground"
+          className="h-6 min-w-[8.75rem] flex-1 bg-transparent px-1 font-mono text-[0.75rem] outline-none placeholder:font-sans placeholder:text-[0.7812rem] placeholder:text-muted-foreground"
         />
         {text.trim() && (
           <button
@@ -158,7 +155,7 @@ export function InstructionsEditor({ value, onChange }: { value: string; onChang
         value={value}
         onChange={(e) => onChange(e.target.value)}
         spellCheck={false}
-        className="min-h-[300px] resize-y bg-card font-mono text-[12.5px] leading-[1.6] dark:bg-card"
+        className="min-h-[18.75rem] resize-y bg-card font-mono text-[0.7812rem] leading-[1.6] dark:bg-card"
       />
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-1 text-2xs text-muted-foreground">Insert</span>
@@ -168,7 +165,7 @@ export function InstructionsEditor({ value, onChange }: { value: string; onChang
             type="button"
             title={v.hint}
             onClick={() => insert(v.name)}
-            className="inline-flex h-6 items-center rounded-[5px] border px-1.5 font-mono text-[11px] text-muted-foreground outline-none transition-colors duration-150 hover:border-brand/35 hover:bg-brand-soft hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-6 items-center rounded-[5px] border px-1.5 font-mono text-[0.6875rem] text-muted-foreground outline-none transition-colors duration-150 hover:border-brand/35 hover:bg-brand-soft hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             {`{{${v.name}}}`}
           </button>
@@ -199,7 +196,7 @@ export function InstructionsPreview({
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded-md border bg-muted/30">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b bg-card px-3">{header}</div>
-      <div className="scroll-thin max-h-[560px] min-h-[300px] flex-1 overflow-y-auto px-3.5 py-3 font-mono text-[12px] leading-[1.6] break-words whitespace-pre-wrap">
+      <div className="scroll-thin max-h-[35rem] min-h-[18.75rem] flex-1 overflow-y-auto px-3.5 py-3 font-mono text-[0.75rem] leading-[1.6] break-words whitespace-pre-wrap">
         {parts.length === 0 && <span className="text-subtle-foreground">(no instructions)</span>}
         {parts.map((p, i) =>
           p.v === undefined ? (

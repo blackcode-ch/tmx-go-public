@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Mock WhatsApp for ?mock=…: a linked account with chats of every message type, and a working
 // link flow (a QR code that renews, "scanned" after a few seconds; or a pairing code), history
 // sync, sending with the delivery ticks and the rate limit, read, settings and Unlink.
@@ -212,7 +209,7 @@ export class MockWhatsApp {
     if (this.mode === "ask") this.timers.push(setTimeout(() => void this.agentAsks(), 1200));
   }
 
-  /** What the owner gate asks for (ARCHITECTURE.md "Owner gate"), or null. */
+  /** What the owner gate asks for (DESIGN.md "Owner gate"), or null. */
   static gateReason(method: string, parts: string[]): string | null {
     if (parts[0] === "whatsapp" && parts[1] === "unlink" && method === "POST") return "unlink WhatsApp from this machine";
     return null;
@@ -284,14 +281,14 @@ export class MockWhatsApp {
       x.setHours(h, mm, 0, 0);
       return Math.min(x.getTime(), now - 60_000);
     };
-    const MUM = "41790000007@s.whatsapp.net";
-    const LEA = "41780000001@s.whatsapp.net";
-    const BO = "41760000002@s.whatsapp.net";
+    const MUM = "41791112233@s.whatsapp.net";
+    const LEA = "41786654321@s.whatsapp.net";
+    const BO = "41764455667@s.whatsapp.net";
     const CREW = "120363041234567890@g.us";
     const FAMILY = "120363099887766554@g.us";
     const lea = LEA;
-    const marco = "41790000011@s.whatsapp.net";
-    const jonas = "41790000012@s.whatsapp.net";
+    const marco = "41795550101@s.whatsapp.net";
+    const jonas = "41795550202@s.whatsapp.net";
     const png = (d: string) => d.slice(d.indexOf(",") + 1);
 
     // Climbing crew: a group with photos, a sticker, a reply, reactions, a location and a poll.
@@ -355,7 +352,7 @@ export class MockWhatsApp {
     l({ type: "text", text: "Here's the offer for the flat, see page 2", at: day(3, 10, 2) });
     const doc = l({ type: "document", caption: "", at: day(3, 10, 3), media: { mime: "application/pdf", size: 245_760, name: "Offer-2026-10.pdf", downloaded: false } });
     this.mediaOf(doc, "application/pdf", PDF, "Offer-2026-10.pdf");
-    l({ type: "contact", text: "Dr. Anna Keller · +41 79 000 00 09", at: day(3, 10, 5) });
+    l({ type: "contact", text: "Dr. Anna Keller · +41 44 123 45 67", at: day(3, 10, 5) });
     l({ type: "text", text: "Thanks! I'll read it tonight", from_me: true, at: day(3, 10, 30), edited: true });
     l({ type: "text", from_me: false, deleted: true, at: day(2, 17, 1) });
     l({ type: "video", caption: "The view from the balcony", at: day(2, 17, 3), media: { mime: "video/mp4", size: 6_291_456, duration_ms: 42_000, width: 720, height: 1280, downloaded: false } });
@@ -377,17 +374,17 @@ export class MockWhatsApp {
 
     // A few quieter chats, and one archived.
     const quiet: [string, string, "dm" | "group", string, number][] = [
-      ["41440000003@s.whatsapp.net", "Dentist Dr. Keller", "dm", "Reminder: your appointment is on Tue, 3 Nov at 08:30.", 26 * hour],
-      ["41790000005@s.whatsapp.net", "Nina", "dm", "Haha yes exactly", 2 * 24 * hour],
+      ["41443331122@s.whatsapp.net", "Dentist Dr. Keller", "dm", "Reminder: your appointment is on Tue, 3 Nov at 08:30.", 26 * hour],
+      ["41799990011@s.whatsapp.net", "Nina", "dm", "Haha yes exactly", 2 * 24 * hour],
       ["120363055500011122@g.us", "Football Tuesday", "group", "Pitch 3 this week", 3 * 24 * hour],
-      ["41790000006@s.whatsapp.net", "Tom Becker", "dm", "Sent you the invoice", 5 * 24 * hour],
+      ["41798887766@s.whatsapp.net", "Tom Becker", "dm", "Sent you the invoice", 5 * 24 * hour],
     ];
     for (const [jid, name, kind, text, ago] of quiet) {
       this.chat({ jid, name, kind });
-      this.add(jid, { type: "text", text, at: now - ago, ...(kind === "group" ? { sender_jid: "41790000013@s.whatsapp.net", sender_name: "Chris" } : {}) }, true);
+      this.add(jid, { type: "text", text, at: now - ago, ...(kind === "group" ? { sender_jid: "41795550303@s.whatsapp.net", sender_name: "Chris" } : {}) }, true);
     }
-    this.chat({ jid: "41790000008@s.whatsapp.net", name: "Apartment Zurich", kind: "dm", archived: true });
-    this.add("41790000008@s.whatsapp.net", { type: "text", text: "The keys are in the mailbox", at: now - 20 * 24 * hour }, true);
+    this.chat({ jid: "41795551234@s.whatsapp.net", name: "Apartment Zurich", kind: "dm", archived: true });
+    this.add("41795551234@s.whatsapp.net", { type: "text", text: "The keys are in the mailbox", at: now - 20 * 24 * hour }, true);
   }
 
   /** History sync: the missing chats arrive in steps while the progress climbs. */
@@ -407,7 +404,7 @@ export class MockWhatsApp {
   }
 
   private incoming() {
-    const jid = "41790000007@s.whatsapp.net";
+    const jid = "41791112233@s.whatsapp.net";
     if (!this.chats.has(jid) || this.status.state !== "connected") return;
     this.add(jid, { type: "text", text: "I'll make your favourite soup ❤️" });
   }

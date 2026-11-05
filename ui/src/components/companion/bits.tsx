@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Small pieces of the Companion UI: its avatar, effects badge, task state, task rows.
 import { useState } from "react";
 import { ChevronRight, Sparkles, X } from "lucide-react";
@@ -102,13 +99,13 @@ export function TaskRow({ t, defaultOpen }: { t: CompanionTask; defaultOpen?: bo
       <CollapsibleTrigger className="grid w-full grid-cols-[1fr_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2.5 text-left outline-none hover:bg-accent/40 focus-visible:bg-accent/50 sm:flex sm:h-11 sm:py-0">
         <span className="col-span-2 flex min-w-0 flex-1 items-center gap-2 sm:col-span-1">
           <ChevronRight className={cn("size-3.5 shrink-0 text-subtle-foreground transition-transform duration-150", open && "rotate-90")} />
-          <span className="min-w-0 truncate text-[13px]">{t.spec.goal}</span>
+          <span className="min-w-0 truncate text-[0.8125rem]">{t.spec.goal}</span>
         </span>
-        <span className="col-start-1 row-start-2 truncate pl-5.5 text-2xs text-muted-foreground sm:w-[150px] sm:shrink-0 sm:pl-0">
+        <span className="col-start-1 row-start-2 truncate pl-5.5 text-2xs text-muted-foreground sm:w-[9.375rem] sm:shrink-0 sm:pl-0">
           {t.origin === "agent" ? `asked by ${agent?.name ?? "an agent"}` : `for ${agent?.name ?? "the head"}`}
         </span>
         {t.effects !== "none" && <EffectsBadge effects={t.effects} className="hidden sm:inline-flex" />}
-        <TaskState state={t.state} className="col-start-2 row-start-2 justify-self-end sm:w-[132px]" />
+        <TaskState state={t.state} className="col-start-2 row-start-2 justify-self-end sm:w-[8.25rem]" />
         <span className="tabular hidden w-12 shrink-0 text-right text-2xs text-subtle-foreground sm:inline" title={absoluteTime(t.created_at)}>
           {relativeTime(t.created_at)}
         </span>
@@ -128,13 +125,13 @@ export function TaskRow({ t, defaultOpen }: { t: CompanionTask; defaultOpen?: bo
           {t.result && (
             <div>
               <p className="mb-1 text-2xs font-medium text-muted-foreground">Companion's report</p>
-              <p className="rounded-md border bg-card px-2.5 py-2 text-[12.5px] leading-relaxed whitespace-pre-wrap">{t.result}</p>
+              <p className="rounded-md border bg-card px-2.5 py-2 text-[0.7812rem] leading-relaxed whitespace-pre-wrap">{t.result}</p>
             </div>
           )}
           {t.error && <p className={cn("text-xs", isDone(t.state) && t.state !== "completed" ? "text-state-error" : "text-muted-foreground")}>{t.error}</p>}
           <div>
             <p className="mb-1 text-2xs font-medium text-muted-foreground">{t.sent_at ? "Sent to Companion" : "What Companion receives"}</p>
-            <pre className="scroll-thin max-h-48 overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-foreground/85">
+            <pre className="scroll-thin max-h-48 overflow-auto rounded-md border bg-muted/40 px-2.5 py-2 font-mono text-[0.7188rem] leading-relaxed whitespace-pre-wrap text-foreground/85">
               {t.text}
             </pre>
           </div>

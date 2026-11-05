@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -16,7 +13,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Thread logs and the board's order (ARCHITECTURE.md "Board"). A log entry is one short line worth
+// Thread logs and the board's order (DESIGN.md "Board"). A log entry is one short line worth
 // keeping (a decision, an action, information, a link), filed by the owner (anywhere), the
 // head (anywhere) or a project's agents (their project's thread). Entries are never edited:
 // a correction is a new entry naming the one it corrects. Project agents start with their

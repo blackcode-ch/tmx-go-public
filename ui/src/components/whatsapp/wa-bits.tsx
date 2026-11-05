@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Small pieces of the WhatsApp UI: the avatar (the chat's picture or initials), delivery ticks,
 // unread badges, the progress of the history sync, and WhatsApp's own text formatting.
 import { Fragment, type ReactNode } from "react";
@@ -54,7 +51,7 @@ export function WaUnread({ n, muted, className }: { n: number; muted?: boolean; 
   return (
     <span
       className={cn(
-        "tabular inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-2xs font-semibold",
+        "tabular inline-flex h-[1.125rem] min-w-[1.125rem] items-center justify-center rounded-full px-1.5 text-2xs font-semibold",
         muted ? "bg-muted-foreground/25 text-foreground/70" : "bg-brand text-brand-foreground",
         className,
       )}
@@ -123,8 +120,8 @@ export function WaText({ text, className }: { text: string; className?: string }
     const at = m.index ?? 0;
     if (at > last) out.push(text.slice(last, at));
     last = at + s.length;
-    if (s.startsWith("```")) out.push(<code key={k++} className="rounded bg-muted px-1 py-0.5 font-mono text-[12.5px]">{s.slice(3, -3)}</code>);
-    else if (s.startsWith("`")) out.push(<code key={k++} className="rounded bg-muted px-1 py-0.5 font-mono text-[12.5px]">{s.slice(1, -1)}</code>);
+    if (s.startsWith("```")) out.push(<code key={k++} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.7812rem]">{s.slice(3, -3)}</code>);
+    else if (s.startsWith("`")) out.push(<code key={k++} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.7812rem]">{s.slice(1, -1)}</code>);
     else if (/^https?:/.test(s)) out.push(<ExternalLink key={k++} href={s}>{s}</ExternalLink>);
     else if (s.startsWith("*")) out.push(<strong key={k++} className="font-semibold">{s.slice(1, -1)}</strong>);
     else if (s.startsWith("_")) out.push(<em key={k++}>{s.slice(1, -1)}</em>);

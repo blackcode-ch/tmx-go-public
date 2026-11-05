@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -10,7 +7,7 @@ import (
 )
 
 // POST /api/recordings/{id}/native {segment?, duration_ms?, closed?, last?, frames?, error?}:
-// the macOS app's report about a native recording, whose files it writes itself (ARCHITECTURE.md
+// the macOS app's report about a native recording, whose files it writes itself (DESIGN.md
 // "Recorder", native capture). It opens, updates and closes segments, names the frames it
 // wrote, ends the recording with last, and is the app's heartbeat. Answers the Recording, whose
 // state and stopping the app follows.

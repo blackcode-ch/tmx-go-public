@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build darwin
 
 package sysinfo
@@ -37,7 +34,7 @@ func Procs() ([]Proc, error) {
 func currentNice(prio int) int { return prio }
 
 // lowerIO: macOS can set another process's I/O policy only from inside it
-// (setiopolicy_np), so agents keep the default I/O policy; see ARCHITECTURE.md "Resources".
+// (setiopolicy_np), so agents keep the default I/O policy; see DESIGN.md "Resources".
 func lowerIO(int) error { return nil }
 
 func memTotal() uint64 {

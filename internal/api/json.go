@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -9,15 +6,29 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/blackcode-ch/tmx-go/internal/fleet"
 )
 
+// writeJSON marshals v fully before writing anything, so the reply always carries a
+// Content-Length. encoding directly into w (json.NewEncoder(w).Encode) leaves net/http
+// unable to know the body's size ahead of the headers, and past its small buffer (a few KB)
+// it falls back to Transfer-Encoding: chunked - which the Python peers' HTTP client cannot
+// read (found 4 Nov: Hostb looked agent-less to Hosta/Hostc once any reply, e.g.
+// GET /api/sessions with enough agents, passed that size).
 func writeJSON(w http.ResponseWriter, status int, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_, _ = w.Write(b)
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {

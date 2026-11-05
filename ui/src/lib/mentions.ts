@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // @mentions in chat messages: the daemon resolves "@label" when a message is sent and lists
 // who was meant (ChatMessage.mentions). For display, each "@label" in the body becomes a
 // Markdown link that the Markdown component renders as a mention pill ("#@me" when it is you

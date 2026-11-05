@@ -52,19 +52,12 @@ jobs:
       - uses: ./.github/actions/setup
       - run: make deps
       - run: cd ui && pnpm exec eslint . && pnpm exec tsc -b && pnpm test && pnpm build
-      - name: the gatesim test build (never shipped)
-        run: CGO_ENABLED=0 go build -tags gatesim -trimpath -o bin/tmx-gatesim . && ./bin/tmx-gatesim version --gate
-      # The same e2e set-up as the private e2e.yml (a first public run without it hung in the
-      # recorder e2e: no trusted TLS for the phone pages, and the 12-minute recording).
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ms-playwright-1.47.2-${{ runner.os }}
-      - name: Playwright's bundled Chromium (pinned)
-        run: cd ui && pnpm exec playwright install --with-deps chromium
-      - name: a throwaway CA and a certificate for tmx.localhost, trusted by Chromium (the phone's HTTPS)
+      - run: CGO_ENABLED=0 go build -tags gatesim -trimpath -o bin/tmx-gatesim .
+      - run: cd ui && pnpm exec playwright install --with-deps chromium
+      - name: Trust a throwaway certificate for the phone HTTPS tests
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           d="$RUNNER_TEMP/e2e-tls"; mkdir -p "$d"; cd "$d"
           openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=tmx e2e CA" -keyout ca.key -out ca.pem \
             -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign"
@@ -73,14 +66,12 @@ jobs:
           openssl x509 -req -in leaf.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 2 -out cert.pem -extfile leaf.ext
           sudo apt-get install -y -qq libnss3-tools >/dev/null
           mkdir -p "$HOME/.pki/nssdb"
-          certutil -d "sql:$HOME/.pki/nssdb" -N --empty-password 2>/dev/null || true
+          if [ ! -f "$HOME/.pki/nssdb/cert9.db" ]; then
+            certutil -d "sql:$HOME/.pki/nssdb" -N --empty-password
+          fi
           certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n "tmx e2e CA" -i ca.pem
           echo "TMXG_E2E_TLS_DIR=$d" >> "$GITHUB_ENV"
-      - name: e2e (the quick per-PR lengths; the 12-minute recorder run stays the private nightly)
-        env:
-          TMXG_E2E_REC_MINUTES: "1"
-          TMXG_E2E_OUTAGE_S: "5"
-        run: cd ui && node --test --test-concurrency=1 --test-reporter=spec e2e/phone.e2e.mjs e2e/pairing.e2e.mjs e2e/recorder.e2e.mjs
+      - run: cd ui && node --test --test-concurrency=1 e2e/*.e2e.mjs
   # macOS is a first-class target: most users are on Macs. It is free here, so it runs
   # on every snapshot, like Linux and Windows. The app is built UNSIGNED (ad hoc, SIGN_IDENTITY "-"):
   # the signing certificate stays private and is used only by the private release build.
