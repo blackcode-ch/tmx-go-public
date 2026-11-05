@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -300,7 +297,7 @@ func TestParseAgyStatus(t *testing.T) {
 	if r, ok := parseAgyStatus(accountstest.AgyStatusOut); !ok || r.connected {
 		t.Fatalf("%+v %v", r, ok)
 	}
-	if r, ok := parseAgyStatus(`{"loggedIn":true,"user":{"email":"a@b.example"},"tier":"ultra"}`); !ok || r.id.Email != "a@b.example" || r.id.Plan != "Ultra" {
+	if r, ok := parseAgyStatus(`{"loggedIn":true,"user":{"email":"a@b.co"},"tier":"ultra"}`); !ok || r.id.Email != "a@b.co" || r.id.Plan != "Ultra" {
 		t.Fatalf("json: %+v %v", r, ok)
 	}
 	if _, ok := parseAgyStatus("whatever"); ok {

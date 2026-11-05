@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Copyright (c) 2023 shadcn; adapted for tmx
-
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
@@ -26,7 +23,7 @@ const buttonVariants = cva(
       size: {
         default: "h-8 px-3 has-[>svg]:px-2.5",
         xs: "h-6 gap-1 rounded-[5px] px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1.5 rounded-md px-2.5 text-[12.5px] has-[>svg]:px-2",
+        sm: "h-7 gap-1.5 rounded-md px-2.5 text-[0.7812rem] has-[>svg]:px-2",
         lg: "h-9 rounded-md px-4 has-[>svg]:px-3",
         icon: "size-8",
         "icon-xs": "size-6 rounded-[5px] [&_svg:not([class*='size-'])]:size-3.5",

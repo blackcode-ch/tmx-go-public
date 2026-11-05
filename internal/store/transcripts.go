@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -13,7 +10,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Voice transcripts (ARCHITECTURE.md "Voice"). One row per source; the text is indexed by FTS5
+// Voice transcripts (DESIGN.md "Voice"). One row per source; the text is indexed by FTS5
 // (transcripts_fts, kept in step by triggers), so search finds words regardless of accents
 // and case. A query with no words falls back to a plain substring match.
 

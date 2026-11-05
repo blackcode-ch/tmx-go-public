@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // "Companion" as the first item of the sidebar's Chats section, once Companion is set up
 // (connected, or tmx installed into it): a dot when Companion wrote something the owner hasn't
 // seen (kept per viewer in localStorage), a quiet spinner while something is in flight.
@@ -31,7 +28,7 @@ export function CompanionSidebarItem({ path, onNavigate }: { path: string; onNav
       aria-current={on ? "page" : undefined}
       data-companion-item
       className={cn(
-        "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
+        "flex h-7 items-center gap-2 rounded-md px-2 text-[0.8125rem] text-sidebar-foreground outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-ring",
         on && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
       )}
     >

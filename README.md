@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/board.png" alt="tmx's Board: the head's conversation as strings of cards, one string per topic, with chats, WhatsApp and projects in the sidebar" width="100%">
+  <img src="docs/images/matrix.png" alt="tmx's Matrix: every thread on a canvas, one string per project; a thread open on the right with the head's turns on it, its state and its events" width="100%">
 </p>
 
 One binary that runs a tree of coding agents on your machine: a head agent, a lead per project, and
@@ -32,10 +32,10 @@ and using the CLI (`tmx skill install` puts it in `~/.claude/skills/tmx`).
 Release builds update themselves from the signed GitHub releases once no agent is busy (`tmx update`,
 Settings → Updates); `make release-key` sets up the signing key once, and `make signing-cert` the macOS
 code-signing certificate (so macOS keeps tmx's microphone and screen permissions across updates).
-[ARCHITECTURE.md](ARCHITECTURE.md) is the design contract: process model, API, MCP tools, safety, chats.
+[DESIGN.md](DESIGN.md) is the design contract: process model, API, MCP tools, safety, chats.
 
 For phone access through a configured trusted HTTPS address, see
-[phone pairing and owner passkeys](ARCHITECTURE.md).
+[phone pairing and owner passkeys](docs/phone-pairing.md).
 
 ---
 *This is a scrubbed CI snapshot of a private repository, made automatically. Personal and machine

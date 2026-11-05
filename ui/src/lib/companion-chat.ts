@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Companion 1:1 (ARCHITECTURE.md "Companion"): the conversation between the owner, the head and
+// Companion 1:1 (DESIGN.md "Companion"): the conversation between the owner, the head and
 // Companion (GET /api/companion/conversation): the owner's and the head's messages, Companion's
 // replies, questions and messages to the head, tasks handed to it, and tmx's error notes.
 // This file holds the logic only (no React, no transport): the store's shape, the event-driven

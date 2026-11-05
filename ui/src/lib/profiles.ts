@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Agent profiles: rendering an instructions template like the daemon does (internal/fleet/prompts.go),
 // deriving the per-level policy from the built-ins (internal/fleet/profiles.go), and display helpers.
 import type { Agent, Level, LevelPolicy, Policy, Profile } from "./types";

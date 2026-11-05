@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The Matrix list's windowing (pages/matrix.tsx): which rows to render for a scroll position.
 // Pure, so ui/test/matrix-window.test.mjs can check the load budget without a browser.
 

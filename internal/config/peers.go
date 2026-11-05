@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 import (
@@ -12,7 +9,7 @@ import (
 )
 
 // Peer is another machine of the fleet that runs the Python tmx daemon (config.json "peers",
-// production profile only; ARCHITECTURE.md "Python fleet interop"). This daemon reads its agents
+// production profile only; DESIGN.md "Python fleet interop"). This daemon reads its agents
 // (GET /api/sessions) and exchanges mail with it over its pair-token API. URL is that daemon's
 // HTTPS address on the tailnet (tailscale serve): a pair token never travels in clear, and no
 // raw LAN or 100.x address is accepted. The pair tokens live in the secrets folder (peers.json),

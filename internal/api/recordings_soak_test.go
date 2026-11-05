@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 // The recorder soak (tmx-lead, 3 Nov; the Python fleet's recorder-soak.yml ported): a REAL clock, the daemon's

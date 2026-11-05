@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package term runs an agent in a pseudo-terminal (terminal mode): the user's shell, or a
 // harness's interactive TUI (Claude Code, Codex, opencode, pi). Output is streamed raw and
 // kept in a replay ring buffer. For a harness, a virtual screen (package screen) is fed the
@@ -17,13 +14,12 @@ import (
 	"sync"
 	"time"
 
-	pty "github.com/aymanbagabas/go-pty"
-
 	"github.com/blackcode-ch/tmx-go/internal/codexguard"
 	"github.com/blackcode-ch/tmx-go/internal/harness"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/runner"
 	"github.com/blackcode-ch/tmx-go/internal/runner/claude"
+	"github.com/blackcode-ch/tmx-go/internal/runner/host"
 	"github.com/blackcode-ch/tmx-go/internal/sysinfo"
 )
 
@@ -155,38 +151,64 @@ func (termRunner) Start(ctx context.Context, spec runner.Spec) (runner.Process, 
 	if cols <= 0 || rows <= 0 {
 		cols, rows = defaultCols, defaultRows
 	}
-	pt, err := pty.New()
-	if err != nil {
-		return nil, fmt.Errorf("open pty: %w", err)
-	}
-	if err := pt.Resize(cols, rows); err != nil {
-		pt.Close()
-		return nil, fmt.Errorf("size pty: %w", err)
-	}
 	argv0, args := l.path, l.args
 	if spec.LowPriority {
 		argv0, args = sysinfo.LowPriorityCommand(argv0, args) // macOS: low disk I/O policy
 	}
-	cmd := pt.Command(argv0, args...)
-	cmd.Dir = spec.Cwd
-	prepareCommand(cmd)
-	cmd.Env = envFor(spec, l)
-	if err := cmd.Start(); err != nil {
-		pt.Close()
-		return nil, fmt.Errorf("start %s: %w", l.path, err)
+	var c conduit
+	if spec.HostDir != "" && spec.HostExe != "" {
+		// A session host owns the terminal: the agent outlives this daemon (runner/host).
+		hc, err := host.Spawn(ctx, spec.HostExe, spec.HostDir, host.Spec{Path: argv0, Args: args, Env: envFor(spec, l),
+			Cwd: spec.Cwd, Cols: cols, Rows: rows, Token: spec.HostToken})
+		if err != nil {
+			return nil, err
+		}
+		sysinfo.RegisterHosted(hc.PID(), hc.HostPID(), hc.HostStart(), l.info == nil)
+		c = hc
+	} else {
+		lc, err := startLocal(argv0, args, spec.Cwd, envFor(spec, l), cols, rows)
+		if err != nil {
+			return nil, fmt.Errorf("start %s: %w", l.path, err)
+		}
+		sysinfo.RegisterChild(lc.PID(), l.info == nil)
+		c = lc
 	}
 	started = true
 	guardStarted = true
-	sysinfo.RegisterChild(cmd.Process.Pid, l.info == nil)
 	if spec.LowPriority {
-		_ = sysinfo.LowerPriority(cmd.Process.Pid) // best effort; children inherit it
+		_ = sysinfo.LowerPriority(c.PID()) // best effort; children inherit it
 	}
-	afterStart(pt)
+	return newProcess(c, l, spec, guardLease, cols, rows), nil
+}
 
+// Reattach connects to the session host an earlier daemon left spec's agent running in
+// (spec.HostDir): the same program, its screen rebuilt from the host's replay. It also returns
+// the credential the program was started with (it still uses it). ErrNoHost when there is no
+// host to reattach to.
+func (termRunner) Reattach(ctx context.Context, spec runner.Spec) (runner.Process, string, error) {
+	if spec.HostDir == "" {
+		return nil, "", host.ErrNoHost
+	}
+	l, err := command(spec)
+	if err != nil {
+		return nil, "", err
+	}
+	hc, err := host.Dial(spec.HostDir, 0) // the kept output: its recent screen
+	if err != nil {
+		return nil, "", err
+	}
+	sysinfo.RegisterHosted(hc.PID(), hc.HostPID(), hc.HostStart(), l.info == nil)
+	cols, rows := spec.Cols, spec.Rows
+	if cols <= 0 || rows <= 0 {
+		cols, rows = defaultCols, defaultRows
+	}
+	return newProcess(hc, l, spec, nil, cols, rows), hc.Token(), nil
+}
+
+func newProcess(c conduit, l launch, spec runner.Spec, guardLease *codexguard.Lease, cols, rows int) *process {
 	p := &process{
 		guardLease: guardLease,
-		pty:        pt,
-		cmd:        cmd,
+		c:          c,
 		shell:      l.info == nil,
 		events:     make(chan runner.Event, EventBuffer),
 		ring:       newRing(ReplaySize),
@@ -205,31 +227,45 @@ func (termRunner) Start(ctx context.Context, spec runner.Spec) (runner.Process, 
 		go p.w.run()
 		go p.w.watchSession()
 	}
-	return p, nil
+	return p
+}
+
+// Detach leaves a hosted program running and ends this process's view of it (a daemon
+// restart): its events close without EvExit. A program in the daemon's own pty cannot be
+// detached (false).
+func (p *process) Detach() bool {
+	if _, ok := p.c.(*host.Conn); !ok {
+		return false
+	}
+	p.mu.Lock()
+	p.detached = true
+	p.mu.Unlock()
+	_ = p.c.Close()
+	return true
 }
 
 type process struct {
 	guardLease *codexguard.Lease
-	pty        pty.Pty
-	cmd        *pty.Cmd
+	c          conduit
 	shell      bool
 	ring       *ring
 	w          *watcher // nil for a shell
 
 	wmu sync.Mutex // serialises writes to the pty
 
-	mu     sync.Mutex // guards state, closed and sending on events; never held across a pty write
-	state  model.AgentState
-	closed bool
-	events chan runner.Event
-	quiet  *time.Timer // shells only
-	turnAt time.Time   // when the current turn began (working after idle)
+	mu       sync.Mutex // guards state, closed and sending on events; never held across a pty write
+	state    model.AgentState
+	closed   bool
+	detached bool // Detach: the program runs on in its host
+	events   chan runner.Event
+	quiet    *time.Timer // shells only
+	turnAt   time.Time   // when the current turn began (working after idle)
 
 	done chan struct{}
 }
 
 func (p *process) Events() <-chan runner.Event { return p.events }
-func (p *process) PID() int                    { return p.cmd.Process.Pid }
+func (p *process) PID() int                    { return p.c.PID() }
 func (p *process) Replay() []byte              { return p.ring.Bytes() }
 
 // Write sends a viewer's input (owner or, absent a pending approval, a head/lead typing into
@@ -266,7 +302,7 @@ func (p *process) Write(b []byte, owner bool) error {
 func (p *process) write(b []byte) error {
 	p.wmu.Lock()
 	defer p.wmu.Unlock()
-	n, err := p.pty.Write(b)
+	n, err := p.c.Write(b)
 	if err == nil && n != len(b) {
 		err = io.ErrShortWrite
 	}
@@ -305,7 +341,7 @@ func (p *process) Resize(cols, rows int) error {
 	if p.w != nil {
 		p.w.scr.Resize(cols, rows)
 	}
-	return p.pty.Resize(cols, rows)
+	return p.c.Resize(cols, rows)
 }
 
 func (p *process) Answer(id string, d runner.Decision) error {
@@ -329,12 +365,12 @@ func (p *process) Stop(ctx context.Context) error {
 	if p.shell {
 		go func() { _ = p.write([]byte("exit\r")) }() // not waited on: a shell not reading its input is signalled below all the same
 	} else {
-		terminate(p.cmd)
+		p.c.Terminate()
 	}
 	if p.waitDone(ctx, exitGrace) {
 		return nil
 	}
-	terminate(p.cmd)
+	p.c.Terminate()
 	select {
 	case <-p.done:
 		return nil
@@ -343,7 +379,7 @@ func (p *process) Stop(ctx context.Context) error {
 	if p.waitDone(context.Background(), killGrace) {
 		return nil
 	}
-	kill(p.cmd)
+	p.c.Kill()
 	<-p.done
 	return nil
 }
@@ -393,7 +429,7 @@ func (p *process) read(done chan<- struct{}) {
 	defer close(done)
 	buf := make([]byte, 32<<10)
 	for {
-		n, err := p.pty.Read(buf)
+		n, err := p.c.Read(buf)
 		if n > 0 {
 			chunk := append([]byte(nil), buf[:n]...)
 			p.ring.Write(chunk)
@@ -419,23 +455,42 @@ func (p *process) read(done chan<- struct{}) {
 // wait reaps the process, lets the reader drain, closes the pty and emits EvExit.
 func (p *process) wait(readDone <-chan struct{}) {
 	if p.guardLease != nil {
-		defer p.guardLease.Close()
+		defer func() {
+			p.mu.Lock()
+			detached := p.detached
+			p.mu.Unlock()
+			if !detached { // a hosted Codex still runs with the lease's configuration
+				p.guardLease.Close()
+			}
+		}()
 	}
-	err := p.cmd.Wait()
+	code, err := p.c.Wait()
 	select {
 	case <-readDone:
 	case <-time.After(500 * time.Millisecond): // a background job may still hold the tty
 	}
-	p.pty.Close()
+	p.c.Close()
 	<-readDone
 	if p.quiet != nil {
 		p.quiet.Stop()
 	}
-
-	ev := runner.Event{Kind: runner.EvExit, ExitCode: -1}
-	if st := p.cmd.ProcessState; st != nil {
-		ev.ExitCode = st.ExitCode()
+	p.mu.Lock()
+	detached := p.detached || errors.Is(err, host.ErrDetached)
+	p.mu.Unlock()
+	if detached {
+		// The program runs on in its host; this daemon only stops watching it.
+		p.mu.Lock()
+		p.closed = true
+		close(p.events)
+		p.mu.Unlock()
+		close(p.done)
+		if p.w != nil {
+			p.w.scr.Close()
+		}
+		return
 	}
+
+	ev := runner.Event{Kind: runner.EvExit, ExitCode: code}
 	if ev.ExitCode != 0 {
 		ev.Err = err
 		if p.w != nil { // what the harness said last, like a chat runner's stderr tail

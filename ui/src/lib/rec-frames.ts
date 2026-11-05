@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Still frames for the summaries (ARCHITECTURE.md "Recorder"): a JPEG of the screen or camera at the
+// Still frames for the summaries (DESIGN.md "Recorder"): a JPEG of the screen or camera at the
 // start, every 30 s of recorded time and at stop, at most 1280 px on the longer side and
 // 600 KB. ImageCapture.grabFrame (Chromium, WebView2) reads the track itself, so it works while
 // this window is hidden behind what is being recorded; elsewhere a tiny muted <video> plays the
@@ -25,6 +22,30 @@ export function frameEvery(): number {
   return FRAME_EVERY_MS;
 }
 
+const LOOK_W = 48;
+const LOOK_H = 27;
+/** A key moment: at least this share of the picture changed, looked at every CHANGE_EVERY_MS, at most one per KEY_GAP_MS. */
+export const CHANGE_MIN = 0.02;
+export const CHANGE_EVERY_MS = 2000;
+export const KEY_GAP_MS = 6000;
+/** at most this many key-moment stills per recording (the rest of MAX_FRAMES stays for the 30-s ones) */
+export const MAX_KEY_FRAMES = 150;
+
+/** RGBA pixels as grey levels (0.3 R + 0.6 G + 0.1 B). */
+export function toGrey(px: ArrayLike<number>): Uint8Array {
+  const out = new Uint8Array(px.length >> 2);
+  for (let i = 0; i < out.length; i++) out[i] = (px[4 * i] * 3 + px[4 * i + 1] * 6 + px[4 * i + 2]) / 10;
+  return out;
+}
+
+/** The share of cells that moved by more than 24 grey levels between two pictures of the same size. */
+export function greyChange(a: Uint8Array, b: Uint8Array): number {
+  if (a.length !== b.length || !a.length) return 0;
+  let moved = 0;
+  for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 24) moved++;
+  return moved / a.length;
+}
+
 type ImageCaptureLike = { grabFrame(): Promise<ImageBitmap> };
 type ImageCaptureCtor = new (t: MediaStreamTrack) => ImageCaptureLike;
 
@@ -43,6 +64,8 @@ export class FrameGrabber {
   private capture: ImageCaptureLike | null = null;
   private video: HTMLVideoElement | null = null;
   private canvas = document.createElement("canvas");
+  private prevGrey: Uint8Array | null = null;
+  private look: HTMLCanvasElement | null = null;
 
   constructor(track: MediaStreamTrack) {
     this.track = track;
@@ -76,6 +99,44 @@ export class FrameGrabber {
     return this.encode(v, v.videoWidth, v.videoHeight);
   }
 
+  /**
+   * How much of the picture changed since the last call (0..1): the share of 48×27 grey cells that moved by
+   * more than 24 levels (the Python recorder's key moments: a new page, a highlight, a drawing). The first
+   * call, or one without a picture, returns 0.
+   */
+  async change(): Promise<number> {
+    if (this.track.readyState !== "live") return 0;
+    let grey: Uint8Array | null = null;
+    if (this.capture) {
+      try {
+        const bm = await withTimeout(this.capture.grabFrame(), 3000);
+        try {
+          grey = this.greyOf(bm);
+        } finally {
+          bm.close();
+        }
+      } catch {
+        /* this time through the video element */
+      }
+    }
+    if (!grey) {
+      const v = await this.videoElement();
+      if (!v?.videoWidth) return 0;
+      grey = this.greyOf(v);
+    }
+    const prev = this.prevGrey;
+    this.prevGrey = grey;
+    return grey && prev ? greyChange(prev, grey) : 0;
+  }
+
+  private greyOf(src: CanvasImageSource): Uint8Array | null {
+    this.look ??= Object.assign(document.createElement("canvas"), { width: LOOK_W, height: LOOK_H });
+    const g = this.look.getContext("2d", { willReadFrequently: true });
+    if (!g) return null;
+    g.drawImage(src, 0, 0, LOOK_W, LOOK_H);
+    return toGrey(g.getImageData(0, 0, LOOK_W, LOOK_H).data);
+  }
+
   stop() {
     if (this.video) {
       this.video.srcObject = null;
@@ -99,10 +160,7 @@ export class FrameGrabber {
     }
     const v = this.video;
     if (v.readyState < 2) {
-      await withTimeout(
-        new Promise<void>((res) => v.addEventListener("loadeddata", () => res(), { once: true })),
-        3000,
-      ).catch(() => {});
+      await withTimeout(new Promise<void>((res) => v.addEventListener("loadeddata", () => res(), { once: true })), 3000).catch(() => {});
     }
     return v.readyState >= 2 ? v : null;
   }

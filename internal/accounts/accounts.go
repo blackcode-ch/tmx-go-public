@@ -1,11 +1,9 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package accounts knows which AI accounts the owner has connected to the harnesses tmx runs
-// (Claude Code, Codex, Antigravity) and how much of each plan's limits is used, as the
-// harnesses themselves report it. It also runs each harness's own sign-in in a terminal and its
-// own sign-out. It never reads a credential file or the keychain, and never keeps a token.
-// See ARCHITECTURE.md "AI accounts and usage".
+// (Claude Code, Codex, Antigravity, Gemini CLI) and how much of each plan's limits is used, as
+// the harnesses themselves report it. It also runs each harness's own sign-in in a terminal and
+// its own sign-out. It never reads a credential file or the keychain, and never keeps a token
+// (Gemini CLI's google_accounts.json, which it reads, holds only addresses).
+// See DESIGN.md "AI accounts and usage".
 package accounts
 
 import (
@@ -29,6 +27,7 @@ const (
 	Claude      model.Harness = model.HarnessClaude
 	Codex       model.Harness = model.HarnessCodex
 	Antigravity model.Harness = "antigravity"
+	Gemini      model.Harness = model.HarnessGemini
 )
 
 // Sign-in states.
@@ -52,13 +51,17 @@ type Payload struct {
 	UpdatedAt int64     `json:"updated_at"`
 }
 
-// Account is one harness's account.
+// Account is one of a harness's accounts.
 type Account struct {
-	Harness   string   `json:"harness"`
-	Label     string   `json:"label"`
-	Installed bool     `json:"installed"`
-	Connected bool     `json:"connected"`
-	Account   Identity `json:"account"`
+	Harness string `json:"harness"`
+	// Name is the account's name among the harness's ("default" = the harness's usual home).
+	Name string `json:"name"`
+	// LaunchDefault: agents of this harness launched without an account use this one.
+	LaunchDefault bool     `json:"launch_default"`
+	Label         string   `json:"label"`
+	Installed     bool     `json:"installed"`
+	Connected     bool     `json:"connected"`
+	Account       Identity `json:"account"`
 	// Limits are the plan's limits, as the harness reports them; empty with LimitsNote saying why.
 	Limits     []Limit `json:"limits"`
 	LimitsNote string  `json:"limits_note"`
@@ -94,7 +97,7 @@ type Login struct {
 
 // Errors (the API maps them: unknown 404, not installed 409, no sign-in 404).
 var (
-	ErrUnknown      = errors.New("no such account: the harnesses are claude, codex and antigravity")
+	ErrUnknown      = errors.New("no such account: the harnesses are claude, codex, antigravity and gemini")
 	ErrNotInstalled = errors.New("not installed")
 	ErrNoLogin      = errors.New("no sign-in is running")
 )
@@ -112,6 +115,8 @@ type Options struct {
 	LookPath func(h model.Harness) (string, error)
 	// Env is added to the harnesses' environment (the daemon's CLAUDE_CONFIG_DIR; tests).
 	Env []string
+	// Profiles lists each harness's named accounts; nil = only "default".
+	Profiles *Profiles
 
 	Every        time.Duration // the periodic refresh (default 5 min; <0 = none)
 	CheckTimeout time.Duration // each status command (default 20 s)
@@ -140,10 +145,12 @@ type Service struct {
 	agy   agyProbe // what this agy is known to support (antigravity.go)
 }
 
-// entry is one harness's state.
+// entry is one account's state.
 type entry struct {
 	def  *def
-	acct Account // the last check's result (Login, Refreshing filled in by Payload)
+	name string   // the account's name
+	home []string // its HomeEnv
+	acct Account  // the last check's result (Login, Refreshing filled in by Payload)
 
 	refreshing bool
 	again      bool      // a refresh was asked for while one ran: run once more
@@ -156,12 +163,17 @@ type entry struct {
 
 // def is what tmx knows about one harness's account.
 type def struct {
-	h       model.Harness
-	label   string
-	check   func(ctx context.Context, s *Service, path string) result
-	login   func(ctx context.Context, s *Service, path string) []string
-	logout  func(ctx context.Context, s *Service, path string) []string
-	install string
+	h      model.Harness
+	label  string
+	check  func(ctx context.Context, s *scope, path string) result
+	login  func(ctx context.Context, s *scope, path string) []string
+	logout func(ctx context.Context, s *scope, path string) []string // nil args: no sign-out command
+	// signedIn, if set, is polled while a sign-in runs: the sign-in stays open in the harness's
+	// app after it (Gemini CLI), so it is stopped once this reports the account signed in.
+	signedIn func(s *scope) bool
+	// loginEnv is added to the sign-in's environment only.
+	loginEnv []string
+	install  string
 }
 
 // result is what a check found out.
@@ -210,18 +222,40 @@ func New(o Options) *Service {
 	}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	for _, d := range defs() {
-		s.entries = append(s.entries, &entry{def: d, login: Login{State: LoginIdle},
-			acct: Account{Harness: string(d.h), Label: d.label, Install: d.install, Account: Identity{Method: MethodUnknown}}})
+		for _, n := range s.names(d.h) {
+			s.entries = append(s.entries, s.newEntry(d, n))
+		}
 	}
 	s.updatedAt = s.now()
 	return s
 }
+
+func (s *Service) names(h model.Harness) []string {
+	if s.o.Profiles == nil {
+		return []string{DefaultName}
+	}
+	return s.o.Profiles.Names(h)
+}
+
+func (s *Service) newEntry(d *def, name string) *entry {
+	var home []string
+	if s.o.Profiles != nil {
+		home = s.o.Profiles.Env(d.h, name)
+	}
+	return &entry{def: d, name: name, home: home, login: Login{State: LoginIdle},
+		acct: Account{Harness: string(d.h), Name: name, Label: d.label, Install: d.install, Account: Identity{Method: MethodUnknown}}}
+}
+
+// scope is e's view of the service.
+func (s *Service) scope(e *entry) *scope { return &scope{Service: s, home: e.home} }
 
 func defs() []*def {
 	return []*def{
 		{h: Claude, label: "Claude", check: claudeCheck, login: claudeLogin, logout: claudeLogout, install: installHint(Claude)},
 		{h: Codex, label: "Codex", check: codexCheck, login: codexLogin, logout: codexLogout, install: installHint(Codex)},
 		{h: Antigravity, label: "Antigravity", check: agyCheck, login: agyLogin, logout: agyLogout, install: installHint(Antigravity)},
+		{h: Gemini, label: "Gemini CLI", check: geminiCheck, login: geminiLogin, logout: geminiLogout, install: installHint(Gemini),
+			signedIn: geminiSignedIn, loginEnv: geminiLoginEnv},
 	}
 }
 
@@ -279,12 +313,18 @@ func (s *Service) Close() {
 	s.wg.Wait()
 }
 
-func (s *Service) entry(h string) *entry {
+// entry is h's account name ("" = "default"; h "" = claude), or nil.
+func (s *Service) entry(h, name string) *entry {
 	if h == "" {
 		h = string(Claude)
 	}
+	if name == "" {
+		name = DefaultName
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, e := range s.entries {
-		if string(e.def.h) == h {
+		if string(e.def.h) == h && e.name == name {
 			return e
 		}
 	}
@@ -315,6 +355,8 @@ func (s *Service) payloadLocked() Payload {
 		a.Limits = append(make([]Limit, 0, len(e.acct.Limits)), e.acct.Limits...)
 		a.Refreshing = e.refreshing
 		a.Login = e.login
+		a.Name = e.name
+		a.LaunchDefault = e.name == s.launchDefault(e.def.h)
 		p.Accounts = append(p.Accounts, a)
 	}
 	return p
@@ -342,17 +384,29 @@ func (s *Service) lookPath(h model.Harness) (string, error) {
 		}
 		return c, nil
 	}
-	return harness.LookPath(h, "")
+	return harness.SignInPath(h) // past a production stub (signin.go)
 }
 
-// Refresh checks one account again ("" = all) in the background. A refresh asked for while one
-// runs for that harness runs once more after it.
-func (s *Service) Refresh(h string) error {
+// Refresh checks h's account name again in the background (h "" = every account; name "" =
+// every account of h). A refresh asked for while one runs for that account runs once more
+// after it.
+func (s *Service) Refresh(h, name string) error {
 	if h == "" {
 		s.refreshAll()
 		return nil
 	}
-	e := s.entry(h)
+	if name == "" {
+		if !Known(h) {
+			return ErrUnknown
+		}
+		for _, e := range s.snapshot() {
+			if string(e.def.h) == h {
+				s.refresh(e)
+			}
+		}
+		return nil
+	}
+	e := s.entry(h, name)
 	if e == nil {
 		return ErrUnknown
 	}
@@ -361,9 +415,16 @@ func (s *Service) Refresh(h string) error {
 }
 
 func (s *Service) refreshAll() {
-	for _, e := range s.entries {
+	for _, e := range s.snapshot() {
 		s.refresh(e)
 	}
+}
+
+// snapshot is the entries now (Add and Remove replace the slice).
+func (s *Service) snapshot() []*entry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]*entry(nil), s.entries...)
 }
 
 func (s *Service) refresh(e *entry) {
@@ -421,7 +482,7 @@ func (s *Service) check(e *entry) Account {
 	s.mu.Lock()
 	prev := e.acct
 	s.mu.Unlock()
-	a := Account{Harness: string(e.def.h), Label: e.def.label, Install: e.def.install,
+	a := Account{Harness: string(e.def.h), Name: e.name, Label: e.def.label, Install: e.def.install,
 		Account: Identity{Method: MethodUnknown}, Limits: []Limit{}}
 	path, err := s.lookPath(e.def.h)
 	if err != nil {
@@ -432,7 +493,7 @@ func (s *Service) check(e *entry) Account {
 	if s.ctx.Err() != nil {
 		return prev
 	}
-	r := e.def.check(s.ctx, s, path)
+	r := e.def.check(s.ctx, s.scope(e), path)
 	a.CheckedAt = s.now()
 	if !r.known {
 		// Keep what was shown, but say the check failed.
@@ -458,12 +519,12 @@ func (s *Service) check(e *entry) Account {
 	return a
 }
 
-// RateLimited marks a limit of h's account as reached at once (Claude's rate_limit_event with
+// RateLimited marks a limit of h's account name ("" = "default") as reached at once (Claude's rate_limit_event with
 // status "rejected" in a chat agent's stream), then checks the account again. kind is the
 // harness's name for the window (five_hour, seven_day, …; "" = unknown); resetsAt is Unix
 // seconds (0 = unknown). Extra usage ("overage") is not a plan limit and only triggers the check.
-func (s *Service) RateLimited(h model.Harness, kind string, resetsAt int64) {
-	e := s.entry(string(h))
+func (s *Service) RateLimited(h model.Harness, name, kind string, resetsAt int64) {
+	e := s.entry(string(h), name)
 	if e == nil {
 		return
 	}

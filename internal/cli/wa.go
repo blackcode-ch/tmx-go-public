@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -32,7 +29,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/whatsapp"
 )
 
-// tmx wa: the owner's WhatsApp, linked to the daemon (ARCHITECTURE.md "WhatsApp").
+// tmx wa: the owner's WhatsApp, linked to the daemon (DESIGN.md "WhatsApp").
 const waUsage = `usage: tmx wa status | link [--phone +41…] | unlink --yes | chats [--limit N] [SEARCH...]
               | read CHAT [--limit N] | send CHAT [-f FILE]... TEXT...
   (CHAT: a name, a phone number with country code, or the JID that tmx wa chats shows)`

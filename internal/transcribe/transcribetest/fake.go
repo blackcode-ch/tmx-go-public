@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package transcribetest installs a fake voice engine and model into a throwaway tmx home, for
 // tests of the API, the CLI and MCP, and for trying the UI on a throwaway daemon. The engine is a
 // shell script that answers like whisper-cli (--version, and -oj -of OUT writing OUT.json with

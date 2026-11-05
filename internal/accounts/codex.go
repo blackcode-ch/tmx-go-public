@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package accounts
 
 import (
@@ -38,10 +35,10 @@ import (
 //     carry {used_percent, window_minutes, resets_at | resets_in_seconds}.
 //   - `codex login` signs in through the browser (a local callback); `codex logout`.
 
-func codexLogin(context.Context, *Service, string) []string  { return []string{"login"} }
-func codexLogout(context.Context, *Service, string) []string { return []string{"logout"} }
+func codexLogin(context.Context, *scope, string) []string  { return []string{"login"} }
+func codexLogout(context.Context, *scope, string) []string { return []string{"logout"} }
 
-func codexCheck(ctx context.Context, s *Service, path string) result {
+func codexCheck(ctx context.Context, s *scope, path string) result {
 	ans, err := s.codexAppServer(ctx, path)
 	var res result
 	if err == nil && ans.accountKnown {
@@ -189,7 +186,7 @@ func codexLine(v any) []byte {
 }
 
 // codexAppServer asks a short-lived `codex app-server` for the account and its rate limits.
-func (s *Service) codexAppServer(ctx context.Context, path string) (codexAnswers, error) {
+func (s *scope) codexAppServer(ctx context.Context, path string) (codexAnswers, error) {
 	var ans codexAnswers
 	ctx, cancel := context.WithTimeout(ctx, s.o.CheckTimeout)
 	defer cancel()
@@ -407,10 +404,12 @@ func deref(p *string) string {
 	return *p
 }
 
-// codexHome is Codex's folder: CODEX_HOME (in Options.Env, then the daemon's), else ~/.codex.
-func (s *Service) codexHome() string {
-	for i := len(s.o.Env) - 1; i >= 0; i-- {
-		if v, ok := strings.CutPrefix(s.o.Env[i], "CODEX_HOME="); ok && v != "" {
+// codexHome is Codex's folder: CODEX_HOME (the account's, Options.Env's or the daemon's), else
+// ~/.codex.
+func (s *scope) codexHome() string {
+	env := s.env()
+	for i := len(env) - 1; i >= 0; i-- {
+		if v, ok := strings.CutPrefix(env[i], "CODEX_HOME="); ok && v != "" {
 			return v
 		}
 	}

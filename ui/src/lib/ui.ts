@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Ephemeral UI state: dialogs, the mobile nav sheet, focus requests.
 import { create } from "zustand";
 

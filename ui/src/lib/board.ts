@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The board (ARCHITECTURE.md "Board"): the head's turns as cards hanging on threads (topics). The
+// The board (DESIGN.md "Board"): the head's turns as cards hanging on threads (topics). The
 // daemon builds the cards (GET /api/board); this keeps them current from the event stream.
 import { create } from "zustand";
 import { onBusEvent, useStore } from "./store";

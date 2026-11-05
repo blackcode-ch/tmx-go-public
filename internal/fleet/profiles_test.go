@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -86,7 +83,7 @@ func TestProfilesSeedFromConfiguredPolicy(t *testing.T) {
 	if lead.Model != haiku || lead.PermissionMode != "acceptEdits" || len(lead.CanLaunch) != 0 || !lead.Modified {
 		t.Fatalf("lead %+v", lead)
 	}
-	if rv, _ := f.GetProfile("reviewer"); rv.Model != "claude-sonnet-5-5" {
+	if rv, _ := f.GetProfile("reviewer"); rv.Model != "claude-sonnet-5" {
 		t.Fatalf("custom profile took the policy: %+v", rv)
 	}
 	f2 := open(model.DefaultPolicy())
@@ -280,7 +277,7 @@ func TestSetPolicyKeepsCustomLaunchRights(t *testing.T) {
 	f := e.started()
 	pol := f.Policy()
 	lp := pol.Levels[model.LevelLead]
-	lp.Model, lp.AllowedModels = haiku, []string{haiku, "claude-sonnet-5-5"}
+	lp.Model, lp.AllowedModels = haiku, []string{haiku, "claude-sonnet-5"}
 	pol.Levels[model.LevelLead] = lp
 	if _, err := f.SetPolicy(OwnerCaller, pol); err != nil {
 		t.Fatal(err)
@@ -316,7 +313,7 @@ func TestUpdateAgent(t *testing.T) {
 	if up, _ := f.UpdateAgent(OwnerCaller, "w1", AgentPatch{Role: str("tests")}); up.Changed || up.RestartNeeded {
 		t.Fatalf("no-op: %+v", up)
 	}
-	if _, err := f.UpdateAgent(OwnerCaller, "w1", AgentPatch{Model: str(opus)}); KindOf(err) != KindForbidden {
+	if _, err := f.UpdateAgent(OwnerCaller, "w1", AgentPatch{Model: str("not-an-allowed-model")}); KindOf(err) != KindForbidden {
 		t.Fatalf("disallowed model: %v", err)
 	}
 	if _, err := f.UpdateAgent(OwnerCaller, "w1", AgentPatch{Profile: str("lead")}); KindOf(err) != KindInvalid {
@@ -358,7 +355,7 @@ func TestAgentsWithoutProfileGetTheirLevel(t *testing.T) {
 	e := newEnv(t)
 	now := model.Now()
 	if err := e.st.PutAgent(model.Agent{ID: "old1", Name: "old", Level: model.LevelWorker, Harness: model.HarnessClaude,
-		Mode: model.ModeChat, Model: "claude-sonnet-5-5", State: model.StateStopped, Desired: "stopped",
+		Mode: model.ModeChat, Model: "claude-sonnet-5", State: model.StateStopped, Desired: "stopped",
 		CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +371,7 @@ func TestAgentsWithoutProfileGetTheirLevel(t *testing.T) {
 func TestProjectWithLeadProfile(t *testing.T) {
 	e := newEnv(t)
 	f := e.started()
-	arch := model.Profile{Slug: "architect", Name: "Architect lead", Level: model.LevelLead, Model: "claude-sonnet-5-5",
+	arch := model.Profile{Slug: "architect", Name: "Architect lead", Level: model.LevelLead, Model: "claude-sonnet-5",
 		Instructions: "Lead {{project}} at {{project_folder}}.", CanLaunch: []string{"worker"}}
 	if _, err := f.CreateProfile(OwnerCaller, arch); err != nil {
 		t.Fatal(err)
@@ -401,5 +398,37 @@ func TestRenderInstructions(t *testing.T) {
 	got := RenderInstructions("Hi {{ name }}, {{name}}! {{nope}} {{Name}}", map[string]string{"name": "ann"})
 	if got != "Hi ann, ann! {{nope}} {{Name}}" {
 		t.Fatal(got)
+	}
+}
+
+func TestProjectLeadAndWorkerModelChoice(t *testing.T) {
+	e := newEnv(t)
+	f := e.started()
+	for _, tc := range []struct{ name, requested, want string }{
+		{"default", "", opus}, {"opus", opus, opus}, {"sonnet", "claude-sonnet-5", "claude-sonnet-5"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := f.CreateProject(OwnerCaller, ProjectRequest{Name: tc.name, Model: tc.requested})
+			if err != nil {
+				t.Fatal(err)
+			}
+			lead := mustAgent(t, f, p.LeadID)
+			if lead.Model != tc.want {
+				t.Fatalf("lead model = %q, want %q", lead.Model, tc.want)
+			}
+			caller := callerFor(t, f, e.chat, lead.ID)
+			for _, grade := range []struct{ name, model string }{{"senior", opus}, {"junior", "claude-sonnet-5"}, {"intern", haiku}} {
+				a, err := f.LaunchAgent(caller, LaunchRequest{Name: tc.name + "-" + grade.name, Model: grade.model})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if a.Model != grade.model {
+					t.Fatalf("%s model = %q", grade.name, a.Model)
+				}
+			}
+		})
+	}
+	if _, err := f.CreateProject(OwnerCaller, ProjectRequest{Name: "bad-model", Model: "unknown"}); KindOf(err) != KindForbidden {
+		t.Fatalf("unsupported model: %v", err)
 	}
 }

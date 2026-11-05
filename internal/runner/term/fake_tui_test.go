@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package term
 
 import (
@@ -29,6 +26,14 @@ import (
 func TestMain(m *testing.M) {
 	if os.Getenv("TMXG_FAKE_TUI") == "1" {
 		fakeTUI()
+		os.Exit(0)
+	}
+	// The test binary is also `tmx host` (host_test.go) and the program a host runs.
+	if len(os.Args) > 1 && os.Args[1] == "host" {
+		os.Exit(testHostMain(os.Args[2:]))
+	}
+	if os.Getenv("TMXG_FAKE_LINE") == "1" {
+		fakeLine()
 		os.Exit(0)
 	}
 	os.Exit(m.Run())

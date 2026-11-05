@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useState } from "react";
 import { Archive, ArchiveRestore, Ellipsis, FolderClosed, FolderX, Pause, Play, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -67,7 +64,7 @@ function DeleteProjectDialog({ project, open, onOpenChange }: { project: Project
         }
       }}
     >
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className="sm:max-w-[28.75rem]">
         <form
           className="grid gap-4"
           onSubmit={async (e) => {
@@ -201,9 +198,9 @@ export function ProjectPage({ id }: { id: string }) {
         <PageTitle>{project.name}</PageTitle>
         <ProjectStatusBadge status={project.status} />
       </PageHeader>
-      <PageBody width="max-w-[920px]" className="space-y-8">
+      <PageBody width="max-w-[57.5rem]" className="space-y-8">
         <div className="space-y-4">
-          <p className={cn("max-w-[70ch] text-[14px] leading-relaxed whitespace-pre-wrap", !project.brief && "text-muted-foreground")}>
+          <p className={cn("max-w-[70ch] text-[0.875rem] leading-relaxed whitespace-pre-wrap", !project.brief && "text-muted-foreground")}>
             {project.brief || "No brief yet."}
           </p>
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-4">
@@ -215,14 +212,14 @@ export function ProjectPage({ id }: { id: string }) {
             ].map(([k, v, sub]) => (
               <div key={k} className="bg-card px-4 py-3">
                 <dt className="text-2xs font-medium text-subtle-foreground uppercase">{k}</dt>
-                <dd className="tabular mt-1 text-[15px] font-medium">{v}</dd>
+                <dd className="tabular mt-1 text-[0.9375rem] font-medium">{v}</dd>
                 <dd className="tabular truncate text-2xs text-muted-foreground">{sub}</dd>
               </div>
             ))}
           </dl>
           <div className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 py-1 pr-1 pl-3">
             <FolderClosed className="size-3.5 shrink-0 text-muted-foreground" />
-            <Truncate className="flex-1 font-mono text-[12.5px] text-foreground/85" title={project.folder}>
+            <Truncate className="flex-1 font-mono text-[0.7812rem] text-foreground/85" title={project.folder}>
               {project.folder}
             </Truncate>
             <CopyButton text={project.folder} label="Copy folder path" />

@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// The recording indicator (ARCHITECTURE.md "Recorder"): a bar on every page while a recording runs,
+// The recording indicator (DESIGN.md "Recorder"): a bar on every page while a recording runs,
 // with the elapsed time, Pause/Resume and Stop, in the window that records and in every other
 // client of this daemon ("Recording on this machine"). It also puts "● Recording 12:03 — tmx"
 // in the window title and restores the title afterwards.
@@ -111,14 +108,14 @@ export function RecordingBar() {
       role="status"
       aria-live="polite"
       data-recording-bar
-      className="flex shrink-0 items-center gap-2.5 border-b border-state-error/30 bg-state-error/10 px-4 py-1.5 text-[13px] text-foreground md:px-6"
+      className="flex shrink-0 items-center gap-2.5 border-b border-state-error/30 bg-state-error/10 px-4 py-1.5 text-[0.8125rem] text-foreground md:px-6"
     >
       <span className="relative flex size-2.5 shrink-0" aria-hidden>
         {!paused && <span className="absolute inline-flex size-full animate-ping rounded-full bg-state-error opacity-60" />}
         <span className={cn("relative inline-flex size-2.5 rounded-full bg-state-error", paused && "opacity-50")} />
       </span>
       <span className="shrink-0 font-medium">{stopping ? "Saving…" : paused ? "Paused" : mine || native ? "Recording" : "Recording on this machine"}</span>
-      <span className="tabular shrink-0 font-mono text-[12.5px]" data-recording-time>
+      <span className="tabular shrink-0 font-mono text-[0.7812rem]" data-recording-time>
         {clock(elapsed(now))}
       </span>
       <span className="hidden min-w-0 truncate text-muted-foreground sm:inline">

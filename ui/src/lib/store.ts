@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The UI's state: the daemon snapshot, kept current by BusEvents, plus per-agent timelines.
 import { create } from "zustand";
 import { ApiError, type EventStream, type Transport } from "./transport";
@@ -249,7 +246,7 @@ function handleEvent(ev: BusEvent) {
       break;
     }
     default:
-    // Unknown event types are ignored, never fatal (ARCHITECTURE.md).
+    // Unknown event types are ignored, never fatal (DESIGN.md).
   }
 }
 
@@ -415,7 +412,9 @@ export function projectTree(agents: Record<string, Agent>, p: Project): { lead: 
 export function pendingApprovals(approvals: Record<string, Approval>): Approval[] {
   return Object.values(approvals)
     .filter((a) => a.state === "pending" && !a.deferred)
-    .sort((a, b) => b.created_at - a.created_at);
+    .sort((a, b) => Number(!!b.card?.urgent) - Number(!!a.card?.urgent)
+      || (a.card?.priority || Number.MAX_SAFE_INTEGER) - (b.card?.priority || Number.MAX_SAFE_INTEGER)
+      || b.created_at - a.created_at);
 }
 
 export function agentName(agents: Record<string, Agent>, idOrName: string | undefined): string {

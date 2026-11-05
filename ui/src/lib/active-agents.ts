@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import type { Agent } from "./types";
 
 export function agentVisible(agent: Agent, showAll: boolean, now: number): boolean {

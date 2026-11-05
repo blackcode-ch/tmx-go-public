@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
-// The Matrix (ARCHITECTURE.md "Matrix"), M2: adoption. Every agent but the head starts with its
+// The Matrix (DESIGN.md "Matrix"), M2: adoption. Every agent but the head starts with its
 // threads and the rule to record events on them; leads also get the playbook for running
 // threads. Threads that go silent are flagged where their owners look (matrix op=mine).
 

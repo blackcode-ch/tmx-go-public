@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package sysinfo measures processes and the machine cheaply, and lowers, pauses and resumes
 // agent process trees. Everything here is per OS (darwin, linux, windows); what an OS or a
 // build cannot measure reports ok=false or ErrUnsupported, never a made-up number.

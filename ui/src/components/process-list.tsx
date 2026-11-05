@@ -1,8 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useEffect, useState } from "react";
 import { api, type ProcessInfo } from "@/lib/api";
+import { asList } from "@/lib/as-list";
 
 export function ProcessList({ agent, projectTools = false }: { agent?: string; projectTools?: boolean }) {
   const [rows, setRows] = useState<ProcessInfo[]>([]);
@@ -11,13 +9,13 @@ export function ProcessList({ agent, projectTools = false }: { agent?: string; p
   useEffect(() => {
     if (agent || projectTools) return;
     let active = true;
-    void api.systemWarnings().then((v) => { if (active) setWarnings(v); }, () => { if (active) setWarnings(["System warnings are unavailable."]); });
+    void api.systemWarnings().then((v) => { if (active) setWarnings(asList<string>(v)); }, () => { if (active) setWarnings(["System warnings are unavailable."]); });
     return () => { active = false; };
   }, [agent, projectTools]);
   useEffect(() => {
     let active = true;
     const load = () => (agent ? api.processes(agent) : projectTools ? api.processTools() : api.systemTools()).then(
-      (p) => { if (active) { setRows(projectTools ? p.filter((v) => v.promoted) : p); setError(""); } },
+      (r) => { if (active) { const p = asList<ProcessInfo>(r); setRows(projectTools ? p.filter((v) => v.promoted) : p); setError(""); } },
       () => { if (active) setError("Process status is unavailable."); },
     );
     void load();

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -108,18 +105,18 @@ func TestAccountsAPI(t *testing.T) {
 		t.Fatalf("GET: %d", s)
 	}
 	list := raw["accounts"].([]any)
-	if len(list) != 3 || raw["updated_at"] == nil {
+	if len(list) != 4 || raw["updated_at"] == nil {
 		t.Fatalf("payload %v", raw)
 	}
 	first := list[0].(map[string]any)
 	for _, k := range []string{"harness", "label", "installed", "connected", "account", "limits", "limits_note", "checked_at",
-		"refreshing", "error", "login", "install"} {
+		"refreshing", "error", "login", "install", "name", "launch_default"} {
 		if _, ok := first[k]; !ok {
 			t.Errorf("no %q in %v", k, first)
 		}
 	}
-	if len(first) != 12 || first["harness"] != "claude" || first["label"] != "Claude" || list[1].(map[string]any)["harness"] != "codex" ||
-		list[2].(map[string]any)["harness"] != "antigravity" {
+	if len(first) != 14 || first["harness"] != "claude" || first["label"] != "Claude" || list[1].(map[string]any)["harness"] != "codex" ||
+		list[2].(map[string]any)["harness"] != "antigravity" || list[3].(map[string]any)["harness"] != "gemini" {
 		t.Fatalf("accounts %v", list)
 	}
 	if lim, ok := first["limits"].([]any); !ok || len(lim) != 0 {
@@ -138,10 +135,10 @@ func TestAccountsAPI(t *testing.T) {
 	if s := owner.do("POST", "/api/accounts/claude/login", nil, nil); s != http.StatusConflict {
 		t.Fatalf("login, not installed: %d", s)
 	}
-	if s := owner.do("POST", "/api/accounts/gemini/login", nil, nil); s != http.StatusNotFound {
+	if s := owner.do("POST", "/api/accounts/nope/login", nil, nil); s != http.StatusNotFound {
 		t.Fatalf("login, unknown: %d", s)
 	}
-	if s := owner.do("POST", "/api/accounts/refresh", map[string]string{"harness": "gemini"}, nil); s != http.StatusNotFound {
+	if s := owner.do("POST", "/api/accounts/refresh", map[string]string{"harness": "nope"}, nil); s != http.StatusNotFound {
 		t.Fatalf("refresh, unknown: %d", s)
 	}
 	if s := owner.do("POST", "/api/accounts/refresh", "{nope", nil); s != http.StatusBadRequest {
@@ -180,7 +177,7 @@ func TestAccountsAPI(t *testing.T) {
 			Data accounts.Payload `json:"data"`
 		}
 		json.Unmarshal(b, &ev)
-		if ev.Type == accounts.EvUpdated && len(ev.Data.Accounts) == 3 && accountOf(ev.Data, "claude").Connected {
+		if ev.Type == accounts.EvUpdated && len(ev.Data.Accounts) == 4 && accountOf(ev.Data, "claude").Connected {
 			break
 		}
 	}
@@ -190,7 +187,7 @@ func TestAccountsAPI(t *testing.T) {
 	if s := owner.do("POST", "/api/accounts/claude/logout", nil, &out); s != 200 || accountOf(out, "claude").Connected {
 		t.Fatalf("logout: %d %+v", s, accountOf(out, "claude"))
 	}
-	if s := owner.do("DELETE", "/api/accounts/codex/login", nil, &out); s != 200 || len(out.Accounts) != 3 {
+	if s := owner.do("DELETE", "/api/accounts/codex/login", nil, &out); s != 200 || len(out.Accounts) != 4 {
 		t.Fatalf("cancel without a sign-in: %d", s)
 	}
 }

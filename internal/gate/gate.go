@@ -1,17 +1,14 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package gate is the owner gate: proof that the owner is at this machine before a sensitive
 // action (allowing a held command, bypassing permissions, deleting a project, changing the gate).
 // The proof comes from the operating system and is checked by the daemon itself: on macOS the
 // daemon asks LocalAuthentication (Touch ID, with the login password as fallback), on Windows
 // Windows Hello (face, fingerprint or PIN; auth_windows.go). A client
 // never proves anything by a header; it only names a confirmation the daemon already verified,
-// bound to exactly one request and usable once. See ARCHITECTURE.md "Safety".
+// bound to exactly one request and usable once. See DESIGN.md "Safety".
 //
 // Lock-out safety: only tmx actions are gated, never the owner's OS login or files.
 // Missing state fails closed once enrolled. A never-enrolled installation persists
-// explicit off on its first start. Offline recovery is described by Recovery and ARCHITECTURE.md.
+// explicit off on its first start. Offline recovery is described by Recovery and DESIGN.md.
 //
 // The grace window (like sudo's timestamp, grace.go): after a successful proof the gate stops
 // asking the owner's own requests for a while (1 hour unless the owner picks another length).
@@ -83,14 +80,18 @@ type Confirmation struct {
 	Error       string `json:"error,omitempty"`
 	Method      string `json:"method"`
 	MethodLabel string `json:"method_label"`
-	CreatedAt   int64  `json:"created_at"`
-	ExpiresAt   int64  `json:"expires_at,omitempty"` // a confirmed proof's use deadline
-	caller      string
-	ui          bool
-	grace       string
-	key         string
-	done        chan struct{}
-	cancel      context.CancelFunc
+	// PIN: the owner PIN answers it (POST /api/gate/confirmations/{id}/pin at the machine);
+	// Hello: the OS prompt (Windows Hello / Touch ID) is open for it too (#187).
+	PIN       bool  `json:"pin,omitempty"`
+	Hello     bool  `json:"hello,omitempty"`
+	CreatedAt int64 `json:"created_at"`
+	ExpiresAt int64 `json:"expires_at,omitempty"` // a confirmed proof's use deadline
+	caller    string
+	ui        bool
+	grace     string
+	key       string
+	done      chan struct{}
+	cancel    context.CancelFunc
 }
 
 // Status is GET /api/gate.
@@ -111,6 +112,11 @@ type Status struct {
 	GraceMinutes int   `json:"grace_minutes"`
 	GraceUntil   int64 `json:"grace_until,omitempty"`
 	GraceSteps   []int `json:"grace_steps"`
+	// PINSet: the owner PIN is set; it answers every confirmation, on every device (#187).
+	// HelloShortcut: the OS prompt is also offered at this machine (Settings > Safety). Without
+	// a PIN the OS prompt is the only way in, whatever HelloShortcut says.
+	PINSet        bool `json:"pin_set"`
+	HelloShortcut bool `json:"hello_shortcut"`
 }
 
 // GatedActions lists what the gate protects once on (Settings shows it). The last ones always
@@ -124,6 +130,7 @@ var GatedActions = []string{
 	"Stopping an agent started outside tmx to adopt it",
 	"Handing Companion a task with money, accounts or outward actions",
 	"Switching the head agent to another harness",
+	"Turning peer-to-peer on (off is never gated: it only ever narrows what this machine reaches)",
 	"Changing update settings or the GitHub token for updates",
 	"Installing an update by hand (automatic updates still install by themselves)",
 	"Making someone a group's admin (also while the gate is off)",
@@ -166,6 +173,9 @@ type fileState struct {
 	// Grace is the grace window in minutes; missing = DefaultGrace, 0 = off. The open window
 	// itself is never written down (grace.go).
 	Grace *int `json:"grace_minutes,omitempty"`
+	// HelloShortcut: also offer the OS prompt (Windows Hello / Touch ID) at this machine. Missing
+	// in an existing gate.json (written before #187) = on, as it was; a new install writes off.
+	HelloShortcut *bool `json:"hello_shortcut,omitempty"`
 }
 
 // Gate is the daemon's owner gate.
@@ -186,6 +196,7 @@ type Gate struct {
 	proofSession string
 	proofCaller  string
 	notify       func(Status)
+	pinSet       func() bool // whether the owner PIN is set (ownerpin); nil = no PIN
 }
 
 // New loads secrets/gate.json. Missing enrolled state, unreadable or incomplete
@@ -211,7 +222,7 @@ func New(paths config.Paths, auth Authenticator, log *slog.Logger, markers ...Ma
 			if absent && absenceErr == nil {
 				// Old never-enrolled versions also left gate.json absent. Persist
 				// the explicit choice without writing an enrolment marker.
-				if e := g.saveLocked(fileState{Enabled: false}); e != nil {
+				if e := g.saveLocked(fileState{Enabled: false, HelloShortcut: new(bool)}); e != nil {
 					log.Warn("gate: cannot initialize disabled state; treating the gate as on")
 				}
 			}
@@ -251,6 +262,50 @@ func New(paths config.Paths, auth Authenticator, log *slog.Logger, markers ...Ma
 func damagedState() fileState {
 	off := 0
 	return fileState{Enabled: true, Grace: &off}
+}
+
+// SetPINCheck tells the gate how to learn whether the owner PIN is set (the API's ownerpin
+// store). Without it the gate has no PIN and asks only through the OS prompt.
+func (g *Gate) SetPINCheck(fn func() bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.pinSet = fn
+}
+
+func (g *Gate) pinSetLocked() bool { return g.pinSet != nil && g.pinSet() }
+
+// helloShortcutLocked: the owner's choice; an existing gate.json without it keeps the OS prompt.
+func (g *Gate) helloShortcutLocked() bool { return g.st.HelloShortcut == nil || *g.st.HelloShortcut }
+
+// HelloShortcut reports whether the OS prompt is offered at this machine besides the PIN.
+func (g *Gate) HelloShortcut() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.helloShortcutLocked()
+}
+
+// ErrNeedPIN: the OS prompt cannot be switched off while no owner PIN is set (it would be the
+// last way in).
+var ErrNeedPIN = errors.New("set your owner PIN first: without it Windows Hello is the only way to confirm")
+
+// SetHelloShortcut turns the OS prompt at this machine on or off. Callers pass Require first
+// (Always and Fresh). Off is refused while no PIN is set.
+func (g *Gate) SetHelloShortcut(on bool) error {
+	g.mu.Lock()
+	if !on && !g.pinSetLocked() {
+		g.mu.Unlock()
+		return ErrNeedPIN
+	}
+	next := g.st
+	next.HelloShortcut = &on
+	err := g.saveLocked(next)
+	g.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	g.log.Info("gate: Windows Hello shortcut changed", "on", on)
+	g.changed()
+	return nil
 }
 
 // Path is the gate's state file (for the recovery note).
@@ -293,6 +348,16 @@ func (g *Gate) statusLocked() Status {
 		GraceMinutes: g.graceLocked(), GraceSteps: append([]int(nil), GraceSteps...)}
 	if until := g.graceUntilLocked(); !until.IsZero() {
 		s.GraceUntil = until.UnixMilli()
+	}
+	s.PINSet, s.HelloShortcut = g.pinSetLocked(), g.helloShortcutLocked()
+	if s.PINSet {
+		// Method stays the OS method: for the UI, status method "pin" means a paired browser.
+		s.MethodLabel = "your owner PIN"
+		if s.HelloShortcut && g.auth.Available() == nil {
+			s.MethodLabel = "your owner PIN or " + g.auth.Label()
+		}
+		s.Available = true
+		return s
 	}
 	if err := g.auth.Available(); err != nil {
 		s.Unavailable = err.Error()
@@ -400,8 +465,17 @@ func (g *Gate) Require(a Action, confirmID string) error {
 			return ErrBusy
 		}
 	}
-	if err := g.auth.Available(); err != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, err)
+	// The PIN answers whenever it is set; the OS prompt opens when the owner keeps the shortcut,
+	// and always when there is no PIN (never a confirmation nobody can answer).
+	pin := g.pinSetLocked()
+	hello := !pin || g.helloShortcutLocked()
+	if hello {
+		if err := g.auth.Available(); err != nil {
+			if !pin {
+				return fmt.Errorf("%w: %v", ErrUnavailable, err)
+			}
+			hello = false
+		}
 	}
 	now := g.now()
 	recent := g.prompts[:0]
@@ -417,7 +491,14 @@ func (g *Gate) Require(a Action, confirmID string) error {
 	g.prompts = append(g.prompts, now)
 	ctx, cancel := context.WithTimeout(context.Background(), PromptTimeout)
 	c := &Confirmation{ID: newID(), Reason: a.Reason, State: StatePending, Method: g.auth.Method(),
-		MethodLabel: g.auth.Label(), CreatedAt: now.UnixMilli(), key: a.Key, caller: a.Caller, ui: a.UI && a.Owner, done: make(chan struct{}), cancel: cancel}
+		MethodLabel: g.auth.Label(), PIN: pin, Hello: hello, CreatedAt: now.UnixMilli(), key: a.Key, caller: a.Caller,
+		ui: a.UI && a.Owner, done: make(chan struct{}), cancel: cancel}
+	if pin {
+		c.Method, c.MethodLabel = "pin", "your owner PIN"
+		if hello {
+			c.MethodLabel = "your owner PIN or " + g.auth.Label()
+		}
+	}
 	g.confs[c.ID] = c
 	g.log.Info("gate: asking the owner", "id", c.ID, "reason", a.Reason)
 	promptReason := a.Reason
@@ -431,18 +512,25 @@ func (g *Gate) Require(a Action, confirmID string) error {
 	return &NeedConfirmation{Confirmation: c.public()}
 }
 
+// prompt waits for the confirmation's answer: the OS prompt (when open for it) or the PIN
+// (ConfirmWithPIN), until PromptTimeout. It alone closes done.
 func (g *Gate) prompt(ctx context.Context, c *Confirmation, reason string) {
-	err := g.authenticate(ctx, reason)
+	var err error
+	if c.Hello {
+		err = g.authenticate(ctx, reason)
+	} else {
+		<-ctx.Done()
+		err = ctx.Err()
+	}
 	c.cancel()
 	g.mu.Lock()
+	if c.State != StatePending { // the PIN answered first
+		g.mu.Unlock()
+		close(c.done)
+		return
+	}
 	if err == nil {
-		now := g.now()
-		c.State, c.ExpiresAt = StateConfirmed, now.Add(UseWindow).UnixMilli()
-		if c.ui {
-			c.grace = newID() + newID()
-			g.proofAt, g.proofSession, g.proofCaller = now, c.grace, c.caller
-		}
-		g.log.Info("gate: owner confirmed", "id", c.ID)
+		g.confirmLocked(c, "os")
 	} else {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			err = errors.New("no answer in time")
@@ -455,6 +543,37 @@ func (g *Gate) prompt(ctx context.Context, c *Confirmation, reason string) {
 		g.changed()
 	}
 	close(c.done)
+}
+
+// confirmLocked marks c confirmed (by "os" or "pin") and opens the grace window for its UI.
+func (g *Gate) confirmLocked(c *Confirmation, by string) {
+	now := g.now()
+	c.State, c.ExpiresAt = StateConfirmed, now.Add(UseWindow).UnixMilli()
+	if c.ui {
+		c.grace = newID() + newID()
+		g.proofAt, g.proofSession, g.proofCaller = now, c.grace, c.caller
+	}
+	g.log.Info("gate: owner confirmed", "id", c.ID, "by", by)
+}
+
+// ErrNoSuchConfirmation: no pending PIN-answerable confirmation of that ID for this caller.
+var ErrNoSuchConfirmation = errors.New("no such pending confirmation")
+
+// ConfirmWithPIN answers a pending confirmation with the owner PIN, which the caller (the API,
+// at the machine) has already verified. Only the caller that started it may answer it.
+func (g *Gate) ConfirmWithPIN(id, caller string) error {
+	g.mu.Lock()
+	c, ok := g.confs[id]
+	if !ok || c.caller != caller || c.State != StatePending || !c.PIN {
+		g.mu.Unlock()
+		return ErrNoSuchConfirmation
+	}
+	g.confirmLocked(c, "pin")
+	cancel := c.cancel
+	g.mu.Unlock()
+	cancel() // ends the OS prompt, if one is open
+	g.changed()
+	return nil
 }
 
 // authenticate asks the OS; a panic in the OS glue (Windows Hello is raw COM calls) fails this
@@ -535,7 +654,7 @@ func (g *Gate) gcLocked() {
 
 func (c *Confirmation) public() Confirmation {
 	return Confirmation{ID: c.ID, Reason: c.Reason, State: c.State, Error: c.Error, Method: c.Method,
-		MethodLabel: c.MethodLabel, CreatedAt: c.CreatedAt, ExpiresAt: c.ExpiresAt}
+		MethodLabel: c.MethodLabel, PIN: c.PIN, Hello: c.Hello, CreatedAt: c.CreatedAt, ExpiresAt: c.ExpiresAt}
 }
 
 func newID() string {

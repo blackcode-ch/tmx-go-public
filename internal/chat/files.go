@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package chat
 
 import (
@@ -23,7 +20,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/uploads"
 )
 
-// Files (ARCHITECTURE.md "Chats": files). The owner uploads a file to a chat, then sends a message
+// Files (DESIGN.md "Chats": files). The owner uploads a file to a chat, then sends a message
 // that names it; the message carries only the file's id, name, type, size and SHA-256.
 // Receivers download it in the background from a member that has it (the author first) over
 // p2p /tmx/file/1.0.0, check the checksum and keep it under FilesDir. An install answers a

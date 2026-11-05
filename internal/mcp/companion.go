@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package mcp
 
 import (
@@ -23,7 +20,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/peertext"
 )
 
-// `tmx mcp --companion` (ARCHITECTURE.md "Companion"): the MCP server Companion, the owner's desktop
+// `tmx mcp --companion` (DESIGN.md "Companion"): the MCP server Companion, the owner's desktop
 // agent app, starts from ~/.aios/mcps/tmx/mcp.json. It reads the fleet, Needs you and chats and
 // can message the head, through the daemon's link routes with the link token
 // (<state>/secrets/companion-token, read on every call so a rotation needs no restart). The
@@ -187,7 +184,7 @@ func (t *CompanionTools) messageHead(ctx context.Context, _ *sdk.CallToolRequest
 	return text(fmt.Sprintf("Message %s for tmx's head agent %s: %s. It reads it labelled as from Companion; it may answer you in your conversation with tmx (\"Message from tmx's head agent ...\"), or tell the owner in tmx.", out.ID, out.To, out.State)), nil, nil
 }
 
-// --- the head's tool: companion_message (ARCHITECTURE.md "Head ↔ Companion: messages") ---
+// --- the head's tool: companion_message (DESIGN.md "Head ↔ Companion: messages") ---
 
 type companionMessageArgs struct {
 	Text    string `json:"text" jsonschema:"your message for Companion (up to 8 KB), or with reply_to your answer to its question"`
