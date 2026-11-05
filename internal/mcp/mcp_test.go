@@ -101,7 +101,7 @@ func TestToolList(t *testing.T) {
 					t.Errorf("earlier tool name %q is not registered", o)
 				}
 			}
-			want := "agent_keys,agent_launch,agent_restart,agent_screen,agent_start,agent_status,agent_stop,agent_type,announce_set,ask_owner,chat_move,chat_read,chat_send,chat_topic,chats,companion_message,daemon_log,daemon_restart,fleet,inbox,matrix,message_pins,my_part,owner_status,process_start,process_stop,processes,profiles,project_artifacts,project_create,project_import,project_member_add,recording_summary,recordings,reply,report,send,thread_add,thread_read,thread_set,thread_update,threads,transcript_read,transcripts,whatsapp_chats,whatsapp_read,whatsapp_send,whoami,withdraw_hold"
+			want := "agent_keys,agent_launch,agent_restart,agent_screen,agent_start,agent_status,agent_stop,agent_type,announce_set,ask_owner,chat_move,chat_read,chat_send,chat_topic,chats,companion_message,daemon_log,daemon_restart,fleet,inbox,matrix,my_part,owner_status,process_start,process_stop,processes,profiles,project_artifacts,project_create,project_import,project_member_add,recording_summary,recordings,reply,report,send,thread_add,thread_read,thread_set,thread_update,threads,transcript_read,transcripts,whatsapp_chats,whatsapp_read,whatsapp_send,whoami,withdraw_hold"
 			if !enabled {
 				want = strings.Replace(want, "whatsapp_chats,whatsapp_read,whatsapp_send,", "", 1)
 			}

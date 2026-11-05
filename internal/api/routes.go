@@ -10,7 +10,7 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
-	s.messagePinRoutes(mux)
+	s.companionMailboxRoutes(mux)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
 	mux.HandleFunc("GET /api/health", s.health)
@@ -408,6 +408,10 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
+	if c, _ := caller(r); c.Companion {
+		s.companionPostMail(w, r)
+		return
+	}
 	var req fleet.SendRequest
 	if !decode(w, r, &req) {
 		return

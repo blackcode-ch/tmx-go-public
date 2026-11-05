@@ -54,18 +54,22 @@ func TestNoBootstrapRelayHolePunchWithoutOptIn(t *testing.T) {
 		t.Fatalf("unbounded group invite: %+v", inv)
 	}
 }
-func TestInviteAdmissionBoundedByExpiry(t *testing.T) {
+func TestInviteAdmissionWindowBounded(t *testing.T) {
 	now := nowMs()
-	in := &inviteRec{CreatedAt: now - (23 * time.Hour).Milliseconds(), Invite: Invite{ExpiresAt: now + time.Hour.Milliseconds(), MaxUses: 1}}
+	in := &inviteRec{CreatedAt: now - int64(3*time.Minute/time.Millisecond), Invite: Invite{ExpiresAt: now + int64(time.Hour/time.Millisecond), MaxUses: 1}}
 	s := &state{Invites: []*inviteRec{in}}
-	if !s.inviteOpen(in.ExpiresAt - 1) {
-		t.Error("valid invite refused just before expiry")
+	if s.inviteOpen(now) {
+		t.Error("invite admits strangers after two minutes")
 	}
-	if s.inviteOpen(in.ExpiresAt) {
-		t.Error("invite admits strangers at expiry")
+	in.CreatedAt = now
+	if !s.inviteOpen(now) {
+		t.Error("fresh invite refused")
 	}
-	if s.inviteOpen(in.ExpiresAt + 1) {
-		t.Error("invite admits strangers after expiry")
+	for _, created := range []int64{0, now + 1, now - (2 * time.Minute).Milliseconds()} {
+		in.CreatedAt = created
+		if s.inviteOpen(now) {
+			t.Errorf("invalid or elapsed admission window: created=%d", created)
+		}
 	}
 }
 

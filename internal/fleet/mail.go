@@ -207,6 +207,20 @@ func (f *Fleet) SendOwner(idOrName, text, thread string) (model.Message, error) 
 }
 
 func (f *Fleet) checkLimitsLocked(m model.Message) error {
+	if err := f.checkQueueLocked(m); err != nil {
+		return err
+	}
+	n, err := f.st.CountSent(m.From, m.To, m.CreatedAt-RateWindow.Milliseconds())
+	if err != nil {
+		return err
+	}
+	if n >= MaxPerWindow {
+		return errf(KindTooMany, "you sent %s %d messages in the last 10 minutes; wait before sending more", f.nameOfLocked(m.To), n)
+	}
+	return nil
+}
+
+func (f *Fleet) checkQueueLocked(m model.Message) error {
 	n, err := f.st.CountQueued(m.To)
 	if err != nil {
 		return err
@@ -214,13 +228,6 @@ func (f *Fleet) checkLimitsLocked(m model.Message) error {
 	// Mail for a peer waits for its machine, not for a reader: only the rate applies.
 	if n >= MaxQueued && !IsPeer(m.To) {
 		return errf(KindTooMany, "%s already has %d messages waiting; try again after it has read them", f.nameOfLocked(m.To), n)
-	}
-	n, err = f.st.CountSent(m.From, m.To, m.CreatedAt-RateWindow.Milliseconds())
-	if err != nil {
-		return err
-	}
-	if n >= MaxPerWindow {
-		return errf(KindTooMany, "you sent %s %d messages in the last 10 minutes; wait before sending more", f.nameOfLocked(m.To), n)
 	}
 	return nil
 }

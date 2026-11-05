@@ -512,7 +512,7 @@ func TestLinkRateCountsOnlyCompanionsMessages(t *testing.T) {
 			t.Fatalf("link message %d: %v", i, err)
 		}
 	}
-	if _, err := d.Fleet.CompanionMessage("one too many"); err == nil || !strings.Contains(err.Error(), "Companion sent the head 20 messages") {
+	if _, err := d.Fleet.CompanionMessage("one too many"); err == nil || !strings.Contains(err.Error(), "Companion sent 20 messages") {
 		t.Fatalf("over the link's rate: %v", err)
 	}
 	msgs, err := d.Fleet.CompanionLinkMessages(5)
@@ -522,6 +522,18 @@ func TestLinkRateCountsOnlyCompanionsMessages(t *testing.T) {
 }
 
 // --- helpers ---
+
+func TestLinkMessagesShareQueueCapacityWithReplies(t *testing.T) {
+	d := apitest.New(t)
+	for range fleet.MaxQueued {
+		if _, err := d.Fleet.DeliverCompanion(d.Fleet.HeadID(), companion.ReplyLabel+" reply"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.Fleet.CompanionMessage("no room"); fleet.KindOf(err) != fleet.KindTooMany || !strings.Contains(err.Error(), "messages waiting") {
+		t.Fatalf("full queue: %v", err)
+	}
+}
 
 // mkWorker launches a worker in a new project and returns its ID.
 func mkWorker(t *testing.T, d *apitest.Daemon) string {
