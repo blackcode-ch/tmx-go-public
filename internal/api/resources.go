@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -15,7 +12,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/slots"
 )
 
-// Resource control routes (ARCHITECTURE.md "Resources").
+// Resource control routes (DESIGN.md "Resources").
 func (s *Server) resourceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/resources", s.withResources(s.getResources))
 	mux.HandleFunc("PUT /api/resources/config", s.ownerOnly(s.withResources(s.putResourceConfig)))

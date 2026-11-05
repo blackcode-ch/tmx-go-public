@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
@@ -12,7 +9,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// ---- summaries of recordings (ARCHITECTURE.md "Summaries"): one row per recording, the lists as
+// ---- summaries of recordings (DESIGN.md "Summaries"): one row per recording, the lists as
 // JSON arrays. The recording's row and files are the recorder's; this is only what Claude wrote.
 
 const summaryCols = `recording_id, state, model, summary, key_points, decisions, action_items, chapters, transcripts,

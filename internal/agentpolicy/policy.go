@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package agentpolicy contains side-effect-free launch and command policies.
 // Callers must apply them before spawning a process or dispatching a browser tool.
 // Command matching is defense in depth, not a sandbox for arbitrary code.

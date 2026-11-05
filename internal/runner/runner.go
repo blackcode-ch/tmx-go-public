@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package runner starts and drives agent processes. The fleet package talks only to this
 // interface; implementations live in runner/claude (chat mode), runner/term (terminal mode)
-// and runner/fake (tests). See ARCHITECTURE.md "Agent runtime".
+// and runner/fake (tests). See DESIGN.md "Agent runtime".
 package runner
 
 import (
@@ -25,7 +22,7 @@ var ErrApprovalPending = errors.New("a menu or an approval is waiting for the ow
 // ErrOwnerOnly is returned by Process.Write for a non-owner write only the owner may make:
 // anything typed into a shell (it would run as a command, with no guard and no approval), and
 // anything but an interrupt key (NonOwnerKey) typed into a harness's TUI, whose own keys and
-// commands change its permissions and answer its menus (ARCHITECTURE.md "Fleet control").
+// commands change its permissions and answer its menus (DESIGN.md "Fleet control").
 var ErrOwnerOnly = errors.New("only the owner can type that into this terminal")
 
 // NonOwnerKey reports whether b is raw input a non-owner (a head or lead driving its worker)
@@ -73,12 +70,15 @@ type Spec struct {
 	// adapter. Runners must prepare and pin the configuration before spawning.
 	CodexGuardHome       string
 	CodexGuardExecutable string
-	MCPConfigPath        string   // claude --mcp-config (written by fleet)
-	SettingsPath         string   // claude --settings: the guard's PreToolUse hook (written by fleet)
-	AllowedTools         []string // claude --allowedTools
-	DisallowedTools      []string // claude --disallowedTools
-	SystemPrompt         string   // claude --append-system-prompt
-	InitialPrompt        string   // agy: first turn passed with -i, not typed a second time
+	// GuardStates returns the owner's current state per guard rule (block | hold | allow); the
+	// Codex parser calls it on every check, so a flip applies to running agents at once.
+	GuardStates     func() map[string]string
+	MCPConfigPath   string   // claude --mcp-config (written by fleet)
+	SettingsPath    string   // claude --settings: the guard's PreToolUse hook (written by fleet)
+	AllowedTools    []string // claude --allowedTools
+	DisallowedTools []string // claude --disallowedTools
+	SystemPrompt    string   // claude --append-system-prompt
+	InitialPrompt   string   // agy: first turn passed with -i, not typed a second time
 	// AddDirs are extra folders the agent may read and edit (claude --add-dir), e.g. its uploads.
 	AddDirs    []string
 	ExtraArgs  []string
@@ -95,6 +95,35 @@ type Spec struct {
 	// (claude.WaitReason; e.g. a Claude sign-in holds it) and "" once it may start. Called from
 	// Start's goroutine, holding no lock of the runner's.
 	OnStartWait func(reason string)
+
+	// HostDir and HostExe: the agent's program runs in a session host of its own, `HostExe
+	// host`, which keeps its state in HostDir and outlives the daemon (runner/host): terminal
+	// mode, and claude's chat mode. Empty: the daemon's own child, ended with the daemon.
+	// HostToken is the agent's tmx credential, kept by the host for the next daemon
+	// (Reattacher).
+	HostDir, HostExe, HostToken string
+}
+
+// ErrNoHost: there is no session host left to reattach to (Reattacher): it is proven gone, so
+// the agent may be started again.
+var ErrNoHost = errors.New("no session host")
+
+// ErrHostUnknown: whether the agent's session host still runs could not be told (the process
+// list could not be read, or it did not answer). The agent must NOT be started a second time
+// on the same conversation: check again later.
+var ErrHostUnknown = errors.New("the session host could not be checked")
+
+// Reattacher is implemented by runners whose processes can outlive the daemon: Reattach
+// connects to the one an earlier daemon left running for spec, and returns the credential it
+// was started with. An error (ErrNoHost: there is none) means: start it instead.
+type Reattacher interface {
+	Reattach(ctx context.Context, spec Spec) (Process, string, error)
+}
+
+// Detacher is implemented by processes that can be left running when the daemon stops:
+// Detach ends the daemon's view (Events closes without EvExit) and reports whether it did.
+type Detacher interface {
+	Detach() bool
 }
 
 type EventKind string
@@ -219,6 +248,18 @@ func (b ByHarness) Supports(h model.Harness) bool {
 	}
 	_, ok := b[h]
 	return ok
+}
+
+// Reattach dispatches to the harness's runner, if it can reattach (ErrNoHost otherwise).
+func (b ByHarness) Reattach(ctx context.Context, spec Spec) (Process, string, error) {
+	h := spec.Harness
+	if h == "" {
+		h = model.HarnessClaude
+	}
+	if r, ok := b[h].(Reattacher); ok {
+		return r.Reattach(ctx, spec)
+	}
+	return nil, "", ErrNoHost
 }
 
 func (b ByHarness) Start(ctx context.Context, spec Spec) (Process, error) {

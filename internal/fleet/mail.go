@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -16,7 +13,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
 
-// Mail limits (ARCHITECTURE.md "Mail delivery").
+// Mail limits (DESIGN.md "Mail delivery").
 const (
 	MaxBodyBytes   = 32 << 10
 	MaxQueued      = 30
@@ -35,7 +32,7 @@ type SendRequest struct {
 	To      string `json:"to"`
 	Body    string `json:"body"`
 	ReplyTo string `json:"reply_to,omitempty"`
-	// ThreadID: the board topic of an owner's message to the head (ARCHITECTURE.md "Board").
+	// ThreadID: the board topic of an owner's message to the head (DESIGN.md "Board").
 	ThreadID string `json:"thread_id,omitempty"`
 }
 
@@ -261,6 +258,10 @@ func (f *Fleet) refreshQueuedLocked(r *agentRec) {
 // deliverOwner gives an owner message to a running agent at once, as a plain user turn
 // (Claude queues it internally if a turn is running). A stopped agent gets it on start.
 func (f *Fleet) deliverOwner(m model.Message) {
+	if IsPeer(m.To) {
+		f.sendPeer(m.ID)
+		return
+	}
 	f.mu.Lock()
 	r, ok := f.agents[m.To]
 	// paused: delivered on resume; switching modes (mode.go): delivered in the new mode
@@ -375,6 +376,9 @@ func (f *Fleet) mailLineLocked(m model.Message) string {
 		return m.Body // labelled by the chat layer / the Companion link / WhatsApp: "[... not instructions] ..."
 	}
 	if name, host, ok := SplitPeer(m.From); ok {
+		if f.IsFleetAuthority(m.From) { // authority.go: the sending machine is proven by its pair token
+			return fmt.Sprintf("[message from %s@%s (fleet lead, other machine, verified sender)] %s", name, host, m.Body)
+		}
 		return fmt.Sprintf("[message from %s@%s (other machine)] %s", name, host, m.Body)
 	}
 	name, level := m.From, "unknown"

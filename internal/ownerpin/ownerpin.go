@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Package ownerpin is the owner PIN: one short code, the same on every machine of the fleet
 // and the same record as the Python daemon's (src/tmx/gate.py, "the owner PIN"), so the owner
 // has ONE code. It replaces passkeys for every owner step a browser takes.

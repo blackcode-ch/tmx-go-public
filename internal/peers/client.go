@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package peers
 
 import (
@@ -309,4 +306,43 @@ func (c *Client) Call(ctx context.Context, host, method, path string, body, out 
 	}
 	_, err := c.do(ctx, peer, method, path, body, out, sendTimeout)
 	return err
+}
+
+// RotateWith generates a fresh pair token and pushes it to host, which must sort after this
+// machine's own name (DESIGN.md "Python fleet interop": the lower-sorting name generates and
+// rotates; host's own POST /api/peers/pair-token enforces the same rule from its side, so this
+// is the one half of the rule Go could not do until now - go-shells-s, 4 Nov, bc #247). The new
+// token is stored locally (Tokens().Store, keeping the old one valid for the usual overlap)
+// ONLY after host's own fingerprint confirms it received exactly that token: a mismatch or
+// network failure leaves the old token the one still in use on both sides, never a token only
+// one side believes is current. Returns the new token's fingerprint.
+func (c *Client) RotateWith(ctx context.Context, host string) (string, error) {
+	peer, ok := c.peers[strings.ToLower(host)]
+	if !ok {
+		return "", Refused{0, "unknown peer " + clean(host, 40)}
+	}
+	if !(c.machine < peer.Name) {
+		return "", Refused{0, peer.Name + " generates the pair token it shares with " + c.machine + ", not the other way round"}
+	}
+	fresh := NewPairToken()
+	var res struct {
+		Fingerprint string `json:"fingerprint"`
+	}
+	if _, err := c.do(ctx, peer, http.MethodPost, "/api/peers/pair-token", map[string]string{"token": fresh}, &res, sendTimeout); err != nil {
+		return "", err
+	}
+	want := Fingerprint(fresh)
+	if res.Fingerprint != want {
+		return "", Refused{0, peer.Name + " confirmed a different token than the one sent: nothing stored locally"}
+	}
+	fp, err := c.tokens.Store(peer.Name, fresh, "rotated-by-"+c.machine)
+	if err != nil {
+		// peer.Name already has the new token (it just confirmed storing it); saving our own
+		// copy failed (a disk error, ctx cancelled after the peer replied). The two sides now
+		// disagree, which only keeps working until the old token's rotationOverlap runs out -
+		// rotate again before then (go-reviewer-o4, 4 Nov).
+		c.log.Error("p2p: rotated with a peer but failed to save our own copy of the new token - rotate again before the old one's overlap ends", "peer", peer.Name, "err", err)
+		return "", err
+	}
+	return fp, nil
 }

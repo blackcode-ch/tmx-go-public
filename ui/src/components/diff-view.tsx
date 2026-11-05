@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useMemo } from "react";
 import { diffLines } from "diff";
 import { cn } from "@/lib/utils";
@@ -53,7 +50,7 @@ export function diffStats(oldStr: string, newStr: string): { add: number; del: n
 export function DiffView({ oldStr, newStr, className, maxHeight = 420 }: { oldStr: string; newStr: string; className?: string; maxHeight?: number }) {
   const lines = useMemo(() => buildLines(oldStr, newStr), [oldStr, newStr]);
   return (
-    <div className={cn("scroll-thin overflow-auto rounded-lg border bg-code py-1.5 font-mono text-[12px] leading-[1.6]", className)} style={{ maxHeight }}>
+    <div className={cn("scroll-thin overflow-auto rounded-lg border bg-code py-1.5 font-mono text-[0.75rem] leading-[1.6]", className)} style={{ maxHeight }}>
       <table className="w-full border-collapse">
         <tbody>
           {lines.map((l, i) =>

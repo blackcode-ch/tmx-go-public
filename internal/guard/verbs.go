@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package guard
 
 import (
@@ -41,6 +38,17 @@ func init() {
 		"csrutil": hCsrutil, "bcdedit": hBcdedit, "bcdboot": hBootAlways, "bless": hBootAlways,
 		"nvram": hNvram, "reagentc": hReagentc, "mountvol": hMountvol, "efibootmgr": hEfiboot,
 		"grub-install": hBootAlways, "kextunload": hBootAlways, "spctl": hSpctl,
+		// firewall and Tailscale (machine protection: who reaches this machine)
+		"netsh": hNetsh, "ufw": hUfw, "pfctl": hNetAlways, "iptables": hNetAlways, "ip6tables": hNetAlways,
+		"nft": hNetAlways, "firewall-cmd": hNetAlways, "tailscale": hTailscale,
+		"new-netfirewallrule": hNetAlways, "set-netfirewallrule": hNetAlways, "remove-netfirewallrule": hNetAlways,
+		"enable-netfirewallrule": hNetAlways, "disable-netfirewallrule": hNetAlways, "set-netfirewallprofile": hNetAlways,
+		"copy-netfirewallrule": hNetAlways, "rename-netfirewallrule": hNetAlways,
+		"stop-service": hTailscaleService, "set-service": hTailscaleService, "suspend-service": hTailscaleService,
+		"sc.exe": hTailscaleService, "sc": hTailscaleService, "net": hTailscaleService, "net.exe": hTailscaleService,
+		// Windows Hello and security keys (the 7 Oct lockout class)
+		"ssh-keygen": hSSHKeygen, "ssh-keygen.exe": hSSHKeygen, "fido2-token": hHelloAlways, "fido2-cred": hHelloAlways,
+		"fido2-assert": hHelloAlways, "ykman": hHelloAlways, "webauthn": hHelloAlways, "webauthn-cli": hHelloAlways,
 		// processes and power
 		"pkill": hPkill, "killall": hPkill, "taskkill": hTaskkill, "kill": hKill, "stop-process": hStopProcess,
 		"xargs": hXargs, "remove-ciminstance": hCimKill, "invoke-cimmethod": hCimKill,
@@ -185,10 +193,15 @@ func (a *analyzer) write(t target, match string) {
 	switch {
 	case deviceRx.MatchString(p) || strings.HasPrefix(p, "//./physicaldrive"):
 		a.add(RuleDisk, "writes straight to the disk device "+t.shown, match)
+	case a.stateSecret(p):
+		a.add(RuleTmxState, "writes into tmx's secrets or its own settings ("+t.shown+")", match)
+	case a.claudeSettingsFile(p): // before inState: the agents' CLAUDE_CONFIG_DIR is in tmx's state
+		a.add(RuleClaudeConfig, "writes the Claude Code settings file "+t.shown, match)
+		if !a.fileTool {
+			a.add(RuleClaudeHooks, "a shell write, delete or rename of the Claude Code settings file "+t.shown+" (it can't be checked for the guard hook)", match)
+		}
 	case a.inState(p):
 		a.add(RuleTmxState, "writes into tmx's state folder ("+t.shown+")", match)
-	case claudeSettings.MatchString(p):
-		a.add(RuleClaudeConfig, "writes the Claude Code settings file "+t.shown, match)
 	case within(p, a.own) || within(p, a.workspace) || a.inTemp(p) || a.claudeData(p):
 	default:
 		a.add(RuleWriteOutside, "writes "+t.shown+", outside the agent's folder and the workspace", match)
@@ -207,8 +220,17 @@ func (a *analyzer) del(t target, recursive bool, match string) {
 	if p == "" {
 		return
 	}
+	// Any delete of a Claude settings file, and a recursive delete of a folder holding them, before
+	// the state branch below returns: claude-config is inside tmx's state (go-reviewer-o4).
+	if a.claudeSettingsFile(p) || recursive && (strings.HasSuffix(p, "/.claude") || within(p, a.state+"/claude-config")) {
+		a.add(RuleClaudeHooks, "deletes Claude Code's settings ("+t.shown+")", match)
+	}
 	if a.inState(p) || a.holdsState(p) && a.protected(p) == "" {
-		a.add(RuleTmxState, "deletes "+t.shown+" (tmx's state)", match)
+		what := " (tmx's state)"
+		if a.stateSecret(p) || a.holdsState(p) {
+			what = " (tmx's state with its secrets)"
+		}
+		a.add(RuleTmxState, "deletes "+t.shown+what, match)
 		return
 	}
 	if !recursive {
@@ -229,6 +251,7 @@ func (a *analyzer) del(t target, recursive bool, match string) {
 		a.add(RuleDeleteOutside, "deletes the agent's whole folder ("+t.shown+")", match)
 	case p == a.workspace:
 		a.add(RuleDeleteOutside, "deletes the whole workspace ("+t.shown+")", match)
+	case a.userContent(p): // paths.go: the owner's own folders are ordinary work
 	default:
 		a.add(RuleDeleteOutside, "deletes "+t.shown+" recursively, outside the agent's folder", match)
 	}
@@ -297,7 +320,7 @@ func hMove(a *analyzer, c *call) {
 				continue
 			}
 			if a.holdsState(t.p) {
-				a.add(RuleTmxState, "moves "+t.shown+" (tmx's state)", c.raw)
+				a.add(RuleTmxState, "moves "+t.shown+" (tmx's state with its secrets)", c.raw)
 				continue
 			}
 		}
@@ -413,6 +436,17 @@ func hACL(a *analyzer, c *call) {
 	recursive, writes := false, false
 	switch c.verb {
 	case "icacls", "cacls", "xcacls", "subinacl", "setacl":
+		if c.verb == "setacl" { // SetACL.exe -on <object> -ot <type> -actn ...
+			for i := 1; i+1 < len(c.args); i++ {
+				if strings.EqualFold(c.args[i].s, "-on") {
+					targets = append(targets, c.args[i+1])
+				}
+			}
+			if len(targets) > 0 {
+				writes = true
+				break
+			}
+		}
 		for i, x := range c.args[1:] {
 			l := strings.ToLower(x.s)
 			switch {
@@ -469,7 +503,11 @@ func (a *analyzer) perm(t target, recursive, acl bool, match string) {
 		return
 	}
 	if a.inState(p) {
-		a.add(RuleTmxState, "changes permissions in tmx's state folder", match)
+		what := "changes permissions in tmx's state folder"
+		if a.stateSecret(p) {
+			what = "changes permissions on tmx's secrets"
+		}
+		a.add(RuleTmxState, what, match)
 		return
 	}
 	if why := a.protected(p); why != "" {
@@ -543,10 +581,18 @@ func hFormat(a *analyzer, c *call) {
 }
 
 func hCipher(a *analyzer, c *call) {
+	enc, sub := false, false
 	for _, x := range c.args[1:] {
-		if l := strings.ToLower(x.s); strings.HasPrefix(l, "/w") {
+		l := strings.ToLower(x.s)
+		if strings.HasPrefix(l, "/w") {
 			a.add(RuleDisk, "cipher /w wipes free disk space", c.raw)
+			return
 		}
+		enc = enc || l == "/e"
+		sub = sub || strings.HasPrefix(l, "/s")
+	}
+	if enc && sub {
+		a.add(RuleDisk, "cipher /e /s encrypts a whole tree", c.raw)
 	}
 }
 
@@ -647,6 +693,116 @@ func hSpctl(a *analyzer, c *call) {
 			a.add(RuleBoot, "spctl switches off Gatekeeper", c.raw)
 			return
 		}
+	}
+}
+
+// ---- firewall and Tailscale ----------------------------------------------------------------------
+
+func hNetAlways(a *analyzer, c *call) {
+	a.add(RuleNetwork, c.verb+" changes the firewall", c.raw)
+}
+
+// hNetsh: only its firewall contexts; "show" reads.
+func hNetsh(a *analyzer, c *call) {
+	j := strings.ToLower(strings.Join(argStrings(c.args[1:]), " "))
+	if (strings.Contains(j, "advfirewall") || strings.Contains(j, "firewall")) && !strings.Contains(j, " show") {
+		a.add(RuleNetwork, "netsh changes the firewall", c.raw)
+	}
+}
+
+func hUfw(a *analyzer, c *call) {
+	if len(c.args) > 1 && strings.EqualFold(c.args[1].s, "status") {
+		return
+	}
+	a.add(RuleNetwork, "ufw changes the firewall", c.raw)
+}
+
+// tailscaleRead are Tailscale subcommands that only read.
+var tailscaleRead = map[string]bool{"status": true, "ip": true, "ping": true, "version": true, "whois": true,
+	"netcheck": true, "dns": true, "exit-node": false, "bugreport": true, "metrics": true, "licenses": true}
+
+func hTailscale(a *analyzer, c *call) {
+	sub := ""
+	for _, x := range c.args[1:] {
+		if !strings.HasPrefix(x.s, "-") {
+			sub = strings.ToLower(x.s)
+			break
+		}
+	}
+	if sub == "" || tailscaleRead[sub] {
+		return
+	}
+	// "serve status" / "funnel status" only read
+	j := strings.ToLower(strings.Join(argStrings(c.args[1:]), " "))
+	if (sub == "serve" || sub == "funnel") && strings.HasSuffix(strings.TrimSpace(j), " status") {
+		return
+	}
+	a.add(RuleNetwork, "tailscale "+sub+" changes how this machine is reached", c.raw)
+}
+
+// hTailscaleService: stopping, suspending or disabling the Tailscale service (Stop-Service,
+// Set-Service -StartupType Disabled / -Status Stopped, sc.exe stop/config/delete, net stop).
+func hTailscaleService(a *analyzer, c *call) {
+	j := strings.ToLower(strings.Join(argStrings(c.args[1:]), " "))
+	if !strings.Contains(j, "tailscale") {
+		return
+	}
+	switch c.verb {
+	case "set-service":
+		if !strings.Contains(j, "disabled") && !strings.Contains(j, "stopped") && !strings.Contains(j, "manual") {
+			return
+		}
+	case "sc.exe", "sc":
+		if !strings.Contains(j, "stop") && !strings.Contains(j, "config") && !strings.Contains(j, "delete") {
+			return
+		}
+	case "net", "net.exe":
+		if !strings.HasPrefix(j, "stop") && !strings.Contains(j, " stop") {
+			return
+		}
+	}
+	a.add(RuleNetwork, c.verb+" stops or disables the Tailscale service", c.raw)
+}
+
+// ---- Windows Hello and security keys -------------------------------------------------------------
+
+func hHelloAlways(a *analyzer, c *call) {
+	a.add(RuleHelloKey, c.verb+" talks to a security key / Windows Hello", c.raw)
+}
+
+var (
+	skType = regexp.MustCompile(`(?i)^(ecdsa-sk|ed25519-sk|sk-[\w@.-]+)$`)
+	skFile = regexp.MustCompile(`(?i)(^|[\\/])id_(ecdsa|ed25519)_sk(\.pub)?$|_sk(\.pub)?$`)
+)
+
+// hSSHKeygen: making or using a security-key (-sk) key reaches Windows Hello (14 Oct incident).
+func hSSHKeygen(a *analyzer, c *call) {
+	args := argStrings(c.args[1:])
+	sign, skKey := false, false
+	for i, x := range args {
+		next := ""
+		if i+1 < len(args) {
+			next = args[i+1]
+		}
+		switch {
+		case x == "-t" && skType.MatchString(next), strings.HasPrefix(x, "-t") && skType.MatchString(strings.TrimPrefix(x, "-t")):
+			a.add(RuleHelloKey, "ssh-keygen makes a security-key (-sk) key", c.raw)
+			return
+		case x == "-K":
+			a.add(RuleHelloKey, "ssh-keygen -K loads keys from a security key", c.raw)
+			return
+		case x == "-O" || strings.HasPrefix(x, "-O") && len(x) > 2:
+			a.add(RuleHelloKey, "ssh-keygen -O sets security-key options", c.raw)
+			return
+		case x == "-Y" && (next == "sign" || next == "verify"):
+			sign = true
+		}
+		if skFile.MatchString(x) {
+			skKey = true
+		}
+	}
+	if sign && skKey {
+		a.add(RuleHelloKey, "ssh-keygen signs with a security-key (-sk) key", c.raw)
 	}
 }
 

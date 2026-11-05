@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -9,7 +6,7 @@ import (
 	"strings"
 )
 
-// gzipped compresses a handler's response when the client accepts gzip (ARCHITECTURE.md "Matrix",
+// gzipped compresses a handler's response when the client accepts gzip (DESIGN.md "Matrix",
 // load budget: 5,000 thread cards are ~2.8 MB of JSON, ~14 kB gzipped). Used on plain
 // request/response JSON routes only: never on streams, upgrades or ranged files.
 func gzipped(h http.HandlerFunc) http.HandlerFunc {

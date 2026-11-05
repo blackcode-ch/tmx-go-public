@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package peers
 
 import (
@@ -69,10 +66,11 @@ type fakePython struct {
 	t    *testing.T
 	name string
 
-	mu       sync.Mutex
-	pairTok  string
-	incoming []fleet.PeerOutbound
-	answer   func(m fleet.PeerOutbound) (int, any)
+	mu           sync.Mutex
+	pairTok      string
+	incoming     []fleet.PeerOutbound
+	answer       func(m fleet.PeerOutbound) (int, any)
+	wrongPairAck bool // answer a fingerprint that doesn't match what was actually stored
 }
 
 func (p *fakePython) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +96,11 @@ func (p *fakePython) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var b struct{ Token string }
 		_ = json.NewDecoder(r.Body).Decode(&b)
 		p.pairTok = b.Token
-		write(200, map[string]string{"fingerprint": Fingerprint(b.Token)})
+		fp := Fingerprint(b.Token)
+		if p.wrongPairAck {
+			fp = Fingerprint(b.Token + "-not-what-we-stored")
+		}
+		write(200, map[string]string{"fingerprint": fp})
 	case "/api/sessions":
 		if !paired {
 			write(401, map[string]string{"error": "bad token"})
@@ -156,6 +158,71 @@ func TestSendUsesThePairToken(t *testing.T) {
 	}
 	if len(py.incoming) != 1 || py.incoming[0].Body != "hi" {
 		t.Fatalf("%+v", py.incoming)
+	}
+}
+
+// RotateWith generates a fresh token, pushes it to a peer sorting after this machine
+// ("hostb" < "hostc"), and stores it locally only once the peer's own fingerprint confirms
+// it received exactly that token.
+func TestRotateWithStoresOnlyAfterTheirConfirmation(t *testing.T) {
+	c, py := newPair(t, "hostc")
+	before := c.tokens.For("hostc")
+	fp, err := c.RotateWith(context.Background(), "Hostc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := c.tokens.For("hostc")
+	if after == before {
+		t.Fatal("the token was not rotated")
+	}
+	if Fingerprint(after) != fp {
+		t.Fatalf("stored token does not match the returned fingerprint: %s vs %s", Fingerprint(after), fp)
+	}
+	if py.pairTok != after {
+		t.Fatal("the peer's own token does not match what we stored")
+	}
+	// The old token keeps working for the overlap (TestTokensRotationAndIdentify already
+	// proves the mechanism itself; this just confirms Store, not a bypass, was used).
+	if p, ok := c.tokens.Identify(before); !ok || p != "hostc" {
+		t.Fatal("the previous token stopped working inside the overlap")
+	}
+}
+
+// Rotating toward a peer sorting BEFORE this machine is refused locally - DESIGN.md's rule
+// (the lower-sorting name generates and rotates) means hosta generates ours, not the other
+// way round, and that peer's own route would refuse it anyway; refusing it here first means no
+// network call and no new token is ever generated for nothing.
+func TestRotateWithRefusesAPeerThatSortsFirst(t *testing.T) {
+	c, py := newPair(t, "hosta")
+	before := c.tokens.For("hosta")
+	if _, err := c.RotateWith(context.Background(), "hosta"); err == nil {
+		t.Fatal("rotated toward a peer that generates our token, not the other way round")
+	}
+	if c.tokens.For("hosta") != before || py.pairTok != before {
+		t.Fatal("something changed despite the refusal")
+	}
+}
+
+// A fingerprint mismatch (the peer claims it stored something other than what was sent) must
+// never be stored locally: the two machines would then disagree about the current token.
+func TestRotateWithNeverStoresOnAFingerprintMismatch(t *testing.T) {
+	c, py := newPair(t, "hostc")
+	before := c.tokens.For("hostc")
+	py.wrongPairAck = true
+	if _, err := c.RotateWith(context.Background(), "hostc"); err == nil {
+		t.Fatal("stored a token the peer did not actually confirm")
+	}
+	if c.tokens.For("hostc") != before {
+		t.Fatal("a mismatched rotation still changed the locally stored token")
+	}
+}
+
+// An unpaired peer (no token yet: tmx peers import-python has not run) is refused before any
+// network call, same as Send.
+func TestRotateWithUnpairedPeerIsNeverCalled(t *testing.T) {
+	c, _ := newPair(t, "hostc", false)
+	if _, err := c.RotateWith(context.Background(), "hostc"); err == nil {
+		t.Fatal("rotated with no pair token at all")
 	}
 }
 

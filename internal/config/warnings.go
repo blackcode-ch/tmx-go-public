@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package config
 
 const TrialServicesWarning = "TRIAL PROFILE: WhatsApp or peers are configured but disabled by this profile. Select the production profile to use these services."

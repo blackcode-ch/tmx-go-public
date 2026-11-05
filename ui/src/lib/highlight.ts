@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Syntax highlighting with shiki: core build, JavaScript regex engine (no wasm), a curated set
 // of languages and dual light/dark themes switched by CSS (.dark). Loaded lazily on first use.
 import type { HighlighterCore } from "shiki/core";

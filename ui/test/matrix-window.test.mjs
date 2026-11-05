@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // The Matrix list's load budget (src/lib/matrix-window.ts, M3): with 5,000 threads only the
 // rows in view are rendered, at every scroll position, and working that out is cheap enough to
 // run on every scroll event on a phone.

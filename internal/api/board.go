@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -9,7 +6,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/fleet"
 )
 
-// The board (ARCHITECTURE.md "Board"): the head's turns as cards on threads. The owner reads and
+// The board (DESIGN.md "Board"): the head's turns as cards on threads. The owner reads and
 // arranges it; the head files its own turn (thread_set → POST /api/board/file).
 func (s *Server) boardRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/board", s.ownerOnly(s.getBoard))

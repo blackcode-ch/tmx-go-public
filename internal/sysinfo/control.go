@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package sysinfo
 
 import (
@@ -32,6 +29,10 @@ func ProtectedProcess(name string) bool {
 type trackedChild struct {
 	proc   Proc
 	exempt bool
+	// anchor is the process the child's ownership is proven by: its parent, verified by PID
+	// and start time. Zero = the daemon itself (RegisterChild); else a session host
+	// (RegisterHosted).
+	anchor Proc
 }
 
 var children = struct {
@@ -59,7 +60,66 @@ func RegisterChild(pid int, exempt bool) {
 			delete(children.roots, id)
 		}
 	}
-	children.roots[pid] = trackedChild{p, exempt}
+	children.roots[pid] = trackedChild{p, exempt, Proc{}}
+}
+
+// RegisterHosted records a program an agent's session host started (runner/host): the host,
+// not the daemon, is its parent, so the host's identity (PID and start time, from its
+// host.json) anchors it instead. It counts only if the program's parent really is that host, a
+// tmx host copy (tmx-host-*) started no later than the program. Called after a start and after
+// a daemon reattached, so brakes and stops reach hosted agents like the daemon's own children.
+func RegisterHosted(pid, hostPID int, hostStart int64, exempt bool) {
+	rows, err := Procs()
+	if err != nil {
+		return
+	}
+	p, ok := find(rows, pid)
+	h, hok := find(rows, hostPID)
+	if !ok || !hok || hostStart <= 0 || h.Start != hostStart || p.PPID != h.PID || p.Start <= 0 || p.Start < h.Start || !hostImage(h.Name) {
+		return
+	}
+	children.Lock()
+	defer children.Unlock()
+	for id, old := range children.roots {
+		now, exists := find(rows, id)
+		if !exists || now.Start != old.proc.Start {
+			delete(children.roots, id)
+		}
+	}
+	children.roots[pid] = trackedChild{p, exempt, h}
+}
+
+// KillHost ends a session host by the identity it recorded (runner/host): only if pid is still
+// the process with that start time and image name, a tmx-host-* copy; else ErrNotChild. It
+// pins the process before the kill (openIdentity checks the start time on the pinned handle),
+// so a reused PID is never hit. Never by name.
+func KillHost(pid int, start int64, name string) error {
+	if pid <= 0 || start <= 0 || !hostImage(name) {
+		return ErrNotChild
+	}
+	rows, err := Procs()
+	if err != nil {
+		return err
+	}
+	p, ok := find(rows, pid)
+	if !ok || p.Start != start || p.Name != name {
+		return ErrNotChild
+	}
+	h, err := openIdentity(p)
+	if err != nil {
+		return err
+	}
+	defer h.close()
+	return h.kill()
+}
+
+// IsHostImage reports whether name (a path or an image name) is a session host's executable:
+// the daemon's copy of tmx, tmx-host-<hash> (cli/hostexe.go).
+func IsHostImage(name string) bool { return hostImage(name) }
+
+func hostImage(name string) bool {
+	name = strings.ToLower(filepath.Base(strings.ReplaceAll(name, `\`, "/")))
+	return strings.HasPrefix(name, "tmx-host-")
 }
 
 // captureControl prunes protected subtrees, checks every edge and requires the
@@ -101,12 +161,19 @@ func registeredTreeFor(pid int, brake bool) ([]Proc, Proc, error) {
 	if err != nil {
 		return nil, Proc{}, err
 	}
-	daemon, ok := find(rows, os.Getpid())
+	anchor, ok := find(rows, os.Getpid())
 	if !ok {
 		return nil, Proc{}, ErrNotChild
 	}
-	tree, err := captureControl(rows, child.proc, daemon)
-	return tree, daemon, err
+	if child.anchor.PID != 0 { // a hosted program: its host, still the same process
+		h, ok := find(rows, child.anchor.PID)
+		if !ok || h.Start != child.anchor.Start || !hostImage(h.Name) {
+			return nil, Proc{}, ErrNotChild
+		}
+		anchor = h
+	}
+	tree, err := captureControl(rows, child.proc, anchor)
+	return tree, anchor, err
 }
 
 // controlledProcess pins an OS process object. Actions never reopen a numeric PID.

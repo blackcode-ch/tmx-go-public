@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -9,7 +6,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/fleet"
 )
 
-// The Matrix (ARCHITECTURE.md "Matrix"): a thread with everything on it, and links. The same calls
+// The Matrix (DESIGN.md "Matrix"): a thread with everything on it, and links. The same calls
 // serve the owner's view and the agents' matrix tool; the fleet scopes them per caller.
 func (s *Server) matrixRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/matrix/threads/{id}", gzipped(s.matrixView)) // ?past=1: ended links too; ?all=1: chatter too

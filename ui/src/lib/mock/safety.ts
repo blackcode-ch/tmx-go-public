@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Safety for ?mock=1: the guard's rule catalogue (generated from internal/guard/rules.go) and
 // the owner gate. ?mock=gate starts with the gate on, so gated actions show "Confirm on this Mac";
 // its grace window (1 h) opens with the first simulated proof (?mock=gate-open: already open).

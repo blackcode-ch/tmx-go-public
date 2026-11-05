@@ -1,9 +1,6 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
-// The Matrix (ARCHITECTURE.md "Matrix"), M0: links from a thread to everything working on it. Most
+// The Matrix (DESIGN.md "Matrix"), M0: links from a thread to everything working on it. Most
 // are made by tmx as things happen (an agent launched for a thread joins it); the owner and
 // agents attach the rest. A link holds a name and a reference, never a secret's value.
 

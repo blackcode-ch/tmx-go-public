@@ -1,8 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 import { useMemo } from "react";
-import { CircleDot, FolderClosed, Gauge, Inbox, Keyboard, LayoutGrid, MessageCircle, MessageSquare, Moon, Plus, Settings, Sparkles, Square, Sun, Waypoints } from "lucide-react";
+import { CircleDot, FolderClosed, Gauge, Inbox, Keyboard, LayoutGrid, ListChecks, MessageCircle, MessageSquare, Moon, Plus, Settings, Sparkles, Square, Sun, Waypoints } from "lucide-react";
 import { useCompanionSetUp } from "@/lib/companion";
 import { isLinked, sortedWaChats, useWa } from "@/lib/whatsapp";
 import { WaAvatar } from "./whatsapp/wa-bits";
@@ -46,21 +43,21 @@ export function CommandPalette() {
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={(v) => ui.openPalette(v)} title="Command palette" description="Jump to an agent or project, or run a command" className="top-[16%] translate-y-0 data-[state=open]:slide-in-from-top-2 sm:max-w-[580px]" showCloseButton={false}>
+    <CommandDialog open={open} onOpenChange={(v) => ui.openPalette(v)} title="Command palette" description="Jump to an agent or project, or run a command" className="top-[16%] translate-y-0 data-[state=open]:slide-in-from-top-2 sm:max-w-[36.25rem]" showCloseButton={false}>
       <CommandInput placeholder="Search agents, projects and commands…" />
       <CommandList className="scroll-thin">
         <CommandEmpty>Nothing matches.</CommandEmpty>
         <CommandGroup heading="Go to">
           <CommandItem value="overview home" onSelect={() => go(paths.overview())}>
-            <LayoutGrid /> Overview <CommandShortcut>G O</CommandShortcut>
+            <LayoutGrid /> Home <CommandShortcut>G O</CommandShortcut>
           </CommandItem>
           <CommandItem value="needs you inbox approvals" onSelect={() => go(paths.inbox())}>
             <Inbox /> Needs you
             {pending > 0 && <span className="tabular text-xs text-muted-foreground">{pending} pending</span>}
             <CommandShortcut>G I</CommandShortcut>
           </CommandItem>
-          <CommandItem value="board topics threads head canvas" onSelect={() => go(paths.board())}>
-            <Waypoints /> Board <CommandShortcut>G B</CommandShortcut>
+          <CommandItem value="matrix board topics threads head canvas" onSelect={() => go(paths.matrix())}>
+            <Waypoints /> Matrix <CommandShortcut>G M</CommandShortcut>
           </CommandItem>
           {headId && (
             <CommandItem value="talk to the head" onSelect={() => go(paths.agent(headId))}>
@@ -77,6 +74,9 @@ export function CommandPalette() {
           )}
           <CommandItem value="usage ai accounts quota limits connect claude codex antigravity" onSelect={() => go(paths.usage())}>
             <Gauge /> Usage
+          </CommandItem>
+          <CommandItem value="features ordered status works partial missing evidence" onSelect={() => go(paths.features())}>
+            <ListChecks /> Features
           </CommandItem>
           {wa && (
             <CommandItem value="whatsapp chats messages link" onSelect={() => go(paths.whatsapp())}>

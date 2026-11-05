@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -24,13 +21,17 @@ const notBuiltPage = `<!doctype html>
 
 // uiHandler serves the embedded UI with an SPA fallback to index.html.
 func uiHandler() http.Handler {
-	if !ui.Built() {
+	return serveUI(ui.FS(), ui.Built())
+}
+
+// serveUI backs uiHandler; split out so tests can serve a fixture fs.FS without a real `pnpm build`.
+func serveUI(root fs.FS, built bool) http.Handler {
+	if !built {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			_, _ = w.Write([]byte(notBuiltPage))
 		})
 	}
-	root := ui.FS()
 	files := http.FileServerFS(root)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
@@ -45,6 +46,11 @@ func uiHandler() http.Handler {
 		}
 		if strings.HasPrefix(name, "assets/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		if name == "manifest.webmanifest" {
+			// Go's mime package has no built-in mapping for this extension; Chrome requires
+			// this exact type to recognize the file as a web app manifest.
+			w.Header().Set("Content-Type", "application/manifest+json")
 		}
 		files.ServeHTTP(w, r)
 	})

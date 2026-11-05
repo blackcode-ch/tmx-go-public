@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api
 
 import (
@@ -10,7 +7,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// profileRoutes: agent profiles (ARCHITECTURE.md "Profiles") and editing an agent after launch.
+// profileRoutes: agent profiles (DESIGN.md "Profiles") and editing an agent after launch.
 func (s *Server) profileRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/profiles", s.listProfiles)
 	mux.HandleFunc("POST /api/profiles", s.ownerOnly(s.createProfile))

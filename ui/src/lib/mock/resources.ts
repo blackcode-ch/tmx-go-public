@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Resource control in the mock daemon: a queued agent, one paused by the write budget (with
 // its Needs-you item), live samples with history, slots, and the routes the UI calls.
 import type { Agent, Approval, BusEvent } from "../types";

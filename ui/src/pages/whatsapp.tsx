@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // WhatsApp: #/whatsapp lists the chats (or shows the linking flow while nothing is linked);
 // #/whatsapp/<jid> is one chat: its messages with media, replies, reactions and ticks, the
 // composer, and any message an agent is waiting to send there.
@@ -77,7 +74,7 @@ function ChatRow({ c }: { c: WaChat }) {
         <WaAvatar chat={c} size="lg" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className={cn("truncate text-[13.5px]", c.unread > 0 && !c.muted ? "font-semibold" : "font-medium")}>{c.name}</span>
+            <span className={cn("truncate text-[0.8438rem]", c.unread > 0 && !c.muted ? "font-semibold" : "font-medium")}>{c.name}</span>
             {c.kind === "group" && <span className="text-2xs text-subtle-foreground">group</span>}
             <span className="tabular ml-auto shrink-0 text-2xs text-subtle-foreground">{c.last ? relativeTime(c.last.at) : ""}</span>
           </div>
@@ -153,7 +150,7 @@ function WaHome() {
     );
   } else if (!linked) {
     body = (
-      <div className="mx-auto max-w-[620px] rounded-xl border bg-card p-5 sm:p-6">
+      <div className="mx-auto max-w-[38.75rem] rounded-xl border bg-card p-5 sm:p-6">
         <WaLinkPanel />
       </div>
     );
@@ -235,7 +232,7 @@ function WaHome() {
         {linked && status?.phone && <span className="hidden truncate font-mono text-2xs text-subtle-foreground sm:inline">{status.phone}</span>}
       </PageHeader>
       {linked && status && <ConnectionBanner s={status} />}
-      <PageBody width="max-w-[820px]">{body}</PageBody>
+      <PageBody width="max-w-[51.25rem]">{body}</PageBody>
     </div>
   );
 }
@@ -294,7 +291,7 @@ function Messages({ chat, onReply }: { chat: WaChat; onReply: (m: WaMessage) => 
       }}
       className="scroll-thin min-h-0 flex-1 overflow-y-auto"
     >
-      <div className="mx-auto max-w-[820px] px-3 pt-4 pb-2 md:px-5">
+      <div className="mx-auto max-w-[51.25rem] px-3 pt-4 pb-2 md:px-5">
         {ml?.hasMore && (
           <div className="flex justify-center pb-2">
             <Button variant="ghost" size="xs" onClick={earlier} disabled={ml.loading}>
@@ -306,7 +303,7 @@ function Messages({ chat, onReply }: { chat: WaChat; onReply: (m: WaMessage) => 
         {ml?.loaded && list.length === 0 && (
           <div className="flex flex-col items-center px-6 pt-10 pb-6 text-center">
             <WaAvatar chat={chat} size="lg" />
-            <p className="mt-3 text-[14px] font-medium">No messages here yet</p>
+            <p className="mt-3 text-[0.875rem] font-medium">No messages here yet</p>
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">New messages show up as they're sent. Older ones may still come with the history sync.</p>
           </div>
         )}
@@ -344,7 +341,7 @@ function AgentSends({ chat }: { chat: WaChat }) {
   if (!asks.length) return null;
   return (
     <div className="shrink-0 px-4 pt-2 md:px-6">
-      <div className="mx-auto max-w-[820px] space-y-2">
+      <div className="mx-auto max-w-[51.25rem] space-y-2">
         {asks.map((a) => {
           const agent = agents[a.agent_id];
           return agent ? <InlineApproval key={a.id} a={a} agent={agent} /> : null;
@@ -435,7 +432,7 @@ function WaChatPage({ jid }: { jid: string }) {
       <PageHeader actions={<ChatMenu chat={chat} s={status} />}>
         <WaAvatar chat={chat} />
         <div className="min-w-0">
-          <h1 className="truncate text-[14px] leading-tight font-semibold tracking-tight">{chat.name}</h1>
+          <h1 className="truncate text-[0.875rem] leading-tight font-semibold tracking-tight">{chat.name}</h1>
           <div className="flex min-w-0 items-center gap-1.5 text-2xs leading-tight text-muted-foreground">
             <span className="shrink-0">{chat.kind === "group" ? "WhatsApp group" : phone ? `WhatsApp · ${phone}` : "WhatsApp"}</span>
             {chat.muted && (

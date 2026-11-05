@@ -1,7 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
-// Mock of the live mode switch (ARCHITECTURE.md "Switching live") for ?mock=1: POST
+// Mock of the live mode switch (DESIGN.md "Switching live") for ?mock=1: POST
 // /api/agents/{id}/mode switches a Claude or Codex agent between chat and its own screen (mid-turn:
 // when the turn ends), and the screen is a small imitation of Claude Code's or Codex's TUI.
 import type { TerminalHandlers, TerminalSession } from "../transport";

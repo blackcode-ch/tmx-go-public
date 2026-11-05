@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -15,6 +12,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/blackcode-ch/tmx-go/internal/harness"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/peertext"
 	"github.com/blackcode-ch/tmx-go/internal/store"
@@ -25,13 +23,20 @@ const maxSlug = 34
 
 // ProjectRequest is POST /api/projects.
 type ProjectRequest struct {
-	Name   string `json:"name"`
-	Folder string `json:"folder,omitempty"`
-	Brief  string `json:"brief,omitempty"`
+	// Lead omitted launches a local lead; empty or "none" leaves it unassigned.
+	// Otherwise this selects an existing local lead/head or a name@host peer.
+	Lead   *string `json:"lead,omitempty"`
+	Name   string  `json:"name"`
+	Folder string  `json:"folder,omitempty"`
+	Brief  string  `json:"brief,omitempty"`
 	// Profile of the project's lead; "" = the built-in lead profile.
 	Profile string `json:"profile,omitempty"`
+	Model   string `json:"model,omitempty"`
 	// Harness for the project's lead; "" preserves the Claude default.
 	Harness model.Harness `json:"harness,omitempty"`
+	// Members: existing agents (names or IDs) in no project yet that join it at once, e.g. a lead
+	// that must launch workers here (AddProjectMember).
+	Members []string `json:"members,omitempty"`
 }
 
 // ProjectPatch is PATCH /api/projects/{id}; nil fields stay.
@@ -62,13 +67,19 @@ func Slugify(name string) string {
 	return s
 }
 
-// CreateProject creates the project folder and row and launches its lead (owner or a level
-// whose policy allows creating projects, i.e. the head).
+// CreateProject creates a project and either launches a lead or records an explicit
+// assignment. Only the owner or a profile allowed to create projects may call it.
 func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, error) {
 	// Resolve before touching the project folder or store. In particular, do not silently
 	// start the lead with Claude when the caller selected an unknown harness.
 	f.mu.Lock()
-	leadHarness, _, err := f.harnessModeLocked(req.Harness, model.ModeChat)
+	leadHarness := model.HarnessClaude
+	var err error
+	if req.Lead == nil {
+		leadHarness, _, err = f.harnessModeLocked(req.Harness, model.ModeChat)
+	} else if req.Harness != "" || req.Profile != "" || req.Model != "" {
+		err = errf(KindInvalid, "harness, profile and model apply only when launching a new lead")
+	}
 	if err != nil {
 		f.mu.Unlock()
 		return model.Project{}, err
@@ -96,9 +107,19 @@ func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, erro
 			return model.Project{}, errf(KindForbidden, "%s (profile %s) cannot launch %s agents", me.a.Name, mp.Slug, req.Profile)
 		}
 	}
-	if _, err := f.launchProfileLocked(req.Profile, model.LevelLead); err != nil {
-		f.mu.Unlock()
-		return model.Project{}, err
+	if req.Lead == nil {
+		if _, err := f.launchProfileLocked(req.Profile, model.LevelLead); err != nil {
+			f.mu.Unlock()
+			return model.Project{}, err
+		}
+	}
+	selectedLead := ""
+	if req.Lead != nil {
+		selectedLead, err = f.projectLeadLocked(*req.Lead)
+		if err != nil {
+			f.mu.Unlock()
+			return model.Project{}, err
+		}
 	}
 	for _, p := range f.projects {
 		if p.Slug == slug {
@@ -106,9 +127,21 @@ func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, erro
 			return model.Project{}, errf(KindConflict, "a project %q already exists", slug)
 		}
 	}
-	if _, err := f.resolveLocked(leadName); err == nil {
+	if _, err := f.resolveLocked(leadName); req.Lead == nil && err == nil {
 		f.mu.Unlock()
 		return model.Project{}, errf(KindConflict, "an agent named %q already exists", leadName)
+	}
+	// Members are checked before anything is created, so a bad name creates nothing.
+	var members []*agentRec
+	for _, m := range req.Members {
+		r, err := f.memberLocked(m, "")
+		if err != nil {
+			f.mu.Unlock()
+			return model.Project{}, err
+		}
+		if r != nil && !slices.Contains(members, r) {
+			members = append(members, r)
+		}
 	}
 	folder := req.Folder
 	switch {
@@ -122,7 +155,16 @@ func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, erro
 		folder = filepath.Join(f.opts.Workspace, folder)
 	}
 	folder = filepath.Clean(folder)
-	if err := f.launchAdmissionLocked(model.Agent{Harness: leadHarness, Level: model.LevelLead, Profile: req.Profile, Cwd: folder}); err != nil {
+	validateFolder := func() error {
+		if req.Lead == nil {
+			return f.launchAdmissionLocked(model.Agent{Harness: leadHarness, Level: model.LevelLead, Profile: req.Profile, Model: req.Model, Cwd: folder})
+		}
+		if err := harness.ValidateLaunchCwd(folder); err != nil {
+			return errf(KindForbidden, "%s", err)
+		}
+		return nil
+	}
+	if err := validateFolder(); err != nil {
 		f.mu.Unlock()
 		return model.Project{}, err
 	}
@@ -130,13 +172,13 @@ func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, erro
 		f.mu.Unlock()
 		return model.Project{}, errf(KindInvalid, "cannot create the folder %s: %v", folder, err)
 	}
-	if err := f.launchAdmissionLocked(model.Agent{Harness: leadHarness, Level: model.LevelLead, Profile: req.Profile, Cwd: folder}); err != nil {
+	if err := validateFolder(); err != nil {
 		f.mu.Unlock()
 		return model.Project{}, err
 	}
 	now := model.Now()
 	p := &model.Project{ID: model.NewID(), Name: strings.TrimSpace(req.Name), Slug: slug, Folder: folder,
-		Brief: req.Brief, Status: model.ProjectActive, CreatedAt: now, UpdatedAt: now}
+		Brief: req.Brief, LeadID: selectedLead, Status: model.ProjectActive, CreatedAt: now, UpdatedAt: now}
 	if err := f.saveProjectLocked(p); err != nil {
 		f.mu.Unlock()
 		return model.Project{}, err
@@ -144,8 +186,27 @@ func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, erro
 	f.projects[p.ID] = p
 	f.projectThreadLocked(p.ID)
 
+	if req.Lead != nil {
+		if r := f.agents[selectedLead]; r != nil {
+			_, linkErr := f.addLinkLocked(model.ThreadLink{ThreadID: f.projectThreadLocked(p.ID), Axis: model.AxisAgent, Ref: r.a.ID, Role: "lead", Label: r.a.Name, Why: "assigned to this project", By: model.Owner, How: model.LinkAuto})
+			if linkErr != nil {
+				f.log.Error("matrix: link assigned lead", "err", linkErr)
+			}
+		}
+		by := model.Owner
+		if me != nil {
+			by = me.a.Name
+		}
+		for _, r := range members {
+			f.joinProjectLocked(by, p, r)
+		}
+		out := *p
+		f.mu.Unlock()
+		return out, nil
+	}
+
 	// The lead is launched by the system on behalf of the head, using the requested harness.
-	lreq := LaunchRequest{Name: leadName, ProjectID: p.ID, Level: model.LevelLead, Profile: req.Profile, Harness: leadHarness, Brief: req.Brief}
+	lreq := LaunchRequest{Name: leadName, ProjectID: p.ID, Level: model.LevelLead, Profile: req.Profile, Model: req.Model, Harness: leadHarness, Brief: req.Brief}
 	if h := f.headLocked(); h != nil {
 		lreq.ParentID = h.a.ID
 	}
@@ -165,11 +226,104 @@ func (f *Fleet) CreateProject(c Caller, req ProjectRequest) (model.Project, erro
 	if err := f.saveProjectLocked(p); err != nil {
 		f.log.Error("store project", "err", err)
 	}
+	by := model.Owner
+	if me != nil {
+		by = me.a.Name
+	}
+	for _, r := range members {
+		f.joinProjectLocked(by, p, r)
+	}
 	out := *p
 	f.mu.Unlock()
 
 	_ = f.startAgent(a.ID, leadKickoff(out))
 	return out, nil
+}
+
+// AddProjectMember puts an existing agent into a project (DESIGN.md "Projects", members), so a
+// lead in it can launch workers there. Only the owner, the head or the project's own lead may add
+// one: never an agent on its own behalf, nor a peer machine. An agent belongs to one project: one
+// already in another is refused; adding it again is a no-op. Takes effect on its next launch.
+func (f *Fleet) AddProjectMember(c Caller, project, agent string) (model.Agent, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, err := f.projectLocked(project)
+	if err != nil {
+		return model.Agent{}, err
+	}
+	by := model.Owner
+	if !c.Owner {
+		if c.Peer != "" {
+			return model.Agent{}, errf(KindForbidden, "only the owner, the head or the project's lead can add members to %s", p.Name)
+		}
+		me, err := f.callerRecLocked(c)
+		if err != nil {
+			return model.Agent{}, err
+		}
+		if !isHead(me) && me.a.ID != p.LeadID {
+			return model.Agent{}, errf(KindForbidden, "only the owner, the head or the project's lead can add members to %s", p.Name)
+		}
+		by = me.a.Name
+	}
+	r, err := f.memberLocked(agent, p.ID)
+	if err != nil {
+		return model.Agent{}, err
+	}
+	if r == nil { // already a member
+		got, _ := f.resolveLocked(strings.TrimSpace(agent))
+		return got.a, nil
+	}
+	f.joinProjectLocked(by, p, r)
+	return r.a, nil
+}
+
+// memberLocked resolves an agent that may join project (""= a project about to be created):
+// nil when it is in that project already.
+func (f *Fleet) memberLocked(agent, project string) (*agentRec, error) {
+	r, err := f.resolveLocked(strings.TrimSpace(agent))
+	if err != nil {
+		return nil, errf(KindInvalid, "member: %s", err.Error())
+	}
+	switch {
+	case r.a.Level == model.LevelHead:
+		return nil, errf(KindInvalid, "%s is the head; the head belongs to no project", r.a.Name)
+	case project != "" && r.a.ProjectID == project:
+		return nil, nil
+	case f.leadsAnotherLocked(r.a.ID, project) != "":
+		return nil, errf(KindConflict, "%s is the lead of project %s; a project's lead never joins another", r.a.Name, f.leadsAnotherLocked(r.a.ID, project))
+	case r.a.ProjectID != "":
+		name := r.a.ProjectID
+		if q := f.projects[r.a.ProjectID]; q != nil {
+			name = q.Name
+		}
+		return nil, errf(KindConflict, "%s is already in project %s; an agent belongs to one project", r.a.Name, name)
+	}
+	return r, nil
+}
+
+// leadsAnotherLocked is the name of a project other than project that agent leads ("" if none),
+// whatever the agent's own ProjectID says.
+func (f *Fleet) leadsAnotherLocked(agent, project string) string {
+	for _, q := range f.projects {
+		if q.LeadID == agent && q.ID != project {
+			return q.Name
+		}
+	}
+	return ""
+}
+
+// joinProjectLocked files the agent under the project and links it to the project's thread.
+func (f *Fleet) joinProjectLocked(by string, p *model.Project, r *agentRec) {
+	r.a.ProjectID = p.ID
+	f.saveAgentLocked(r)
+	role := "worker"
+	if r.a.Level == model.LevelLead {
+		role = "member"
+	}
+	if _, err := f.addLinkLocked(model.ThreadLink{ThreadID: f.projectThreadLocked(p.ID), Axis: model.AxisAgent, Ref: r.a.ID, Role: role,
+		Label: r.a.Name, Why: "added to the project", By: by, How: model.LinkHand}); err != nil {
+		f.log.Error("matrix: link project member", "agent", r.a.ID, "project", p.ID, "err", err)
+	}
 }
 
 // UpdateProject changes a project's name, brief or status (owner only).
@@ -246,7 +400,10 @@ type ProjectSectionPatch struct {
 	Needs       *[]string              `json:"needs,omitempty"`
 	AddNeeds    []string               `json:"add_needs,omitempty"`
 	Links       *[]string              `json:"links,omitempty"`
-	Lead        *string                `json:"lead,omitempty"`
+	// ReplaceLinks: Links replaces the whole list (an empty one clears it). Without it, Links is
+	// merged into the list, deduplicated by URL, a newer title winning (bc #244, 4 Nov).
+	ReplaceLinks bool    `json:"replace_links,omitempty"`
+	Lead         *string `json:"lead,omitempty"`
 }
 
 func sectionText(s string, max int) string {
@@ -271,6 +428,9 @@ func (f *Fleet) sectionLocked(p *model.Project) (model.ProjectSection, error) {
 		return sec, err
 	}
 	sec.ProjectID, sec.Slug, sec.Name = p.ID, p.Slug, p.Name
+	if sec.Lead == "" && IsPeer(p.LeadID) {
+		sec.Lead = strings.TrimPrefix(p.LeadID, PeerPrefix)
+	}
 	return sec, nil
 }
 
@@ -287,21 +447,21 @@ func (f *Fleet) ProjectSection(c Caller, project string) (model.ProjectSection, 
 	return f.sectionLocked(p)
 }
 
-// SetProjectSection accepts reports from project members or the owner.
+// SetProjectSection accepts reports from authorized project writers.
 // It never creates or closes approvals, cards or tasks.
 func (f *Fleet) SetProjectSection(c Caller, project string, patch ProjectSectionPatch) (model.ProjectSection, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	me, err := f.callerRecLocked(c)
-	if err != nil {
-		return model.ProjectSection{}, err
+	if c.Peer != "" {
+		return model.ProjectSection{}, errf(KindForbidden, "only project members or the owner can write its section")
 	}
 	p, err := f.projectLocked(project)
 	if err != nil {
 		return model.ProjectSection{}, err
 	}
-	if me != nil && me.a.ProjectID != p.ID {
-		return model.ProjectSection{}, errf(KindForbidden, "only project members or the owner can write its section")
+	me, err := f.projectWriterLocked(c, p)
+	if err != nil {
+		return model.ProjectSection{}, err
 	}
 	if patch.Lead != nil && me != nil && me.a.ID != p.LeadID {
 		return model.ProjectSection{}, errf(KindForbidden, "only the project lead or owner can change feedback routing")
@@ -355,11 +515,11 @@ func (f *Fleet) SetProjectSection(c Caller, project string, patch ProjectSection
 		}
 	}
 	if patch.Links != nil {
-		sec.Links = []model.ProjectLink{}
-		for i, value := range *patch.Links {
-			if i >= 20 {
-				break
-			}
+		var links []model.ProjectLink
+		if !patch.ReplaceLinks {
+			links = slices.Clone(sec.Links)
+		}
+		for _, value := range *patch.Links {
 			if strings.TrimSpace(value) == "" {
 				continue
 			}
@@ -378,8 +538,19 @@ func (f *Fleet) SetProjectSection(c Caller, project string, patch ProjectSection
 					title = parts[len(parts)-1]
 				}
 			}
-			sec.Links = append(sec.Links, model.ProjectLink{Title: title, URL: url})
+			if i := slices.IndexFunc(links, func(l model.ProjectLink) bool { return l.URL == url }); i >= 0 {
+				links[i].Title = title // the same URL again: one entry, the newer title
+				continue
+			}
+			links = append(links, model.ProjectLink{Title: title, URL: url})
 		}
+		if len(links) > 20 {
+			return sec, errf(KindInvalid, "a section holds at most 20 links; replace the list (replace_links) to drop some")
+		}
+		if links == nil {
+			links = []model.ProjectLink{}
+		}
+		sec.Links = links
 	}
 	if patch.Lead != nil {
 		lead := strings.ToLower(strings.TrimSpace(*patch.Lead))
@@ -456,20 +627,20 @@ func validateProjectOutputs(in []model.ProjectOutput) ([]model.ProjectOutput, er
 }
 
 // SetMyProjectContribution has no caller-supplied ownership field. Even the owner
-// cannot impersonate an agent; only that project's authenticated member writes its row.
+// cannot impersonate an agent; only an authenticated project writer writes its own row.
 func (f *Fleet) SetMyProjectContribution(c Caller, project string, patch ProjectContributionPatch) (model.ProjectContribution, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	me, err := f.callerRecLocked(c)
-	if err != nil {
-		return model.ProjectContribution{}, err
-	}
 	p, err := f.projectLocked(project)
 	if err != nil {
 		return model.ProjectContribution{}, err
 	}
-	if me == nil || me.a.ProjectID != p.ID {
-		return model.ProjectContribution{}, errf(KindForbidden, "only a project member can write its own contribution")
+	me, err := f.projectWriterLocked(c, p)
+	if err != nil {
+		return model.ProjectContribution{}, err
+	}
+	if me == nil {
+		return model.ProjectContribution{}, errf(KindForbidden, "only an authenticated project writer can write its own contribution")
 	}
 	all, err := f.st.ProjectContributions(p.ID)
 	if err != nil {

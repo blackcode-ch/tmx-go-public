@@ -1,9 +1,7 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
@@ -52,4 +50,57 @@ func (s *Store) PutProfile(p model.Profile) error {
 func (s *Store) DeleteProfile(slug string) error {
 	_, err := s.db.Exec(`DELETE FROM profiles WHERE slug = ?`, slug)
 	return err
+}
+
+// UpgradeModelDefaults changes only untouched pre-ladder defaults, once per store.
+// The marker and profile writes commit together, so an owner can later restore
+// Sonnet-only settings without the next daemon start changing them again.
+func (s *Store) UpgradeModelDefaults() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`INSERT OR IGNORE INTO profile_default_upgrades(name) VALUES ('model-ladder-2026-11')`)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return tx.Commit()
+	}
+	for _, slug := range []string{"lead", "worker", "reviewer"} {
+		var data string
+		err := tx.QueryRow(`SELECT data FROM profiles WHERE slug = ?`, slug).Scan(&data)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		var current model.Profile
+		if err := json.Unmarshal([]byte(data), &current); err != nil {
+			return err
+		}
+		updated, _ := model.DefaultProfile(slug)
+		previous := updated.Clone()
+		previous.Model = "claude-sonnet-5-5"
+		previous.AllowedModels = []string{"claude-sonnet-5-5"}
+		if !current.SameSettings(previous) {
+			continue
+		}
+		current.Model, current.AllowedModels = updated.Model, updated.AllowedModels
+		current.UpdatedAt = model.Now()
+		b, err := json.Marshal(current)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`UPDATE profiles SET data = ?, updated_at = ? WHERE slug = ?`, string(b), current.UpdatedAt, slug); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

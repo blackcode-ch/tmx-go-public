@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -11,7 +8,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// WhatsApp (ARCHITECTURE.md "WhatsApp", internal/whatsapp) touches the fleet in two ways: approvals of
+// WhatsApp (DESIGN.md "WhatsApp", internal/whatsapp) touches the fleet in two ways: approvals of
 // kind whatsapp (an agent's message waiting for the owner's Allow) and mail from the WhatsApp
 // party (new messages in chats the owner chose, the outcome of an agent's message), already
 // framed as outside data by the service.

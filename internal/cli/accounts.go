@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -47,7 +44,7 @@ func cmdAccounts(e *env, args []string) error {
 			h = pos[1]
 		}
 		if len(pos) > 2 || (h != "" && !accounts.Known(h)) {
-			return usageErr("usage: tmx accounts refresh [claude|codex|antigravity]")
+			return usageErr("usage: tmx accounts refresh [claude|codex|antigravity|gemini]")
 		}
 		return withOwner(e, func(c *client.Client, cx context.Context) error {
 			var p accounts.Payload

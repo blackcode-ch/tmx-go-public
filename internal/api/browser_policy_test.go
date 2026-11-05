@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -17,8 +14,11 @@ func TestBrowserHostPolicyOwnerGate(t *testing.T) {
 	d := apitest.New(t)
 	owner := tc.New(d.URL, d.OwnerToken)
 	agent := tc.New(d.URL, d.AgentToken(t, "head"))
-	var policy map[string]bool
-	if s, _ := call(t, agent, "GET", "/api/guard/policy", nil, &policy); s != 0 || len(policy) != 1 || policy["allow_browser_automation"] {
+	var policy struct {
+		Allow  bool                     `json:"allow_browser_automation"`
+		States map[string]guard.Outcome `json:"states"`
+	}
+	if s, _ := call(t, agent, "GET", "/api/guard/policy", nil, &policy); s != 0 || policy.Allow || policy.States[guard.RuleBrowser] != guard.Allow {
 		t.Fatalf("default policy: %d %+v", s, policy)
 	}
 	next := guard.DefaultSettings()
@@ -39,7 +39,7 @@ func TestBrowserHostPolicyOwnerGate(t *testing.T) {
 	if s, _ := call(t, confirmed(t, owner, conf), "PUT", "/api/safety/guard", next, nil); s != 0 {
 		t.Fatalf("browser permission with proof: %d", s)
 	}
-	if s, _ := call(t, agent, "GET", "/api/guard/policy", nil, &policy); s != 0 || !policy["allow_browser_automation"] {
+	if s, _ := call(t, agent, "GET", "/api/guard/policy", nil, &policy); s != 0 || !policy.Allow {
 		t.Fatalf("updated policy: %d %+v", s, policy)
 	}
 	if s, _ := call(t, tc.New(d.URL, "invalid-fixture"), "GET", "/api/guard/policy", nil, nil); s != http.StatusUnauthorized {

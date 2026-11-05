@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package cli
 
 import (
@@ -32,6 +29,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 	"github.com/blackcode-ch/tmx-go/internal/peers"
 	"github.com/blackcode-ch/tmx-go/internal/recorder"
+	"github.com/blackcode-ch/tmx-go/internal/recworker"
 	"github.com/blackcode-ch/tmx-go/internal/rollback"
 	"github.com/blackcode-ch/tmx-go/internal/runner"
 	"github.com/blackcode-ch/tmx-go/internal/runner/claude"
@@ -104,10 +102,32 @@ func cmdDaemon(e *env, args []string) (err error) {
 		node = host
 		defer host.Close()
 	}
+	// Each harness's named accounts, with their private homes (internal/accounts profiles.go):
+	// an agent runs as one of them. Never in a project or in git.
+	profiles, err := accounts.OpenProfiles(filepath.Join(paths.Home, "ai-accounts"))
+	if err != nil {
+		return err
+	}
+	// Terminal agents run in session hosts that outlive this daemon (fleet/hosting.go), from a
+	// copy of this tmx so an update can replace the installed one while they run.
+	var hostExe string
+	if self, err := os.Executable(); err == nil {
+		if real, err := filepath.EvalSymlinks(self); err == nil {
+			self = real
+		}
+		if hostExe, err = hostExecutable(paths.Home, self); err != nil {
+			log.Warn("session hosts: no copy of tmx for them; terminal agents end with the daemon", "err", err)
+			hostExe = ""
+		}
+	}
 	f, err := fleet.New(fleet.Options{
-		AutoShelve: e.cfg.AutoShelve,
-		Store:      st, Paths: paths, Runners: runners(),
+		HostExecutable: hostExe,
+		Accounts:       profiles,
+		AutoShelve:     e.cfg.AutoShelve,
+		Supervisor:     e.cfg.Supervisor,
+		Store:          st, Paths: paths, Runners: runners(),
 		Machine: e.cfg.Machine, Version: config.Version, Workspace: e.cfg.Workspace,
+		FleetAuthorities: e.cfg.FleetAuthorities, AgentBypass: e.cfg.AgentBypass,
 		URL: e.cfg.URL(), ClaudeCommand: e.cfg.ClaudeCommand, HeadHarness: e.cfg.HeadHarness,
 		Policy: e.cfg.EffectivePolicy(), // seeds the built-in profiles on first start only
 		Guard:  e.cfg.Guard,
@@ -135,7 +155,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	}
 	defer jobWorkers.Close()
 
-	// Chats with other tmx installs (ARCHITECTURE.md "Chats"). Without a node peer-to-peer is off
+	// Chats with other tmx installs (DESIGN.md "Chats"). Without a node peer-to-peer is off
 	// and the chat routes answer 503.
 	// p2p.debug_drain reads the node's channels itself (testing the network layer alone), so
 	// the chat layer must not: chats then run without a node.
@@ -161,7 +181,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 		return err
 	}
 
-	// Companion, the owner's desktop agent app (ARCHITECTURE.md "Companion").
+	// Companion, the owner's desktop agent app (DESIGN.md "Companion").
 	var comp *companion.Service
 	if e.cfg.Companion.On() {
 		inst, err := e.installOptions()
@@ -174,7 +194,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 		f.SetCompanionMessenger(comp.SendHeadMessage)
 	}
 
-	// The owner's screen and microphone recordings (ARCHITECTURE.md "Recorder"): the window captures,
+	// The owner's screen and microphone recordings (DESIGN.md "Recorder"): the window captures,
 	// the daemon only stores what it is sent.
 	rec := recorder.New(recorder.Options{Store: st, Dir: paths.RecordingsDir(), Publish: f.Publish, Logger: log,
 		Settings: func() config.RecorderConfig {
@@ -243,29 +263,36 @@ func cmdDaemon(e *env, args []string) (err error) {
 		return err
 	}
 	sum := newSummaries(paths, e.cfg, st, rec, voice, f, log)
-	rec.SetFinished(sum.Finished)
+	// recworker: on Stop the recorder launches its own short-lived report worker and tracks it (G5, "tool > agent")
+	recw := recworker.New(recworker.Options{Fleet: f, Summaries: sum, Recordings: rec, Exe: f.Executable(),
+		Dir: filepath.Join(paths.Home, "rec-workers"), Logger: log})
+	rec.SetFinished(recw.Finished)
 	wa := newWhatsApp(paths, st, f, log) // wa.go: the owner's WhatsApp, linked as a companion device
 	f.SetWhatsApp(wa)
 	ups := uploads.New(paths)
 	ups.Prune(func(id string) bool { _, err := f.Agent(id); return err == nil }) // agents removed while down
-	// The AI accounts the harnesses are signed in to, and their plans' usage (ARCHITECTURE.md "AI
+	// The AI accounts the harnesses are signed in to, and their plans' usage (DESIGN.md "AI
 	// accounts and usage"). The harnesses run in a folder of their own, never a project.
 	accts := accounts.New(accounts.Options{Dir: filepath.Join(paths.Home, "accounts"), Publish: f.Publish, Logger: log,
-		Commands: map[model.Harness]string{model.HarnessClaude: e.cfg.ClaudeCommand},
+		Commands: accountCommands(e.cfg),
 		// The sign-in shown and made here (`claude auth login`) is the agents' own.
-		Env: []string{claude.EnvConfigDir + "=" + claudeDir}})
-	f.SetRateLimitHook(func(h model.Harness, rl runner.RateLimit) { accts.RateLimited(h, rl.Type, rl.ResetsAt) })
-	// peers: the Python fleet's other machines (production only; ARCHITECTURE.md "Python fleet interop").
+		Env:      []string{claude.EnvConfigDir + "=" + claudeDir},
+		Profiles: profiles})
+	f.SetRateLimitHook(func(h model.Harness, account string, rl runner.RateLimit) {
+		accts.RateLimited(fleet.AccountHarness(h), account, rl.Type, rl.ResetsAt)
+	})
+	// peers: the Python fleet's other machines (production only; DESIGN.md "Python fleet interop").
 	var fleetPeers *peers.Client
 	if e.cfg.Production() && len(e.cfg.Peers) > 0 {
 		fleetPeers = peers.New(e.cfg, paths, log)
 		f.SetPeerSender(fleetPeers, fleetPeers.Machine())
+		sum.SetPeer(fleetPeers) // summaries.via_peer: a peer's local model writes this machine's summaries
 		go fleetPeers.Run(ctx)
 	}
-	srv := api.New(api.Options{SystemWarnings: e.cfg.Warnings, Fleet: f, OwnerToken: token, Port: e.cfg.Port, TrustedHosts: e.cfg.API.TrustedHosts, Shutdown: stop, Gate: g, Logger: log,
+	srv := api.New(api.Options{SystemWarnings: e.cfg.Warnings, Fleet: f, OwnerToken: token, Port: e.cfg.Port, TrustedHosts: e.cfg.API.TrustedHosts, Shutdown: stop, Restart: func() { restartExe = currentExe; stop() }, Gate: g, Logger: log,
 		Jobs:      jobWorkers,
 		Resources: rm, Slots: sl, Chats: chats, P2P: node, P2PLog: netLog, Companion: comp, Uploads: ups, Updater: upd, Recorder: rec,
-		Voice: voice, Summaries: sum, WhatsApp: wa, Accounts: accts, Peers: fleetPeers,
+		Voice: voice, Summaries: sum, RecWorker: recw, WhatsApp: wa, Accounts: accts, Peers: fleetPeers,
 		SaveP2PName: func(name string) error {
 			c, err := config.Load(paths)
 			if err != nil {
@@ -315,6 +342,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	if err := voice.Start(); err != nil {
 		log.Error("voice start", "err", err)
 	}
+	recw.Start()
 	if err := sum.Start(); err != nil {
 		log.Error("summaries start", "err", err)
 	}
@@ -330,6 +358,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	}
 	log.Info("tmx daemon stopping")
 	accts.Close()
+	recw.Close()
 	sum.Close()
 	wa.Close()
 	voice.Close()
@@ -386,4 +415,16 @@ func respawnDaemon(e *env, exe string) error {
 	cmd.Env = os.Environ()
 	detach(cmd)
 	return cmd.Start()
+}
+
+// accountCommands are the executables the AI accounts run: claude_command, and
+// sign_in_commands for codex and agy (only known harnesses, only absolute paths).
+func accountCommands(cfg config.Config) map[model.Harness]string {
+	m := map[model.Harness]string{model.HarnessClaude: cfg.ClaudeCommand}
+	for h, c := range cfg.SignInCommands {
+		if (h == string(model.HarnessCodex) || h == "antigravity") && filepath.IsAbs(c) {
+			m[model.Harness(h)] = c
+		}
+	}
+	return m
 }

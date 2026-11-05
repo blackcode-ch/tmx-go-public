@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package term
 
 import (
@@ -17,7 +14,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/runner/claude"
 )
 
-// A harness TUI's conversation in the timeline (ARCHITECTURE.md "Switching live"). Its screen says
+// A harness TUI's conversation in the timeline (DESIGN.md "Switching live"). Its screen says
 // when a turn ends (working → idle), which becomes a result entry: the end of a turn in the
 // log and on the head's Board. For Claude, its transcript adds what was said: tmx follows the
 // conversation's file while the TUI runs and turns what Claude writes there (replies,

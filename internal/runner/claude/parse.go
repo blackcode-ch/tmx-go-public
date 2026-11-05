@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package claude
 
 import (
@@ -17,7 +14,7 @@ import (
 // maxToolResult caps EntryToolResult.Text.
 const maxToolResult = 64 << 10
 
-// wireMsg is the union of the stdout events we read (see ARCHITECTURE.md "Claude stream-json protocol").
+// wireMsg is the union of the stdout events we read (see DESIGN.md "Claude stream-json protocol").
 type wireMsg struct {
 	Type            string          `json:"type"`
 	Subtype         string          `json:"subtype"`

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package fleet
 
 import (
@@ -11,7 +8,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// Live mode switch (ARCHITECTURE.md "Switching live"). A Claude or Codex agent leaves chat mode for
+// Live mode switch (DESIGN.md "Switching live"). A Claude or Codex agent leaves chat mode for
 // its harness's own screen (the TUI in a pty, read by tmx like any terminal agent) and comes
 // back, on the same conversation: its process is stopped and started again in the other mode
 // with the same session id, so the profile, the MCP config, the permissions, the guard and the

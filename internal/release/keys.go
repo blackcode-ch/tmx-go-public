@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package release
 
 import (
@@ -22,7 +19,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/update"
 )
 
-// A rotation statement (`tmx release keys`, ARCHITECTURE.md "Updates", rotation): KEYS, the whole new
+// A rotation statement (`tmx release keys`, DESIGN.md "Updates", rotation): KEYS, the whole new
 // pin set for repo with a serial, and KEYS.sig, signed by a key the daemons pin now. Both files
 // go into a directory; they are attached to the next release (`gh release upload`) before it is
 // signed. keys.log in the release home holds the serials used: a serial is never signed twice.

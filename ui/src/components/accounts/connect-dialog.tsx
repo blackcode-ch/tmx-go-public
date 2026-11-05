@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 // Connect an AI account: the harness's own sign-in runs in a terminal on the daemon; this shows
 // that terminal (it opens the browser itself, and may ask for a pasted code) and follows
 // login.state on accounts.updated. Succeeded closes the dialog with a toast; closing while it
@@ -20,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { accountsApi, loadAccounts, sentence, useAccount, type AccountStatus } from "@/lib/accounts";
+import { accountsApi, accountTitle, loadAccounts, sentence, useAccount, type AccountStatus } from "@/lib/accounts";
 import { loginTerminalPath } from "@/lib/transport";
 import { cn } from "@/lib/utils";
 import { HarnessMark } from "./usage-bits";
@@ -29,6 +26,8 @@ const TerminalView = lazy(() => import("@/components/terminal-view").then((m) =>
 
 export interface Connecting {
   harness: string;
+  /** the account, by its name among the harness's */
+  account: string;
   /** the daemon's sign-in session; a new one remounts the terminal */
   session: string;
 }
@@ -38,7 +37,7 @@ export function ConnectDialog({ connecting: current, onClose, onRetry }: { conne
   const last = useRef<Connecting | null>(current);
   if (current) last.current = current;
   const connecting = last.current;
-  const a = useAccount(connecting?.harness ?? "");
+  const a = useAccount(connecting?.harness ?? "", connecting?.account);
   const [ask, setAsk] = useState(false);
   // What we know of this session: "starting" until the daemon reports it running.
   const saw = useRef(false);
@@ -76,37 +75,37 @@ export function ConnectDialog({ connecting: current, onClose, onRetry }: { conne
   const cancel = () => {
     if (!connecting) return;
     const label = a?.label ?? connecting.harness;
-    accountsApi.cancelLogin(connecting.harness).catch((e) => toast.error(`Could not stop ${label}'s sign-in`, { description: (e as Error).message }));
+    accountsApi.cancelLogin(connecting.harness, connecting.account).catch((e) => toast.error(`Could not stop ${label}'s sign-in`, { description: (e as Error).message }));
     setAsk(false);
     onClose();
   };
 
-  const label = a?.label ?? connecting?.harness ?? "";
+  const label = a ? accountTitle(a) : (connecting?.harness ?? "");
   return (
     <>
       <Dialog open={!!current} onOpenChange={(v) => !v && close()}>
         <DialogContent
-          className="gap-0 overflow-hidden p-0 sm:max-w-[680px]"
+          className="gap-0 overflow-hidden p-0 sm:max-w-[42.5rem]"
           onInteractOutside={(e) => e.preventDefault()}
           // Escape in the terminal belongs to the sign-in (its menus use it).
           onEscapeKeyDown={(e) => (e.target as Element | null)?.closest?.(".xterm") && e.preventDefault()}
           data-connect-dialog
         >
           <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b px-5 py-4 pr-12 text-left">
-            {connecting && <HarnessMark harness={connecting.harness} label={label} className="size-8 text-[12px]" />}
+            {connecting && <HarnessMark harness={connecting.harness} label={label} className="size-8 text-[0.75rem]" />}
             <div className="min-w-0">
-              <DialogTitle className="text-[15px]">Connect {label}</DialogTitle>
+              <DialogTitle className="text-[0.9375rem]">Connect {label}</DialogTitle>
               <DialogDescription className="mt-0.5 text-xs">Finish signing in in your browser. If it asks for a code, paste it here.</DialogDescription>
             </div>
           </DialogHeader>
-          <div className="flex h-[300px] flex-col bg-background p-3 sm:h-[340px]">
+          <div className="flex h-[18.75rem] flex-col bg-background p-3 sm:h-[21.25rem]">
             {connecting && (
               <Suspense fallback={<div className="flex-1" />}>
-                <TerminalView key={connecting.session} path={loginTerminalPath(connecting.harness)} ended={null} className="p-0 md:p-0" />
+                <TerminalView key={connecting.session} path={loginTerminalPath(connecting.harness, connecting.account)} ended={null} className="p-0 md:p-0" />
               </Suspense>
             )}
           </div>
-          <div className="flex min-h-[52px] flex-wrap items-center gap-x-3 gap-y-2 border-t px-5 py-2.5" aria-live="polite">
+          <div className="flex min-h-[3.25rem] flex-wrap items-center gap-x-3 gap-y-2 border-t px-5 py-2.5" aria-live="polite">
             <div className="min-w-0 flex-1 basis-56">
               <Status phase={phase} message={sentence(a?.login.message)} label={label} />
             </div>
@@ -170,7 +169,7 @@ function Status({ phase, message, label }: { phase: string | undefined; message?
   if (phase === "running")
     return (
       <p className={cn(row, "text-muted-foreground")}>
-        <span className="mt-[5px] size-1.5 shrink-0 animate-pulse-dot rounded-full bg-state-working" aria-hidden />
+        <span className="mt-[0.3125rem] size-1.5 shrink-0 animate-pulse-dot rounded-full bg-state-working" aria-hidden />
         <span className="min-w-0">{message || "Waiting for you to finish signing in…"}</span>
       </p>
     );

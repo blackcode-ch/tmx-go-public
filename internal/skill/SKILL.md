@@ -32,7 +32,7 @@ tmxg help
 
 `make headless` produces `bin/tmxg` (with `.exe` on Windows); `make dist` produces
 `dist/tmxg_<version>_<os>_<arch>`. Installation and lifecycle execution require
-the disposable-VM qualification described in `ARCHITECTURE.md`: egress capture, ACL
+the disposable-VM qualification described in `TRIAL.md`: egress capture, ACL
 comparison and proof that Python's agents, hooks and ports remain unaffected.
 
 The trial state directory is `%LOCALAPPDATA%/tmxg-trial` on Windows,

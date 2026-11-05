@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 //go:build desktop
 
 package desktop
@@ -13,7 +10,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/devaudio"
 )
 
-// Device audio for recordings (ARCHITECTURE.md "Recorder", "Recording on each platform"): in the
+// Device audio for recordings (DESIGN.md "Recorder", "Recording on each platform"): in the
 // Windows app, WASAPI loopback of the default output, captured in this window process and
 // streamed to the page as "tmx:devaudio" events (a devaudio.Chunk: ~100 ms of Int16 PCM,
 // base64), where ui/src/lib/native-audio.ts turns it into a MediaStreamTrack for the recorder.

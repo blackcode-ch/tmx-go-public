@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright 2026 The tmx authors
-
 package api_test
 
 import (
@@ -13,7 +10,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/blackcode-ch/tmx-go/internal/api"
 	"github.com/blackcode-ch/tmx-go/internal/api/apitest"
 	"github.com/blackcode-ch/tmx-go/internal/config"
 	"github.com/blackcode-ch/tmx-go/internal/model"
@@ -36,6 +35,12 @@ func enableVoiceHosts(t *testing.T, home string) {
 }
 
 func TestConfiguredVoiceHostOptInSilenceReplayAndOneHop(t *testing.T) {
+	// bc #214, run 41692174665: hostTimeout's 2s host-probe deadline (fleethosts.go) is a real
+	// production UX/stall bound and stays that way; go test -race's well-documented 2-10x
+	// slowdown, on top of the rest of this package's ~190s run contending for CPU, could still
+	// lose that race against the test's own httptest server even though its handler does no
+	// real work. Widen it for this test alone.
+	t.Cleanup(api.SetHostTimeoutForTest(10 * time.Second))
 	local := apitest.New(t)
 	token := model.NewID()
 	var lookups, posts atomic.Int32
