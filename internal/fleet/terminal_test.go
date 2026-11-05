@@ -51,7 +51,7 @@ func TestAgentTypedTextIsDeliveredLikeMail(t *testing.T) {
 	if err := f.TypeText(lc, "w1", "  run the tests\r\nthen report  ", true); err != nil {
 		t.Fatalf("lead typed: %v", err)
 	}
-	if got := p.Sent(); len(got) != 1 || got[0] != "[message from alpha-lead (lead)] run the tests\nthen report" {
+	if got := p.Sent(); len(got) != 1 || got[0] != "[message from alpha-lead (lead)]\n│ run the tests\n│ then report" {
 		t.Fatalf("sent %q", got)
 	}
 	if got := p.Written(); len(got) != 0 {
@@ -73,7 +73,7 @@ func TestAgentTypedTextIsDeliveredLikeMail(t *testing.T) {
 	if err := f.TypeText(lc, "w1", "a\x1b[201~\x1b[Zb\x03\x7f\u009bc", true); err != nil {
 		t.Fatalf("lead typed: %v", err)
 	}
-	if got := p.Sent(); got[1] != "[message from alpha-lead (lead)] a[201~[Zbc" {
+	if got := p.Sent(); got[1] != "[message from alpha-lead (lead)]\n│ a[201~[Zbc" {
 		t.Fatalf("control bytes survived: %q", got[1])
 	}
 

@@ -11,6 +11,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/blackcode-ch/tmx-go/internal/client"
+	"github.com/blackcode-ch/tmx-go/internal/fleet"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/peertext"
 )
@@ -380,9 +381,19 @@ func (t *Tools) inbox(ctx context.Context, _ *sdk.CallToolRequest, _ noArgs) (*s
 		if m.ReplyTo != "" {
 			fmt.Fprintf(&b, " reply to %s", m.ReplyTo)
 		}
-		fmt.Fprintf(&b, ":\n%s\n\n", m.Body)
+		fmt.Fprintf(&b, ":\n%s\n\n", inboxBody(m))
 	}
 	return untrusted(strings.TrimSpace(b.String())), nil, nil
+}
+
+// inboxBody is a message's body as inbox shows it: an agent's words (here or on another
+// machine) quoted line by line, so none of them reads as tmx's framing; the owner's as written;
+// chat, Companion and WhatsApp mail as stored, labelled and quoted by its own layer.
+func inboxBody(m model.Message) string {
+	if m.From == model.Owner || m.From == model.CompanionParty || m.From == model.WhatsAppParty || fleet.IsExternal(m.From) {
+		return m.Body
+	}
+	return peertext.Quote(m.Body)
 }
 
 func (t *Tools) reply(ctx context.Context, _ *sdk.CallToolRequest, in replyArgs) (*sdk.CallToolResult, any, error) {
@@ -507,10 +518,7 @@ func (t *Tools) threads(ctx context.Context, _ *sdk.CallToolRequest, _ noArgs) (
 		b.WriteString("Topics (the owner has not ordered them yet; most recently active first):\n")
 	}
 	for i, th := range list {
-		title := th.Title
-		if th.Kind == model.ThreadChat {
-			title = peertext.Field(title) // a chat's string carries the chat's name: its members'
-		}
+		title := peertext.Field(th.Title) // agents and chats' members name topics: one line, no brackets
 		fmt.Fprintf(&b, "%d. %s (%s): %d %s, %d log %s", i+1, title, th.Kind, th.Cards, plural(th.Cards, "card", "cards"),
 			th.Entries, plural(th.Entries, "line", "lines"))
 		if th.Archived {
@@ -596,7 +604,7 @@ func (t *Tools) threadRead(ctx context.Context, _ *sdk.CallToolRequest, in threa
 	var b strings.Builder
 	fmt.Fprintf(&b, "Log of %q, oldest first:\n", out.Thread.Title)
 	for _, e := range out.Entries {
-		line := fmt.Sprintf("- %s · %s · %s (%s)", time.UnixMilli(e.At).Local().Format("2 Jan 15:04"), e.Kind, strings.ReplaceAll(e.Text, "\n", " "), e.By)
+		line := fmt.Sprintf("- %s · %s · %s (%s)", time.UnixMilli(e.At).Local().Format("2 Jan 15:04"), e.Kind, peertext.Inline(e.Text, 0), e.By) // mail lines included: one line each
 		if e.Link != "" {
 			line += " → " + e.Link
 		}
