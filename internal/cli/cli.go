@@ -30,6 +30,7 @@ Daemon:
   tmx app                         open the desktop app (starts the daemon if needed)
 
 Fleet:
+  tmx transfers list              list this machine's durable file-copy records
   tmx ls                          head → projects → agents with state and model
   tmx project import PROJECT --file FILE
   tmx project new NAME [--folder DIR] [--brief TEXT] [--harness claude|codex] [--model M]
@@ -144,6 +145,7 @@ var commands map[string]cmdFunc
 
 func init() {
 	commands = map[string]cmdFunc{
+		"antechamber": cmdAntechamber, "transfers": cmdTransfers,
 		"daemon": cmdDaemon, "up": cmdUp, "down": cmdDown, "status": cmdStatus, "open": cmdOpen,
 		"rollback": cmdRollback,
 		"peers":    cmdPeers,

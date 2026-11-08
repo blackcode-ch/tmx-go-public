@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/blackcode-ch/tmx-go/internal/transfers"
 	"github.com/blackcode-ch/tmx-go/internal/update"
 	"github.com/blackcode-ch/tmx-go/internal/uploads"
 	"log/slog"
@@ -37,6 +38,7 @@ const MaxBody = 1 << 20
 
 // Options configures the server.
 type Options struct {
+	Transfers *transfers.Service
 	// OpenAgentDesktop can be supplied by an embedding desktop; nil uses the OS.
 	OpenAgentDesktop func(kind, target string) error
 	SystemWarnings   []string
@@ -72,6 +74,7 @@ type Options struct {
 }
 
 type Server struct {
+	transfers      *transfers.Service
 	push           phonePush
 	agentDesktop   agentDesktop
 	p2pActions     p2pActionStore
@@ -131,6 +134,7 @@ func New(o Options) *Server {
 	s.wa = o.WhatsApp
 	s.accounts = o.Accounts
 	s.peers = o.Peers
+	s.transfers = o.Transfers
 	s.peerMux = s.peerProtocolRoutes()
 	s.initDevices()
 	s.initPush()

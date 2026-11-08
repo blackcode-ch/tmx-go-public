@@ -35,16 +35,20 @@ const EnvPort = "TMXG_PORT"
 
 // Config is config.json. Zero fields take their defaults on Load.
 type Config struct {
-	Tasks         *TaskConfig `json:"tasks,omitempty"`
-	Supervisor    *string     `json:"supervisor,omitempty"`  // nil = architect; explicit empty = unique-head fallback
-	AutoShelve    *bool       `json:"auto_shelve,omitempty"` // nil = on; workers idle two hours or explicitly done
-	Warnings      []string    `json:"-"`                     // runtime notices; never persisted or used to enable services
-	API           APIConfig   `json:"api,omitempty"`
-	Profile       string      `json:"profile,omitempty"`
-	Machine       string      `json:"machine"`
-	Workspace     string      `json:"workspace"`
-	Port          int         `json:"port"`
-	ClaudeCommand string      `json:"claude_command,omitempty"` // "" = claude on PATH
+	Owner              *OwnerConfig    `json:"owner,omitempty"`
+	SecretFolders      []string        `json:"secret_folders,omitempty"`
+	TrustedBackupRoots []string        `json:"trusted_backup_roots,omitempty"`
+	Transfers          *TransferConfig `json:"transfers,omitempty"`
+	Tasks              *TaskConfig     `json:"tasks,omitempty"`
+	Supervisor         *string         `json:"supervisor,omitempty"`  // nil = architect; explicit empty = unique-head fallback
+	AutoShelve         *bool           `json:"auto_shelve,omitempty"` // nil = on; workers idle two hours or explicitly done
+	Warnings           []string        `json:"-"`                     // runtime notices; never persisted or used to enable services
+	API                APIConfig       `json:"api,omitempty"`
+	Profile            string          `json:"profile,omitempty"`
+	Machine            string          `json:"machine"`
+	Workspace          string          `json:"workspace"`
+	Port               int             `json:"port"`
+	ClaudeCommand      string          `json:"claude_command,omitempty"` // "" = claude on PATH
 	// SignInCommands are the executables the AI accounts' sign-in, sign-out and checks run for
 	// codex and agy ("codex", "antigravity"), when the one on PATH must not be used (Hostb's
 	// production start puts exit-78 stubs first so no Codex/agy agent starts); agents still
@@ -71,6 +75,23 @@ type Config struct {
 	// AgentBypass: Claude agents guarded by tmx's hook run in bypass mode, so the guard alone
 	// decides what asks the owner (internal/fleet/guard.go); nil = on, false = Claude's prompts.
 	AgentBypass *bool `json:"agent_bypass,omitempty"` // the Python fleet's other machines (peers.go); production only
+}
+
+// OwnerConfig supplies names used by the manipulation detector. Empty names retain generic role matching.
+type OwnerConfig struct {
+	DisplayName string   `json:"display_name,omitempty"`
+	Aliases     []string `json:"aliases,omitempty"`
+}
+
+func (o *OwnerConfig) Names() []string {
+	if o == nil {
+		return nil
+	}
+	return append([]string{o.DisplayName}, o.Aliases...)
+}
+
+type TransferConfig struct {
+	HoldNeedsHuman bool `json:"hold_needs_human,omitempty"`
 }
 
 // RecorderConfig is config.json "recorder" (DESIGN.md "Recorder"); zero fields take the defaults.

@@ -58,6 +58,7 @@ func peerHeaderRoute(r *http.Request) bool {
 
 func (s *Server) peerProtocolRoutes() http.Handler {
 	mux := http.NewServeMux()
+	s.transferPeerRoutes(mux)
 	mux.HandleFunc("GET /api/sessions", s.peerSessions)
 	mux.HandleFunc("POST /api/messages/incoming", s.peerIncoming)
 	mux.HandleFunc("POST /api/peers/pair-token", s.peerPairToken)
@@ -123,7 +124,7 @@ func (s *Server) servePeer(w http.ResponseWriter, r *http.Request, next http.Han
 	if ob != "" && ob != "daemon" && ob != "operator" {
 		s.log.Debug("p2p: peer call with an unrecognised on-behalf", "peer", from, "on_behalf", ob, "path", r.URL.Path)
 	}
-	if peerProtocolPaths[r.URL.Path] {
+	if peerProtocolPaths[r.URL.Path] || transferProtocolPath(r.URL.Path) {
 		c := peerCaller{name: from}
 		s.peerMux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), peerCtxKey{}, c)))
 		return
