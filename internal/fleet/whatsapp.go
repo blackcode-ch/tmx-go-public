@@ -42,7 +42,7 @@ func (f *Fleet) WhatsAppApproval(agentID string, in model.WaSendInput) (model.Ap
 	if err := f.st.PutApproval(ap); err != nil {
 		return model.Approval{}, err
 	}
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: agentID, ProjectID: r.a.ProjectID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: agentID, ProjectID: r.a.ProjectID, Data: ap})
 	return ap, nil
 }
 

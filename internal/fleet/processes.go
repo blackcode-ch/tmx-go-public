@@ -132,7 +132,7 @@ func (f *Fleet) RequestProcess(c Caller, req ProcessRequest) (ProcessResult, err
 	}
 	req.Args = append([]string(nil), req.Args...)
 	f.processRequests[ap.ID] = ownedProcessRequest{agentID: r.a.ID, proc: r.proc, request: req}
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
 	return ProcessResult{Approval: &ap}, nil
 }
 
@@ -160,7 +160,7 @@ func (f *Fleet) decideProcessLocked(ap model.Approval, d DecideRequest) (model.A
 		return ap, err
 	}
 	delete(f.processRequests, ap.ID)
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalResolved, AgentID: ap.AgentID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalResolved, AgentID: ap.AgentID, Data: ap})
 	if d.Decision == "allow" {
 		process, err := f.startProcessLocked(ap.AgentID, p.request)
 		if err != nil {

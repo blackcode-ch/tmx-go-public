@@ -105,7 +105,7 @@ jobs:
       fail-fast: false
       # The platforms and their CMake flags: the pin job's "What this run builds" step.
       matrix: ${{ fromJSON(needs.pin.outputs.matrix) }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os == 'ubuntu-22.04' && 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' && 'ubuntu-22.04-arm' || matrix.os == 'windows-2022' && 'windows-2022' || 'macos-latest' }}
     timeout-minutes: 45
     defaults:
       run:
@@ -183,7 +183,7 @@ jobs:
             else
               deps=$("$dumpbin" -nologo -dependents "$f" | tr -d '\r')
               echo "$deps"
-              # Only the DLL lines: the output also names the file itself (whisper-cli_…).
+              # Only the DLL lines: the output also names the file itself (whisper-cli_...).
               if grep -iE '^\s+\S+\.dll\s*$' <<<"$deps" | grep -iE 'vcruntime|msvcp|vcomp|ucrtbase|ggml|whisper'; then
                 echo "::error::$ASSET needs DLLs that are not part of Windows"; exit 1
               fi

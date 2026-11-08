@@ -106,7 +106,10 @@ func (f *Fleet) LiveAgents() []model.Agent {
 }
 
 // Publish puts an event on the bus (resource samples, slot changes, chat.* events).
-func (f *Fleet) Publish(ev model.BusEvent) { f.bus.Publish(ev) }
+func (f *Fleet) Publish(ev model.BusEvent) {
+	f.auditApprovalEvent(ev)
+	f.bus.Publish(ev)
+}
 
 // admitLocked decides whether a start of r (not running) goes ahead now. It reports
 // queued=true when r now waits in the queue, or a KindTooMany error with NoWait.
@@ -369,7 +372,7 @@ func (f *Fleet) BrakeAgent(id, reason, detail string, ask bool) ([]sysinfo.Proc,
 			f.log.Error("store approval", "err", err)
 		} else {
 			p.approvalID = ap.ID
-			f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: id, ProjectID: r.a.ProjectID, Data: ap})
+			f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: id, ProjectID: r.a.ProjectID, Data: ap})
 		}
 	}
 	f.saveAgentLocked(r)

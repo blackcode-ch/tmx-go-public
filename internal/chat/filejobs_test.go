@@ -104,15 +104,26 @@ func TestGovernedChatPoisonQuarantineStopsFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "first damaged attempt", func() bool { f, _ := bo.st.GetChatFile(id, up.ID); return f.Tries > 0 })
-	for tries := 0; tries < 10; tries++ {
+	// ErrBusy during the previous attempt's ledger sync is a retryable admission
+	// failure, not another poison read. Wait for quarantine instead of spending a
+	// fixed retry budget while the disk is still busy.
+	eventually(t, "poison job quarantined", func() bool {
 		f, _ := bo.st.GetChatFile(id, up.ID)
-		if f.State == model.ChatFileFailed {
-			break
+		// Retry the governed admission directly: persistence contention must not
+		// consume the chat layer's separate missing-file retry budget.
+		ok, why := bo.svc.fetchGoverned(f, alex.node.ID())
+		if ok || (why != "damaged" && why != "unreachable" && why != "quarantined") {
+			t.Fatalf("unexpected poison result: ok=%v why=%q", ok, why)
 		}
-		time.Sleep(20 * time.Millisecond)
-		bo.svc.fetchOne(f)
-	}
+		return why == "quarantined"
+	})
 	f := fileOf(t, bo, id, msg.ID)
+	// Admission may remain busy until the quarantine ledger sync finishes.
+	eventually(t, "chat observes quarantine", func() bool {
+		bo.svc.fetchOne(f)
+		f = fileOf(t, bo, id, msg.ID)
+		return f.State == model.ChatFileFailed
+	})
 	if f.State != model.ChatFileFailed || !strings.Contains(f.Error, "quarantined") {
 		t.Fatal(f)
 	}

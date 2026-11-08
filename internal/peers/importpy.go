@@ -27,7 +27,7 @@ const (
 	ImportMissing   = "missing"  // the Python daemon holds no token for it
 	ImportConflict  = "conflict" // this daemon already holds a different one: never overwritten
 	ImportInvalid   = "invalid"  // the Python token is not a usable pair token
-	ImportSkipped   = "skipped"  // not a full peer there (role "cloud"): not imported
+	ImportSkipped   = "skipped"  // not explicitly a full peer there (role "cloud", or none): not imported
 )
 
 // Imported is one pair token ImportPython considered.
@@ -60,7 +60,8 @@ func PythonHome() (string, error) {
 }
 
 // ImportPython imports from the Python daemon at pyHome (the CLI passes only PythonHome()).
-// Production profile with peers only; full peers only.
+// Production profile with peers only; full peers only, and only those whose Python entry says
+// "role": "full" explicitly: a token with no role is not given a full peer's reach here.
 // A secret this daemon already holds with another value is never overwritten (ImportConflict).
 func ImportPython(cfg config.Config, p config.Paths, pyHome string) ([]Imported, error) {
 	if !cfg.Production() || len(cfg.Peers) == 0 {
@@ -76,15 +77,14 @@ func ImportPython(cfg config.Config, p config.Paths, pyHome string) ([]Imported,
 	for _, peer := range cfg.Peers {
 		row := Imported{Name: peer.Name}
 		tok, _ := pyTokens[peer.Name]["token"].(string)
+		// No role is the restricted case here, although Python itself reads a missing role as
+		// "full": a full peer operates this machine's agents, so that takes an explicit choice.
 		role, _ := pyTokens[peer.Name]["role"].(string)
-		if role == "" {
-			role = "full" // Python's own default when role is absent (r.get("role") or "full")
-		}
 		cur := tokens.For(peer.Name)
 		switch {
 		case tok == "":
 			row.Status = ImportMissing
-		case role != "full": // a cloud box's token is limited there: never a full peer here
+		case role != "full": // a cloud box's token, or one with no role: never a full peer here
 			row.Status = ImportSkipped
 		case len(tok) < minTokenLen:
 			row.Status = ImportInvalid

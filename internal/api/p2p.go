@@ -19,6 +19,8 @@ import (
 // raw envelopes without the chat layer) used by `tmx p2p` for live checks. The chat layer
 // owns the user-facing invite/contact/chat routes.
 func (s *Server) p2pRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/p2p/agent/invite", s.agentOnly(s.agentP2PInvite))
+	mux.HandleFunc("POST /api/p2p/agent/join", s.agentOnly(s.agentP2PJoin))
 	mux.HandleFunc("GET /api/p2p", s.ownerOnly(s.p2pStatus))
 	mux.HandleFunc("PUT /api/p2p/config", s.ownerOnly(s.putP2PConfig))
 	mux.HandleFunc("POST /api/p2p/restart", s.ownerOnly(s.p2pRestartNow))

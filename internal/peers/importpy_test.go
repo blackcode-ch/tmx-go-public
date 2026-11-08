@@ -121,8 +121,8 @@ func TestImportPythonRefusals(t *testing.T) {
 }
 
 // Python's role "cloud" (a cloud box, limited to a few routes there) is never imported as a full
-// peer here. An entry with no role key at all defaults to "full" there too (Python's own
-// r.get("role") or "full"), so it is imported, not skipped.
+// peer here, and neither is an entry with no role at all (Python reads that as "full"; here a
+// full peer takes an explicit "role": "full").
 func TestImportPythonSkipsCloudPeers(t *testing.T) {
 	p := config.Paths{Home: t.TempDir()}
 	hostc := NewPairToken()
@@ -131,14 +131,14 @@ func TestImportPythonSkipsCloudPeers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := statuses(rows); s["hosta"] != ImportSkipped || s["hostc"] != ImportImported {
+	if s := statuses(rows); s["hosta"] != ImportSkipped || s["hostc"] != ImportSkipped {
 		t.Fatalf("%+v", rows)
 	}
 	if NewTokens(p.PeersFile()).For("hosta") != "" {
 		t.Fatal("a cloud token was imported")
 	}
-	if NewTokens(p.PeersFile()).For("hostc") != hostc {
-		t.Fatal("a peer with no explicit role (defaults to full) was not imported")
+	if NewTokens(p.PeersFile()).For("hostc") == hostc {
+		t.Fatal("a peer with no role was imported as a full peer")
 	}
 }
 

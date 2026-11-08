@@ -176,7 +176,14 @@ func (s *Server) peerSessions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	host := s.peers.Machine()
+	host := snap.Machine
+	if s.peers != nil {
+		host = s.peers.Machine()
+	}
+	projects := map[string]string{}
+	for _, p := range snap.Projects {
+		projects[p.ID] = p.Name
+	}
 	agents := snap.Agents
 	if snap.Head != nil {
 		agents = append([]model.Agent{*snap.Head}, agents...)
@@ -191,10 +198,12 @@ func (s *Server) peerSessions(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, map[string]any{
 			"name": a.Name, "host": host, "id": a.ID, "adapter": string(a.Harness), "state": pythonState(a.State),
 			"title": a.Role, "role": a.Role, "queued_messages": a.Queued, "managed": true,
+			"rooms": []string{}, "tier": string(a.Level), "cwd": a.Cwd, "project": projects[a.ProjectID],
+			"conversation_id": a.SessionID, "started_at": float64(a.CreatedAt) / 1000,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"host": host, "commit": buildCommit(), "version": s.f.Version(),
-		"sessions": rows, "supervisor": s.f.SupervisorName(), "system": map[string]any{}})
+		"sessions": rows, "supervisor": s.supervisorRef(host), "system": map[string]any{}})
 }
 
 // peerIncoming is POST /api/messages/incoming: a peer hands over mail for an agent here.
