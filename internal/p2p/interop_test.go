@@ -287,7 +287,7 @@ func runInteropPair(t *testing.T, inviterKind, joinerKind string) {
 	joiner.close()
 	inviter.close()
 	if joinErr != nil {
-		t.Fatalf("%s: %v", joinerKind, joinErr)
+		t.Fatalf("%s: %v\n%s: %v", joinerKind, joinErr, inviterKind, inviteErr)
 	}
 	if inviteErr != nil {
 		t.Fatalf("%s: %v", inviterKind, inviteErr)

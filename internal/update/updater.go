@@ -609,6 +609,11 @@ func (u *Updater) SetToken(tok string) error {
 // token: the stored token, else TMX_GITHUB_TOKEN / GH_TOKEN / GITHUB_TOKEN, else the GitHub
 // CLI's (`gh auth token`, asked at most every 10 minutes).
 func (u *Updater) token() string {
+	// The public fleet source must also work on machines with stale private-repo
+	// credentials; do not discover or transmit credentials for this source.
+	if u.settings().Repo == config.PublicUpdateRepo {
+		return ""
+	}
 	if t := u.fileToken(); t != "" {
 		return t
 	}

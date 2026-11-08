@@ -547,6 +547,21 @@ func TestBoardForANewMember(t *testing.T) {
 		return x.Title == "Packing" && x.Color == "green" && entryTexts(b) == "Bring boots."
 	})
 	// A topic dave has not heard of: the message's hint shows it; a later rename wins.
+	// Dave's board arrives independently of Bo's membership update. SendWith takes
+	// its recipients from Bo's current roster, so wait for Dave there before sending.
+	// Otherwise Dave can be omitted entirely; waiting longer for delivery cannot help.
+	eventually(t, "bo knows dave is a member", func() bool {
+		c, err := bo.svc.Chat(gid)
+		if err != nil {
+			return false
+		}
+		for _, member := range current(c.Members) {
+			if member.PeerID == dave.node.ID() {
+				return true
+			}
+		}
+		return false
+	})
 	fresh := model.ChatTopic{ChatID: gid, ID: "tfresh", Title: "Fresh", CreatedAt: model.Now()}
 	if err := bo.st.PutChatTopic(fresh); err != nil { // as if bo's own change to dave were still on its way
 		t.Fatal(err)
@@ -555,10 +570,7 @@ func TestBoardForANewMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Under -race's instrumentation (fleet-ci run 41644672751: 11.05s observed, the whole
-	// package at 228.9s) the default 5s eventually() is too tight for this delivery; a longer
-	// deadline, still polling with an early exit, not a fixed sleep.
-	eventuallyWithin(t, 20*time.Second, "dave shows it on Fresh", func() bool {
+	eventually(t, "dave shows it on Fresh", func() bool {
 		return msgTopic(dave, gid, m.ID) == "tfresh" && topicOf(board(t, dave, gid), "tfresh").Title == "Fresh"
 	})
 	renamed := "Fresh air"

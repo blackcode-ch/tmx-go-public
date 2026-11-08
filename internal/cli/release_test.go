@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,5 +58,35 @@ func TestReleaseKeygenPrintsOnlyThePublicKey(t *testing.T) {
 	}
 	if code := run([]string{"release", "sign"}, &out, &errw); code == 0 {
 		t.Fatal("sign without a tag")
+	}
+}
+
+func TestReleaseSignFile(t *testing.T) {
+	home := t.TempDir()
+	pub, err := release.Keygen(home, "fleet-release-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := release.KeyFile(home, pub.ID)
+	sums := filepath.Join(home, "SHA256SUMS")
+	sig := filepath.Join(home, "SHA256SUMS.sig")
+	if err := os.WriteFile(sums, []byte(strings.Repeat("0", 64)+"  binary\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errw bytes.Buffer
+	args := []string{"release", "sign-file", sums, "--key", keyPath, "--out", sig, "--tag", "fleet-v1.0.0"}
+	if code := run(args, &out, &errw); code == 0 {
+		t.Fatal("sign-file accepted no rebuild source")
+	}
+	args = append(args, "--source", home, "--commit", strings.Repeat("a", 40))
+	if code := run(args, &out, &errw); code == 0 {
+		t.Fatal("signed despite invalid source repository")
+	}
+	if _, err := os.Stat(sig); !os.IsNotExist(err) {
+		t.Fatal("signature created before rebuild")
+	}
+	key, _ := os.ReadFile(keyPath)
+	if strings.Contains(out.String()+errw.String(), strings.TrimSpace(string(key))) {
+		t.Fatal("printed private key")
 	}
 }

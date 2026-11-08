@@ -22,6 +22,7 @@ Daemon:
   tmx rollback                    restore previous binary and database (daemon must be stopped)
   tmx release keygen [--id ID]    the fleet release key (release machine only; prints the public key)
   tmx release sign TAG [--dry-run] check the release gates through gh, then sign the draft's SHA256SUMS
+  tmx release sign-file SUMS --key PATH --out SIG --tag TAG  sign reviewed checksums offline; no upload
   tmx release sign-extra TAG [--dry-run] sign the public mirror's voice-engine release (whisper-engine-vX.Y.Z) after its gates
   tmx peers import-python         move this machine's Python tmx pair tokens into this daemon (fingerprints only)
   tmx status                      is the daemon running?
@@ -83,6 +84,11 @@ Chats with other people's tmx (also in the app):
   tmx chat agent CHAT AGENT|none  which local agent takes part (default: the head)
   tmx chat admin CHAT PERSON [--leave]   hand a group to PERSON (confirm with Touch ID / Windows Hello)
   tmx chat admin CHAT --cancel    withdraw that offer while it waits
+
+Peer-to-peer (agents use phone approval):
+  tmx p2p invite-create --label NAME [--kind person|group] [--ttl 24h] [--max-uses 1]
+  tmx p2p agent-join --link LINK  preview and request phone approval
+  tmx p2p invite-create|agent-join --approval ID  resume the same request
 
 Peer-to-peer (network diagnostics):
   tmx p2p [status]                peer ID, addresses, reachability (direct/relayed/offline)

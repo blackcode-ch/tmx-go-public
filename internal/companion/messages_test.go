@@ -243,11 +243,14 @@ func TestHeadMessageThatActsWaitsForOwner(t *testing.T) {
 	}
 
 	// Outward words alone are everyday chat: no approval (Companion's own gate guards sending).
-	chat, err := d.Companion.SendHeadMessage(head, "Did you send the contract to the client?", "")
+	// Use an independent service: this allowed chat may send before cancellation, and
+	// must not change the send count used below to check denial of the money request.
+	chatDaemon, _ := connected(t)
+	chat, err := chatDaemon.Companion.SendHeadMessage(chatDaemon.Fleet.HeadID(), "Did you send the contract to the client?", "")
 	if err != nil || chat.Effects != model.EffectsOutward || chat.State != model.CompanionQueued || chat.ApprovalID != "" {
 		t.Fatalf("outward chat: %+v %v", chat, err)
 	}
-	if _, err := d.Companion.Cancel(chat.ID, ""); err != nil {
+	if _, err := chatDaemon.Companion.Cancel(chat.ID, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -512,7 +515,7 @@ func TestLinkRateCountsOnlyCompanionsMessages(t *testing.T) {
 			t.Fatalf("link message %d: %v", i, err)
 		}
 	}
-	if _, err := d.Fleet.CompanionMessage("one too many"); err == nil || !strings.Contains(err.Error(), "Companion sent the head 20 messages") {
+	if _, err := d.Fleet.CompanionMessage("one too many"); err == nil || !strings.Contains(err.Error(), "Companion sent 20 messages") {
 		t.Fatalf("over the link's rate: %v", err)
 	}
 	msgs, err := d.Fleet.CompanionLinkMessages(5)
@@ -522,6 +525,18 @@ func TestLinkRateCountsOnlyCompanionsMessages(t *testing.T) {
 }
 
 // --- helpers ---
+
+func TestLinkMessagesShareQueueCapacityWithReplies(t *testing.T) {
+	d := apitest.New(t)
+	for range fleet.MaxQueued {
+		if _, err := d.Fleet.DeliverCompanion(d.Fleet.HeadID(), companion.ReplyLabel+" reply"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := d.Fleet.CompanionMessage("no room"); fleet.KindOf(err) != fleet.KindTooMany || !strings.Contains(err.Error(), "messages waiting") {
+		t.Fatalf("full queue: %v", err)
+	}
+}
 
 // mkWorker launches a worker in a new project and returns its ID.
 func mkWorker(t *testing.T, d *apitest.Daemon) string {

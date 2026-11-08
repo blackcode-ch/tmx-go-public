@@ -12,6 +12,10 @@ import (
 // after the agent is gone, so a runner never blocks on a full channel.
 func (f *Fleet) consume(r *agentRec, proc runner.Process, done chan struct{}) {
 	defer close(done)
+	// The ID is stable, but controls replace the whole r.a value under f.mu.
+	f.mu.Lock()
+	id := r.a.ID
+	f.mu.Unlock()
 	exited := false
 	for ev := range proc.Events() {
 		if ev.Kind == runner.EvExit {
@@ -20,7 +24,6 @@ func (f *Fleet) consume(r *agentRec, proc runner.Process, done chan struct{}) {
 			continue
 		}
 		if f.handleEvent(r, proc, ev) {
-			id := r.a.ID // safe: ID never changes
 			f.goTracked(func() { f.tryDeliver(id) })
 		}
 	}
@@ -38,6 +41,7 @@ func (f *Fleet) handleEvent(r *agentRec, proc runner.Process, ev runner.Event) (
 	if r.proc != proc || f.agents[r.a.ID] != r {
 		return false // a stale process (restarted or removed agent)
 	}
+	f.observeTasksLocked(r, ev)
 	switch ev.Kind {
 	case runner.EvMailDelivery:
 		if ev.Delivery == "submitted" || ev.Delivery == "unconfirmed" {
@@ -120,6 +124,7 @@ func (f *Fleet) handleExit(r *agentRec, proc runner.Process, code int, err error
 		r.proc = nil
 		return
 	}
+	f.observeTasksLocked(r, runner.Event{Kind: runner.EvExit})
 	f.processes.StopOwner(r.a.ID)
 	if ids, receiptErr := f.st.PendingMailReceipts(r.a.ID); receiptErr == nil {
 		f.mailReceiptLocked(r.a.ID, ids, "unconfirmed")

@@ -75,7 +75,7 @@ func TestPeerInboundDeliveredAndIdempotent(t *testing.T) {
 	}
 	eventually(t, "delivered", func() bool {
 		s := lp.Sent()
-		return len(s) >= 2 && s[len(s)-1] == "[message from bob@hostc (other machine)] hello from hostc"
+		return len(s) >= 2 && s[len(s)-1] == "[message from bob@hostc (other machine)]\n│ hello from hostc"
 	})
 	entries, _ := f.Timeline("alpha-lead", 0, 0)
 	labelled := false

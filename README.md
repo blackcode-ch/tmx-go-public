@@ -40,4 +40,5 @@ For phone access through a configured trusted HTTPS address, see
 ---
 *This is a scrubbed CI snapshot of a private repository, made automatically. Personal and machine
 names are replaced, so a few identifiers differ from the private build (the MCP tool `announce_set`
-has another name there), internal docs are left out, and it is not a release source.*
+has another name there), and internal docs are left out. Headless release binaries are built from
+reviewed main snapshots; the updater accepts them only with a valid fleet release signature.*

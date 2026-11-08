@@ -26,11 +26,9 @@ func manager(t *testing.T, o Options) *Manager {
 	}
 	t.Cleanup(func() {
 		m.Close()
-		select {
-		case <-m.Done():
-		case <-time.After(time.Second):
-			t.Error("worker did not exit")
-		}
+		// Close cancels workers; Done also waits for any in-flight ledger sync.
+		// Let the test runner's timeout bound I/O rather than assuming disk speed.
+		<-m.Done()
 	})
 	return m
 }
@@ -42,7 +40,10 @@ func wait(t *testing.T, m *Manager, id, state string) Record {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if r.State == state && m.mutation.TryLock() {
+		if r.State == state {
+			// Cached terminal state is published before its ledger sync finishes.
+			// Join that transaction before the next nonblocking Submit/Release.
+			m.mutation.Lock()
 			m.mutation.Unlock()
 			return r
 		}

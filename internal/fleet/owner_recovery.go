@@ -30,7 +30,7 @@ func (f *Fleet) OwnerRecoveryNotice(host string, expires time.Time) error {
 		return err
 	}
 	f.bus.Publish(model.BusEvent{Type: model.EvTimelineAppended, AgentID: h.a.ID, Data: entry})
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: h.a.ID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: h.a.ID, Data: ap})
 	f.bus.Publish(model.BusEvent{Type: "security.owner_recovery", AgentID: h.a.ID, Data: map[string]any{"host": host, "expires": expires}})
 	time.AfterFunc(time.Until(expires), func() {
 		f.ExpireApproval(ap.ID, "Recovery capability expired; this notice never grants owner authority.")

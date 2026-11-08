@@ -1,6 +1,7 @@
 # Build output
 /bin/
 /dist/
+/release-dist/
 /build/*
 # The product icon's source stays in git (its PNG render too: see the *.png exceptions below).
 !/build/appicon.svg

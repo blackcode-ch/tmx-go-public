@@ -10,6 +10,7 @@ import { PageBody, PageHeader, PageTitle, Section } from "@/components/page";
 import { P2PSection } from "@/components/p2p-settings";
 import { ProfilesSection } from "@/components/profiles-section";
 import { SafetySection } from "@/components/safety-settings";
+import { PhoneNotifications } from "@/components/phone-notifications";
 import { OwnerDevices } from "@/components/device-pairing";
 import { CompanionSection } from "@/components/companion/settings";
 import { UpdateSection } from "@/components/update-settings";
@@ -262,6 +263,7 @@ export function SettingsPage() {
 
         <SafetySection />
         <OwnerDevices />
+        <PhoneNotifications />
 
         <div id="companion" className="scroll-mt-6">
           <CompanionSection />

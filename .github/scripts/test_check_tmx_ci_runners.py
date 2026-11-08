@@ -39,6 +39,28 @@ jobs:
 
 
 class CheckTmxCiRunnersTests(unittest.TestCase):
+    def test_yaml_trailing_comments_preserve_runner_policy(self):
+        allowed = [
+            "macos-15   # GitHub-hosted, Apple Silicon (arm64)",
+            "'macos-15' # hosted",
+            '"macos-15" # hosted',
+            "[ubuntu-latest, macos-15] # hosted",
+            "${{ inputs.mac && 'macos-15' || 'ubuntu-latest' }} # hosted",
+        ]
+        refused = [
+            "self-hosted # comment",
+            "[ubuntu-latest, self-hosted] # comment",
+            "${{ inputs.runner }} # comment",
+            "'macos-15 # not a comment'",
+            '"macos-15 # not a comment"',
+            "macos-15#not-a-comment",
+            "'macos-15 # not a comment' # actual comment",
+        ]
+        for label in allowed + refused:
+            with self.subTest(label=label):
+                result = run({"x.yml": BASE.format(runs_on=label, run_line="go test ./...")})
+                self.assertEqual(result == 0, label in allowed)
+
     def test_tagged_go_test_on_github_hosted_passes(self):
         wf = BASE.format(runs_on="windows-latest", run_line="go test -tags tmx_ci ./...")
         self.assertEqual(run({"x.yml": wf}), 0)

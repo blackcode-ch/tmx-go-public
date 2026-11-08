@@ -1,0 +1,51 @@
+# Unsigned build artifacts only. Detached release signatures are supplied outside CI.
+name: public release binaries
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'New fleet-vX.Y.Z or fleet-vX.Y.Z-rcN release version'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: public-release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'blackcode-ch/tmx-go-public' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GOTOOLCHAIN: go1.26.6
+    steps:
+      # actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      # actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: go.mod
+      # pnpm/action-setup@v4 (commit; the v4 tag object is f40ffcd)
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: 12.14.0
+      # actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: pnpm --dir ui install --frozen-lockfile
+      - run: pnpm --dir ui build
+      - name: Build four platforms and checksums (no signing key)
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: go run ./cmd/public-release -mode build -tag "$RELEASE_TAG" -dir release-dist
+      # actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fleet-release-binaries
+          path: release-dist/*
+          if-no-files-found: error
+          retention-days: 14

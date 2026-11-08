@@ -72,6 +72,8 @@ export const api = {
     t().request<Upload>("POST", `/api/agents/${enc(id)}/uploads`, f),
   getUpload: (id: string, data = false) => t().request<Upload>("GET", `/api/uploads/${enc(id)}${data ? "?data=1" : ""}`),
 
+  seenApproval: (id: string) => t().request<void>("POST", `/api/approvals/${enc(id)}/seen`),
+
   decide: (id: string, b: DecideBody) =>
     ownerAction((c) => t().request<Approval>("POST", withConfirmation(`/api/approvals/${enc(id)}`, c), b)),
 

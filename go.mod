@@ -1,6 +1,8 @@
 module github.com/blackcode-ch/tmx-go
 
-go 1.26.6
+go 1.26.0
+
+toolchain go1.26.6
 
 require (
 	github.com/aymanbagabas/go-pty v0.2.3
@@ -8,6 +10,7 @@ require (
 	github.com/charmbracelet/x/vt v0.1.0
 	github.com/coder/websocket v1.8.15
 	github.com/go-webauthn/webauthn v0.18.2
+	github.com/google/uuid v1.6.0
 	github.com/libp2p/go-libp2p v0.50.0
 	github.com/libp2p/go-libp2p-kad-dht v0.42.2
 	github.com/libp2p/go-msgio v0.3.0
@@ -58,7 +61,6 @@ require (
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect

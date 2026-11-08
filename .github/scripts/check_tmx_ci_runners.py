@@ -48,6 +48,29 @@ class UnreadableScript(Exception):
     """a run: line calls a script this can't read - fail closed rather than skip it."""
 
 
+def strip_yaml_comment(value):
+    """Strip a whitespace-separated YAML comment outside quoted scalars."""
+    quote = None
+    i = 0
+    while i < len(value):
+        char = value[i]
+        if quote:
+            if quote == '"' and char == "\\":
+                i += 2
+                continue
+            if char == quote:
+                if quote == "'" and i + 1 < len(value) and value[i + 1] == "'":
+                    i += 2
+                    continue
+                quote = None
+        elif char in ("'", '"'):
+            quote = char
+        elif char == "#" and (i == 0 or value[i - 1].isspace()):
+            return value[:i].rstrip()
+        i += 1
+    return value
+
+
 def jobs_in(path: Path):
     """Yield (job_name, lines) for each top-level job block in a workflow's jobs: section."""
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -267,7 +290,7 @@ def main() -> int:
                     failed = True
                     continue
 
-            raw = next((RUNS_ON.match(l).group(1) for l in lines if RUNS_ON.match(l)), None)
+            raw = next((strip_yaml_comment(RUNS_ON.match(l).group(1)) for l in lines if RUNS_ON.match(l)), None)
             if raw is None:
                 print(f"{path}: job {job!r} has no runs-on; reusable workflows need explicit "
                       "runner verification", file=sys.stderr)
