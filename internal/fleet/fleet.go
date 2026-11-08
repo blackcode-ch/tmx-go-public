@@ -23,6 +23,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/guard"
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
+	"github.com/blackcode-ch/tmx-go/internal/people"
 	"github.com/blackcode-ch/tmx-go/internal/processes"
 	"github.com/blackcode-ch/tmx-go/internal/runner"
 	"github.com/blackcode-ch/tmx-go/internal/store"
@@ -95,16 +96,18 @@ type Fleet struct {
 
 	cardRouteWarnings map[string]bool // once per orphaned card per daemon run; guarded by mu
 
-	mu                sync.Mutex
-	closed            bool
-	shelveLoopStarted bool
-	profiles          map[string]*model.Profile // by slug
-	agents            map[string]*agentRec      // by ID
-	projects          map[string]*model.Project
-	tokens            map[string]string      // agent token -> agent ID
-	perms             map[string]permRequest // pending permission approval ID -> harness request
-	res               resState               // launch queue and brakes (resources.go)
-	safety            *safetyState           // guard settings and holds (guard.go)
+	mu                  sync.Mutex
+	closed              bool
+	reminders           *people.Scheduler // people.go: durable reminders
+	reminderLoopStarted bool
+	shelveLoopStarted   bool
+	profiles            map[string]*model.Profile // by slug
+	agents              map[string]*agentRec      // by ID
+	projects            map[string]*model.Project
+	tokens              map[string]string      // agent token -> agent ID
+	perms               map[string]permRequest // pending permission approval ID -> harness request
+	res                 resState               // launch queue and brakes (resources.go)
+	safety              *safetyState           // guard settings and holds (guard.go)
 
 	companion    CompanionDecider   // decides approvals of kind companion (companion.go); nil = none
 	companionMsg CompanionMessenger // sends the head's messages to Companion (companion.go); nil = none

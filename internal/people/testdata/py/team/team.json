@@ -1,0 +1,9 @@
+{
+  "team": [
+    {"key": "ana", "name": "Ana Example", "role": "Designer", "lang": "en", "kind": "team", "preferred": "email",
+     "aliases": ["anna"], "channels": {"email": "ana@example.test", "whatsapp": "41790000001"}},
+    {"key": "bo", "name": "Bo Example", "kind": "client", "channels": {"whatsapp": "41790000002"}},
+    {"key": "cy", "name": "Cy Example", "kind": "external", "channels": {}},
+    {"key": "dee", "name": "Dee Example", "channels": {"github": "dee-example"}}
+  ]
+}

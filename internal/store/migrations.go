@@ -600,6 +600,12 @@ ALTER TABLE agents ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;`,
 CREATE INDEX task_receipts_active ON task_receipts(state,agent_id);`,
 	`CREATE TABLE agent_project_views (agent_id TEXT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE, data TEXT NOT NULL);`,
 	`CREATE TABLE approval_delivery (id TEXT PRIMARY KEY REFERENCES approvals(id) ON DELETE CASCADE, notified TEXT NOT NULL DEFAULT 'not_attempted', seen_at INTEGER NOT NULL DEFAULT 0);`,
+	// People, Clients, Promises, Reminders (docs/PEOPLE_PROMISES.md). Personal data lives only here, in the state dir.
+	`CREATE TABLE people (key TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE promises (id TEXT PRIMARY KEY, person_key TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('open','done','dropped')), due TEXT NOT NULL DEFAULT '', data TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+CREATE INDEX promises_person ON promises(person_key, status);
+CREATE TABLE reminders (id TEXT PRIMARY KEY, fire_at INTEGER NOT NULL, target TEXT NOT NULL, text TEXT NOT NULL, promise_id TEXT NOT NULL DEFAULT '', state TEXT NOT NULL CHECK(state IN ('pending','fired','cancelled')), attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT NOT NULL DEFAULT '', fired_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+CREATE INDEX reminders_due ON reminders(state, fire_at);`,
 }
 
 func (s *Store) migrate() error {

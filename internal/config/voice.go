@@ -4,6 +4,8 @@ package config
 // with explicitly enabled fallback to configured local daemon hosts.
 // Every field is optional; internal/transcribe fills the defaults.
 type VoiceConfig struct {
+	// ViaPeer routes all audio and reports to this paired fleet machine. No cloud fallback.
+	ViaPeer string `json:"via_peer,omitempty"`
 	// FallbackHosts permits dictation on the explicitly configured local hosts when
 	// this engine is busy or unavailable. Off by default; Overview access alone is read-only.
 	FallbackHosts bool `json:"fallback_hosts,omitempty"`

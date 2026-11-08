@@ -1,0 +1,10 @@
+{"id":"m1","kind":"out","from":"lead","msg_id":"x","text":"plain message","status":"sent","at":1760000000}
+{"id":"a1","kind":"out","from":"lead","text":"Can you send the mockups?","ask":true,"owner":"lead","due":"2026-10-15","title":"Mockups","status":"queued","at":1760000001}
+{"id":"a1","status":"sent","at":1760000100}
+{"id":"a1","reminded_at":1760600000}
+{"id":"a2","kind":"out","from":"lead","text":"Logo files?","ask":true,"status":"queued","at":1760000002}
+{"id":"a2","status":"answered","at":1760000200}
+{"id":"a3","kind":"out","from":"worker1","text":"Old ask\nsecond line","ask":true,"due":"2099-01-01","status":"queued","at":1760000003}
+{"ids":["a3"],"status":"dropped","by":"owner","at":1760000300}
+{"id":"a4","kind":"out","from":"worker1","text":"Due in the future","ask":true,"due":"2099-06-01","title":"Future","status":"queued","at":1760000004}
+{"id":"b1","kind":"out","from":"lead","text":"torn

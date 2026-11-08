@@ -177,12 +177,13 @@ type CompanionConfig struct {
 // P2PConfig is config.json "p2p" (DESIGN.md "Peer-to-peer network"). Everything is optional:
 // the defaults need no configuration at all.
 type P2PConfig struct {
-	Enabled   *bool    `json:"enabled,omitempty"`   // false = no p2p host at all
-	Name      string   `json:"name,omitempty"`      // display name for new invites; "" = the OS account's name
-	Port      int      `json:"port,omitempty"`      // fixed QUIC/TCP port; 0 = picked once, then remembered
-	Relays    []string `json:"relays,omitempty"`    // extra circuit relays (/ip4/…/p2p/<id>), e.g. your own
-	Bootstrap []string `json:"bootstrap,omitempty"` // extra DHT bootstrap peers (added to the IPFS defaults)
-	DHT       *bool    `json:"dht,omitempty"`       // false = no public DHT (no relay discovery, LAN/direct only)
+	FileMaxBytes int64    `json:"file_max_bytes,omitempty"` // 0 = 25 MiB; may lower the protocol ceiling
+	Enabled      *bool    `json:"enabled,omitempty"`        // false = no p2p host at all
+	Name         string   `json:"name,omitempty"`           // display name for new invites; "" = the OS account's name
+	Port         int      `json:"port,omitempty"`           // fixed QUIC/TCP port; 0 = picked once, then remembered
+	Relays       []string `json:"relays,omitempty"`         // extra circuit relays (/ip4/…/p2p/<id>), e.g. your own
+	Bootstrap    []string `json:"bootstrap,omitempty"`      // extra DHT bootstrap peers (added to the IPFS defaults)
+	DHT          *bool    `json:"dht,omitempty"`            // false = no public DHT (no relay discovery, LAN/direct only)
 	// DHTExplicit: the owner set DHT themselves (PUT /api/p2p/config, a real UI action) - as
 	// opposed to a default fillDefaults or the same route wrote on its own. Older config.json
 	// files have an explicit "dht":false from before production honoured this field at all
@@ -206,6 +207,13 @@ type P2PConfig struct {
 
 // On reports whether p2p is enabled (default false).
 func (p *P2PConfig) On() bool { return p != nil && p.Enabled != nil && *p.Enabled }
+
+func (p *P2PConfig) FileLimit() int64 {
+	if p == nil || p.FileMaxBytes <= 0 || p.FileMaxBytes > 25<<20 {
+		return 25 << 20
+	}
+	return p.FileMaxBytes
+}
 
 // DHTOn, MDNSOn and NATPortMapOn default to false.
 func (p *P2PConfig) DHTOn() bool        { return p != nil && p.DHT != nil && *p.DHT }

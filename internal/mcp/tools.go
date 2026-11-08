@@ -122,6 +122,7 @@ type askArgs struct {
 
 func (t *Tools) register(s *sdk.Server) {
 	t.registerProcesses(s)
+	t.registerPeople(s)
 	t.registerProjectSections(s)
 	sdk.AddTool(s, &sdk.Tool{Name: "whoami", Description: "Who you are in tmx: name, level, project, parent, model, folder."}, t.whoami)
 	sdk.AddTool(s, &sdk.Tool{Name: "fleet", Description: "All projects and agents on this machine with their state and model."}, t.fleet)

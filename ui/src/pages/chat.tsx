@@ -3,7 +3,7 @@
 // contact panel.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PinMessageButton } from "@/components/message-pins";
-import { ArrowUp, AtSign, Bot, Clock3, Ellipsis, Info, Loader2, LogOut, MessagesSquare, PanelRight, QrCode, Trash2, Users, Waypoints } from "lucide-react";
+import { ArrowUp, AtSign, Bot, Clock3, Download, Ellipsis, Info, Loader2, LogOut, MessagesSquare, PanelRight, QrCode, Trash2, Users, Waypoints } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -77,6 +77,38 @@ function asAttached(f: ChatFile): AttachedFile {
   return { id: f.id, name: f.name, type: f.type, size: formatSize(f.size), path: f.path ?? "", image: !!f.image, state: f.state, error: f.error };
 }
 
+function DownloadChatFile({ chatId, file }: { chatId: string; file: ChatFile }) {
+  const [busy, setBusy] = useState(false);
+  async function download() {
+    setBusy(true);
+    try {
+      const nativeSave = window.go?.desktop?.App?.SaveChatFile;
+      if (nativeSave) {
+        await nativeSave(chatId, file.id);
+        return;
+      }
+      const f = await chatApi.file(chatId, file.id, true);
+      const bin = atob(f.data ?? "");
+      const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = f.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not download file");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <Button variant="ghost" size="sm" disabled={busy || file.state !== "ready"} onClick={download} aria-label={`Download ${file.name}`}>
+    {busy ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}<span className="max-w-48 truncate">{file.name}</span>
+  </Button>;
+}
+
 function MessageRow({ chat, m, first }: { chat: Chat; m: ChatMessage; first: boolean }) {
   if (m.sender === CHAT_SYSTEM) {
     return (
@@ -127,7 +159,10 @@ function MessageRow({ chat, m, first }: { chat: Chat; m: ChatMessage; first: boo
           </span>
         </div>
         {m.files && m.files.length > 0 && (
-          <AttachmentList files={m.files.map(asAttached)} loadImage={loaderFor(chat.id)} className="justify-start pt-1.5 pb-1" />
+          <div>
+            <AttachmentList files={m.files.map(asAttached)} loadImage={loaderFor(chat.id)} className="justify-start pt-1.5 pb-1" />
+            <div className="flex flex-wrap gap-1">{m.files.map((file) => <DownloadChatFile key={file.id} chatId={chat.id} file={file} />)}</div>
+          </div>
         )}
       </div>
     </div>
