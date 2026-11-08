@@ -16,7 +16,44 @@ concurrency:
   group: public-ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  runner-lock:
+    # Guard tests never run on operators' machines. This
+    # mirror is GitHub-hosted runners only; fail closed if a workflow here ever names a self-hosted
+    # one. public-scrub.sh deletes public-ci/ and copies this set into .github/workflows/ before
+    # the mirror's own CI runs, so check THAT path at runtime, not public-ci/workflows/ (which
+    # won't exist there) - grep exit 2 (no such directory) must fail this step, not pass it.
+    name: fleet runner-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: fail if any workflow here names a self-hosted runner
+        run: |
+          set +e
+          grep -rlE 'runs-on:.*self-h[o]sted' .github/workflows/
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+      - run: python3 -m unittest discover -s .github/scripts -p test_check_tmx_ci_runners.py
+      - run: python3 .github/scripts/check_tmx_ci_runners.py
+  smoke:
+    name: fleet smoke
+    needs: runner-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -count=1 -timeout=15m ./...
   go-linux:
+    needs: runner-lock
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -27,6 +64,7 @@ jobs:
       - run: go vet ./...
       - run: go test -count=1 -timeout=15m ./...
   go-windows:
+    needs: runner-lock
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -34,9 +72,12 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - run: go build ./...
-      - run: go test -count=1 -timeout=15m ./...
+      # tmx_ci, as in fleet-ci.yml: the guard tests are `!windows || tmx_ci`, so without it the guard has no Windows run
+      - run: go vet -tags tmx_ci ./...
+      - run: go test -tags tmx_ci -count=1 -timeout=15m ./...
       - run: go test -tags=aclmutate -count=1 -timeout=10m ./internal/config/...
   race:
+    needs: runner-lock
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -44,7 +85,37 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - run: go test -race -count=1 -timeout=20m ./...
+  bench:
+    needs: runner-lock
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: python -m unittest discover -s scripts -p test_bench_budget.py
+      - name: Measure bounded storage benchmarks
+        shell: bash
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          set -o pipefail
+          go test -json -run '^$' -bench '^BenchmarkRSI' -benchmem -benchtime=1000x -count=3 -timeout=2m ./internal/store > "$RUNNER_TEMP/bench-raw.json"
+      - name: Check budgets and write report
+        if: always()
+        run: python scripts/bench_budget.py "${{ runner.temp }}/bench-raw.json" "${{ runner.temp }}/bench.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench
+          path: |
+            ${{ runner.temp }}/bench.json
+            ${{ runner.temp }}/bench-raw.json
+          if-no-files-found: error
   ui-and-e2e:
+    needs: runner-lock
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -76,6 +147,7 @@ jobs:
   # on every snapshot, like Linux and Windows. The app is built UNSIGNED (ad hoc, SIGN_IDENTITY "-"):
   # the signing certificate stays private and is used only by the private release build.
   macos:
+    needs: runner-lock
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -95,6 +167,7 @@ jobs:
 
   p2p-interop:
     name: P2P interop (pinned fleet baseline)
+    needs: runner-lock
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

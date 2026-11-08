@@ -121,6 +121,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 		}
 	}
 	f, err := fleet.New(fleet.Options{
+		Tasks:          e.cfg.Tasks,
 		HostExecutable: hostExe,
 		Accounts:       profiles,
 		AutoShelve:     e.cfg.AutoShelve,

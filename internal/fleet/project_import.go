@@ -224,7 +224,7 @@ func (f *Fleet) ImportProject(c Caller, project string, req ProjectImportRequest
 		f.bus.Publish(model.BusEvent{Type: "project.section.updated", ProjectID: p.ID, Data: *sec})
 	}
 	for _, a := range cards {
-		f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: a.AgentID, ProjectID: p.ID, Data: a})
+		f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: a.AgentID, ProjectID: p.ID, Data: a})
 	}
 	return rec, nil
 }

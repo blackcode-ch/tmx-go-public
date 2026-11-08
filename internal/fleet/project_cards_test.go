@@ -1,11 +1,12 @@
 package fleet
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
 	"github.com/blackcode-ch/tmx-go/internal/store"
@@ -223,6 +224,10 @@ func TestProjectCardArchitectUsesConfiguredSupervisor(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e, f, p := sectionFixture(t)
+			// Install the logger before queuing any approval notification. The
+			// notifier belongs to the fleet and may log after AskProjectOwner returns.
+			var warnings approvalLog
+			f.log = slog.New(slog.NewTextHandler(&warnings, nil))
 			f.opts.Supervisor = tc.supervisor
 			delete(f.agents, "head")
 			f.agents["lead"].a.State = model.StateStopped
@@ -241,8 +246,6 @@ func TestProjectCardArchitectUsesConfiguredSupervisor(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.agents["asker"].a.State = model.StateStopped
-			var warnings bytes.Buffer
-			f.log = slog.New(slog.NewTextHandler(&warnings, nil))
 			for _, id := range []string{"first", "late", "late"} {
 				_, err = f.Decide(OwnerCaller, a.ID, DecideRequest{Decision: "answer", Version: a.Version, AnswerID: id, Answer: "Keep my words", FreeText: true})
 				if err != nil {
@@ -262,8 +265,15 @@ func TestProjectCardArchitectUsesConfiguredSupervisor(t *testing.T) {
 			if tc.want == "asker" {
 				wantWarnings = 1
 			}
-			if got := strings.Count(warnings.String(), "no fallback recipient"); got != wantWarnings {
-				t.Fatalf("warnings %d want %d: %s", got, wantWarnings, warnings.String())
+			// Join the fleet's background workers before inspecting the final log.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := f.Close(ctx); err != nil {
+				t.Fatal(err)
+			}
+			logs := warnings.text()
+			if got := strings.Count(logs, "no fallback recipient"); got != wantWarnings {
+				t.Fatalf("warnings %d want %d: %s", got, wantWarnings, logs)
 			}
 		})
 	}

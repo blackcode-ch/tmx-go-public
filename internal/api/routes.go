@@ -10,13 +10,21 @@ import (
 )
 
 func (s *Server) routes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/remote", s.remote)
+	s.agentControlRoutes(mux)
+	s.agentProjectRoutes(mux)
+	s.agentFileRoutes(mux)
 	s.messagePinRoutes(mux)
+	s.companionMailboxRoutes(mux)
+	s.taskRoutes(mux)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
 	mux.HandleFunc("GET /api/health", s.health)
 	mux.HandleFunc("GET /api/peers", s.ownerOnly(s.peerStatus))
 	mux.HandleFunc("POST /api/peers/{name}/rotate", s.ownerOnly(s.peerRotate))
 	mux.HandleFunc("GET /api/snapshot", s.snapshot)
+	mux.HandleFunc("GET /api/fleet", s.fleetRoster)
+	mux.HandleFunc("GET /api/sessions", s.peerSessions)
 	mux.HandleFunc("POST /api/shutdown", s.ownerOnly(s.shutdown))
 
 	mux.HandleFunc("POST /api/projects", s.createProject)
@@ -50,6 +58,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/approvals", s.ownerOnly(s.listApprovals))
 	mux.HandleFunc("POST /api/approvals", s.ask)
 	mux.HandleFunc("POST /api/approvals/{id}", s.ownerOnly(s.decide))
+	mux.HandleFunc("POST /api/approvals/{id}/seen", s.ownerOnly(s.seenApproval))
 
 	mux.HandleFunc("GET /api/messages", s.listMessages)
 	mux.HandleFunc("POST /api/messages", s.postMessage)
@@ -408,6 +417,10 @@ func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
+	if c, _ := caller(r); c.Companion {
+		s.companionPostMail(w, r)
+		return
+	}
 	var req fleet.SendRequest
 	if !decode(w, r, &req) {
 		return
@@ -500,4 +513,13 @@ func (s *Server) projectFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, rec)
+}
+
+func (s *Server) seenApproval(w http.ResponseWriter, r *http.Request) {
+	c, _ := caller(r)
+	if err := s.f.MarkApprovalSeen(c, r.PathValue("id")); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

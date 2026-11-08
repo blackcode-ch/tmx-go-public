@@ -169,6 +169,13 @@ func (f *Fleet) guardInfo(req HoldRequest, outcome guard.Outcome) (model.GuardHo
 // Hold records a tool call the guard held (agent only): a pending Approval of kind guard in
 // Needs you, and the agent waits for it.
 func (f *Fleet) Hold(c Caller, req HoldRequest) (model.Approval, error) {
+	if req.Rule == guard.RuleP2PInvite || req.Rule == guard.RuleP2PJoin {
+		return model.Approval{}, errf(KindForbidden, "use the dedicated pairing tools")
+	}
+	return f.hold(c, req)
+}
+
+func (f *Fleet) hold(c Caller, req HoldRequest) (model.Approval, error) {
 	if c.Owner {
 		return model.Approval{}, errf(KindForbidden, "only an agent's guard hook holds calls")
 	}
@@ -228,7 +235,7 @@ func (f *Fleet) Hold(c Caller, req HoldRequest) (model.Approval, error) {
 	r.waiting++
 	r.a.State = model.StateWaiting
 	f.saveAgentLocked(r)
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
 	return ap, nil
 }
 
@@ -331,6 +338,10 @@ func (f *Fleet) decideGuard(ap model.Approval, d DecideRequest) (model.Approval,
 	if _, waiting := f.safetyLocked().holds[ap.ID]; !waiting {
 		f.finishApprovalLocked(&ap, model.ApprovalExpired, "")
 		return ap, errf(KindConflict, "the agent is no longer waiting for this; the hold expired")
+	}
+	if (ap.Tool == ToolP2PInvite || ap.Tool == ToolP2PJoin) && model.Now()-ap.CreatedAt >= P2PApprovalTTL.Milliseconds() {
+		f.resolveHoldLocked(&ap, model.ApprovalExpired, "", "No answer in time; not run: ")
+		return ap, errf(KindConflict, "the pairing approval expired")
 	}
 	if d.Decision == DecisionAllowAlways {
 		if err := f.rememberAlwaysLocked(ap, d.Scope); err != nil {
@@ -525,7 +536,7 @@ func (f *Fleet) expireHoldsLocked(agentID string) {
 	st := f.safetyLocked()
 	for id, ch := range st.holds {
 		ap, err := f.st.GetApproval(id)
-		if err != nil || ap.AgentID != agentID {
+		if err != nil || ap.AgentID != agentID || ap.Tool == ToolP2PInvite || ap.Tool == ToolP2PJoin {
 			continue
 		}
 		close(ch)
