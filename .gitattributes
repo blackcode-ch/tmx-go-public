@@ -1,0 +1,3 @@
+# Vite preserves HTML line endings and copies public assets verbatim. Keep UI
+# text identical on Windows (including core.autocrlf=true) and Linux checkouts.
+ui/** text=auto eol=lf

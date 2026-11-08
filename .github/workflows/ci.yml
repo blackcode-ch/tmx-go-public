@@ -123,6 +123,13 @@ jobs:
       - uses: ./.github/actions/setup
       - run: make deps
       - run: cd ui && pnpm exec eslint . && pnpm exec tsc -b && pnpm test && pnpm build
+      - name: Print UI SHA-256 manifest for cross-platform rebuild comparison
+        run: node ui/scripts/dist-manifest.mjs | tee ui-dist.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist-sha256-linux
+          path: ui-dist.sha256
+          if-no-files-found: error
       - run: CGO_ENABLED=0 go build -tags gatesim -trimpath -o bin/tmx-gatesim .
       - run: cd ui && pnpm exec playwright install --with-deps chromium
       - name: Trust a throwaway certificate for the phone HTTPS tests

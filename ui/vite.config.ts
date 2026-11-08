@@ -15,6 +15,9 @@ export default defineConfig({
     emptyOutDir: true, // public/.keep is copied back, so ui/dist/.keep survives a build
     chunkSizeWarningLimit: 1500,
     target: "es2022",
+    // Lightning CSS color conversion differs between Windows and Linux builds.
+    // Keep minification while making release rebuilds byte-for-byte reproducible.
+    cssMinify: "esbuild",
   },
   server: {
     port: 5173,
