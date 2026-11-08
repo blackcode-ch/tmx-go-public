@@ -21,8 +21,8 @@ export function PageBody({ children, className, width = "max-w-[65rem]" }: { chi
   return (
     // relative: anything absolutely positioned inside (sr-only text, popper anchors) stays in
     // this scroller instead of stretching the whole window, which then scrolled with it.
-    <div className="scroll-thin relative min-h-0 flex-1 overflow-y-auto">
-      <div className={cn("mx-auto w-full px-5 py-6 md:px-8 md:py-8", width, className)}>{children}</div>
+    <div className="scroll-thin relative min-h-0 min-w-0 flex-1 overflow-y-auto">
+      <div className={cn("mx-auto min-w-0 w-full px-5 py-6 md:px-8 md:py-8", width, className)}>{children}</div>
     </div>
   );
 }
@@ -39,8 +39,8 @@ export function Section({
   className?: string;
 }) {
   return (
-    <section className={className}>
-      <div className="mb-2.5 flex h-7 items-center gap-2">
+    <section id={typeof title === "string" ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-") : undefined} className={cn("min-w-0", className)}>
+      <div className="mb-2.5 flex min-h-7 flex-wrap items-center gap-2">
         <h2 className="text-[0.8125rem] font-medium text-foreground">{title}</h2>
         {right && <div className="ml-auto flex items-center gap-1.5">{right}</div>}
       </div>

@@ -1,3 +1,4 @@
+import { PhoneNotificationBanner, PhoneNotificationsProvider } from "@/components/phone-notifications";
 import { useEffect } from "react";
 import { MessagePinsStrip } from "@/components/message-pins";
 import { Inbox, KeyRound, Menu, PlugZap, RefreshCw, Search } from "lucide-react";
@@ -220,7 +221,7 @@ export default function App() {
   const desktopMac = !!transport?.desktop && transport.platform === "darwin";
 
   return (
-    <TooltipProvider>
+    <PhoneNotificationsProvider><TooltipProvider>
       {status === "booting" ? (
         <Boot />
       ) : status === "unauthorized" || status === "offline" ? (
@@ -232,6 +233,7 @@ export default function App() {
             <RecordingBar />
             <DictationBar />
             <WindowUpdateBanner />
+            <PhoneNotificationBanner />
             <MobileBar />
             <MessagePinsStrip />
             <Routes />
@@ -249,6 +251,6 @@ export default function App() {
         </div>
       )}
       <Toaster position="bottom-right" closeButton={false} />
-    </TooltipProvider>
+    </TooltipProvider></PhoneNotificationsProvider>
   );
 }

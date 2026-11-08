@@ -23,7 +23,7 @@ export function ProcessList({ agent, projectTools = false }: { agent?: string; p
     return () => { active = false; clearInterval(timer); };
   }, [agent, projectTools]);
   const title = agent ? "Processes" : projectTools ? "Project tools" : "System tools";
-  return <section className="my-6" aria-label={title}>
+  return <section id={title.toLowerCase().replaceAll(" ", "-")} className="my-6" aria-label={title}>
     <h2 className="mb-2 text-sm font-medium">{title}</h2>
     {warnings.map((warning) => <p key={warning} role="alert" className="mb-3 rounded border border-amber-500 p-3 text-sm">{warning}</p>)}
     {error ? <p className="text-sm text-muted-foreground">{error}</p> : rows.length === 0 ?

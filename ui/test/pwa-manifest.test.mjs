@@ -32,13 +32,22 @@ test('manifest.webmanifest declares name, standalone display, and a maskable ico
   }
 });
 
-// The owner, 3 Nov: the grid logo is out; the Pocket dragon (Tiamat) is the mark everywhere: the
-// header, the favicon and the app icons, the exact assets of the Python dashboard's Tiamatrix design.
-test('the favicon, the app icon source and the header mark are the Pocket dragon', () => {
-  const dragon = 'M12 12L20 12L20 20L28 20L28 12L36 12L36 20L44 20L44 12L52 12L52 28L60 28L60 36L52 36L52 44L36 44L36 52L44 52L44 60L20 60L20 52L12 52L12 44L4 44L4 28L12 28L12 36L20 36L20 44L28 44L28 36L20 36L20 28L12 28Z';
+test('favicon, desktop source and header use the canonical Living cell', () => {
+  const canonical = readFileSync(new URL('../public/living-cell.svg', import.meta.url), 'utf8');
+  assert.match(canonical, /id="living-cell"/);
+  assert.match(canonical, /M1 1H5V5H1Z/);
   for (const f of ['../public/favicon.svg', '../public/brand/header-mark.svg', '../../build/appicon.svg']) {
-    const svg = readFileSync(new URL(f, import.meta.url), 'utf8');
-    assert.ok(svg.includes(dragon), `${f} is not the Pocket dragon`);
-    assert.ok(!svg.includes('M1 1H5V5H1Z'), `${f} still has the grid (living cell)`);
+    assert.equal(readFileSync(new URL(f, import.meta.url), 'utf8').trim(), canonical.trim(), f);
+  }
+  const mark = readFileSync(new URL('../src/components/brand-mark.tsx', import.meta.url), 'utf8');
+  assert.match(mark, /src="\/living-cell.svg"/);
+});
+
+test('PNG icons have their advertised install sizes', () => {
+  const icons = { 'icon-192.png': 192, 'icon-512.png': 512, 'icon-maskable-192.png': 192, 'icon-maskable-512.png': 512, 'apple-touch-icon.png': 180 };
+  for (const [name, size] of Object.entries(icons)) {
+    const png = readFileSync(new URL('../public/' + name, import.meta.url));
+    assert.equal(png.readUInt32BE(16), size, name + ' width');
+    assert.equal(png.readUInt32BE(20), size, name + ' height');
   }
 });

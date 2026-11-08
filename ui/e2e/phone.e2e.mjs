@@ -25,6 +25,11 @@ test("phone-size pages load without a token loop", { timeout: 5 * 60_000 }, asyn
       const body = await page.locator("body").innerText();
       assert.doesNotMatch(body, TOKEN_SCREEN, `${p}: token screen at phone size`);
       assert.ok(await page.getByRole("heading").first().isVisible(), `${p}: rendered (a heading is visible): ${body.slice(0, 200)}`);
+      assert.deepEqual(await page.evaluate(() => {
+        return [document.documentElement, document.body, ...document.querySelectorAll("main, main > *, main > * > .scroll-thin")]
+          .filter(el => el.clientWidth && el.scrollWidth > el.clientWidth + 1)
+          .map(el => `${el.tagName}: ${el.scrollWidth} > ${el.clientWidth}`);
+      }), [], `${p}: shared phone layout has no horizontal scroll`);
     }
     await page.reload();                                     // a reload keeps the session (no prompt, no loop)
     await page.waitForLoadState("networkidle");
