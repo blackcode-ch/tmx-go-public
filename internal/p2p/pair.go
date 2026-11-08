@@ -194,6 +194,16 @@ func (n *Host) Join(ctx context.Context, link string) (Paired, error) {
 	if p.ExpiresAt > 0 && p.ExpiresAt <= nowMs() {
 		return Paired{}, errors.New("this invite has expired; ask for a new one")
 	}
+	n.mu.Lock()
+	n.beginPairReadyLocked(p.PeerID)
+	n.pairReady[p.PeerID].outgoing++
+	n.mu.Unlock()
+	defer func() {
+		n.mu.Lock()
+		n.pairReady[p.PeerID].outgoing--
+		n.endPairReadyLocked(p.PeerID)
+		n.mu.Unlock()
+	}()
 	if len(p.Addrs) > 0 {
 		n.h.Peerstore().AddAddrs(p.PeerID, p.Addrs, peerstore.TempAddrTTL)
 	}
@@ -387,10 +397,12 @@ func (n *Host) handlePair(s network.Stream) {
 		n.pairing = make(map[peer.ID]int)
 	}
 	n.pairing[remote]++
+	n.beginPairReadyLocked(remote)
 	n.mu.Unlock()
 	defer func() {
 		n.mu.Lock()
 		n.pairing[remote]--
+		n.endPairReadyLocked(remote)
 		if n.pairing[remote] == 0 {
 			delete(n.pairing, remote)
 		}

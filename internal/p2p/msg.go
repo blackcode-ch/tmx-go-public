@@ -115,6 +115,9 @@ func (n *Host) Send(ctx context.Context, peerID string, env Envelope) error {
 	if p == n.self {
 		return errors.New("cannot send to this node itself")
 	}
+	if err := n.waitPairReady(ctx, p); err != nil {
+		return fmt.Errorf("%w: pairing is not ready: %v", ErrUnreachable, err)
+	}
 	if !n.isPeer(p) {
 		return fmt.Errorf("%w: %s is not a paired peer", ErrRejected, peerID)
 	}
@@ -165,6 +168,12 @@ func (n *Host) handleMsg(s network.Stream) {
 	remote := s.Conn().RemotePeer()
 	_ = s.SetDeadline(time.Now().Add(streamTimeout))
 	reply := func(a ack) { _ = writeMsg(s, a) }
+	ctx, cancel := context.WithTimeout(n.ctx, streamTimeout)
+	defer cancel()
+	if err := n.waitIncomingPairReady(ctx, remote); err != nil {
+		_ = s.Reset()
+		return
+	}
 	if !n.isPeer(remote) {
 		reply(ack{Error: "not paired with this tmx"})
 		return

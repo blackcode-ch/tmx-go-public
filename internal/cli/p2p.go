@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/blackcode-ch/tmx-go/internal/fleet"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -13,7 +15,10 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/p2p"
 )
 
-const p2pUsage = `usage: tmx p2p status
+const p2pUsage = `usage: tmx p2p invite-create --label NAME [--kind person|group] [--ttl 24h] [--max-uses 1]
+       tmx p2p agent-join --link LINK
+       tmx p2p invite-create|agent-join --approval ID
+       tmx p2p status
        tmx p2p invite [--group ID --group-name NAME] [--hours N] [--uses N]
        tmx p2p invites | revoke ID
        tmx p2p preview LINK | join LINK
@@ -28,6 +33,15 @@ func cmdP2P(e *env, args []string) error {
 		args = []string{"status"}
 	}
 	sub, rest := args[0], args[1:]
+	if sub == "join" && os.Getenv(fleet.EnvToken) != "" {
+		if len(rest) == 1 && !strings.HasPrefix(rest[0], "--") {
+			rest = []string{"--link", rest[0]}
+		}
+		return cmdAgentP2P(e, "agent-join", rest)
+	}
+	if sub == "invite-create" || sub == "agent-join" {
+		return cmdAgentP2P(e, sub, rest)
+	}
 	return withOwner(e, func(c *client.Client, cx context.Context) error {
 		switch sub {
 		case "status":

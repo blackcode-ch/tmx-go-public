@@ -453,6 +453,13 @@ func (s *Server) postBlock(w http.ResponseWriter, r *http.Request) {
 // gateDecide asks the gate before the owner allows a guard hold. Denying never needs a proof.
 func (s *Server) gateDecide(w http.ResponseWriter, r *http.Request, id string, req fleet.DecideRequest) bool {
 	ap, err := s.f.ApprovalByID(id)
+	if err == nil && (ap.Tool == fleet.ToolP2PInvite || ap.Tool == fleet.ToolP2PJoin) && (req.Decision == "allow" || req.Decision == fleet.DecisionAllowAlways) {
+		reason := ap.Description
+		if req.Decision == fleet.DecisionAllowAlways {
+			reason += "; always allow this pairing tool"
+		}
+		return s.requireOwner(w, r, gate.Action{Reason: reason, Key: actionKey(r, map[string]any{"id": id, "req": req}), Always: true, Fresh: true})
+	}
 	if err == nil && ap.Tool == fleet.ToolProcessStart && req.Decision == "allow" {
 		return s.RequireOwner(w, r, "start the agent's requested command", map[string]any{"id": id, "req": req})
 	}

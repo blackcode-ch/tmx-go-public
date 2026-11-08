@@ -237,7 +237,7 @@ func (f *Fleet) topicLineLocked(id string) string {
 	if threadOr(id) == model.GeneralThread || strings.HasPrefix(id, model.ChatThread("")) {
 		return ""
 	}
-	line := "[topic: " + f.threadTitleLocked(id)
+	line := "[topic: " + peertext.Field(f.threadTitleLocked(id)) // agents name topics: one line, no brackets
 	if all, err := f.st.Entries(id); err == nil {
 		if n := len(liveEntries(all)); n > 0 {
 			line += fmt.Sprintf(" · %d %s in its log", n, map[bool]string{true: "line", false: "lines"}[n == 1])

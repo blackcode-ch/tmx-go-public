@@ -151,7 +151,7 @@ func TestTypeKeysScreenAuthorization(t *testing.T) {
 	if err := f.TypeText(lc, "w1", "hello", true); err != nil {
 		t.Fatalf("type: %v", err)
 	}
-	if got := proc.Sent(); len(got) != 1 || got[0] != "[message from alpha-lead (lead)] hello" {
+	if got := proc.Sent(); len(got) != 1 || got[0] != "[message from alpha-lead (lead)]\n│ hello" {
 		t.Fatalf("typed: %q", got)
 	}
 
