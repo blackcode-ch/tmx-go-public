@@ -52,6 +52,11 @@ func (s *Server) ownerOrAgent(h http.HandlerFunc) http.HandlerFunc {
 
 // writeVoiceErr maps the service's errors to statuses.
 func writeVoiceErr(w http.ResponseWriter, err error) {
+	var pending transcribe.PendingError
+	if errors.As(err, &pending) {
+		writeJSON(w, http.StatusAccepted, map[string]any{"state": "pending", "message": "transcription pending", "transcript_id": pending.ID})
+		return
+	}
 	switch {
 	case errors.Is(err, transcribe.ErrNoSpeech):
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
@@ -123,6 +128,9 @@ const maxDictationBody = 8 << 20
 // (Content-Type audio/* or application/octet-stream; WAV, MP3, FLAC or Ogg, at most 512 MB;
 // ?language=) is a file (tmx transcribe FILE). The answer waits for the job's turn.
 func (s *Server) transcribeNow(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get(transcriptionLocalOnly) != "" {
+		r = r.WithContext(transcribe.LocalOnly(r.Context()))
+	}
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if strings.HasPrefix(ct, "audio/") || ct == "application/octet-stream" {
 		res, err := s.voice.TranscribeFile(r.Context(), http.MaxBytesReader(w, r.Body, transcribe.MaxFileBytes), r.URL.Query().Get("language"))

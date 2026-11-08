@@ -140,6 +140,9 @@ func (s *Service) transcription(r model.Recording, may bool) progress {
 			p.waiting++ // the database is busy: look again later
 		case t.State == model.TranscriptQueued || t.State == model.TranscriptRunning:
 			p.waiting++
+			if strings.HasPrefix(t.Model, "peer:") {
+				p.note = "transcription pending"
+			}
 		}
 	}
 	if len(missing) == 0 {
@@ -294,6 +297,8 @@ func (s *Service) runOne(x model.RecordingSummary) {
 	now := s.now()
 	cur.FinishedAt, cur.UpdatedAt = now, now
 	switch out.state {
+	case model.SummaryTranscribing:
+		cur.State, cur.Error, cur.Note = model.SummaryTranscribing, "", out.note
 	case model.SummaryDone:
 		cur.State, cur.Error, cur.Note = model.SummaryDone, "", out.note
 		cur.Model, cur.Summary, cur.KeyPoints, cur.Decisions = out.model, out.sum.Summary, out.sum.KeyPoints, out.sum.Decisions
@@ -343,6 +348,41 @@ func (s *Service) make(ctx context.Context, x model.RecordingSummary) outcome {
 		notes = append(notes, in.missing) // the watcher's note says why, when it has one
 	}
 	note := joinNotes(x.Note, notes)
+	// Fleet audio never reaches a cloud summarizer, including after the owner
+	// changes the current voice setting. The stored transcripts pin their peer.
+	via := ""
+	for _, g := range wavSegments(r) {
+		if t, e := s.o.Store.TranscriptBySource(recorder.Source(r.ID, g.N)); e == nil {
+			if host, ok := strings.CutPrefix(t.Model, "peer:"); ok {
+				via = host
+				break
+			}
+		}
+	}
+	if v, ok := s.o.Voice.(interface{ ViaPeer() string }); ok && via == "" {
+		via = v.ViaPeer()
+	}
+	if via != "" {
+		v, ok := s.o.Voice.(interface {
+			FleetReport(context.Context, string, string, string) (string, error)
+		})
+		if !ok {
+			return outcome{state: model.SummaryTranscribing, note: "report pending"}
+		}
+		var text strings.Builder
+		for _, line := range in.lines {
+			text.WriteString(line.text)
+			text.WriteByte('\n')
+		}
+		if text.Len() == 0 {
+			return outcome{state: model.SummarySkipped, err: in.nothingSaid(r)}
+		}
+		report, err := v.FleetReport(ctx, via, r.ID, text.String())
+		if err != nil {
+			return outcome{state: model.SummaryTranscribing, note: "report pending"}
+		}
+		return outcome{state: model.SummaryDone, sum: model.RecordingSummary{Summary: report}, model: "peer:" + via, note: "Report generated on the fleet peer from audio transcripts.", transcripts: in.transcripts, parts: 1}
+	}
 	if in.empty() {
 		return outcome{state: model.SummarySkipped, err: in.nothingSaid(r), note: note}
 	}

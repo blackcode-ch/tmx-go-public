@@ -267,7 +267,13 @@ func cmdDaemon(e *env, args []string) (err error) {
 	// recworker: on Stop the recorder launches its own short-lived report worker and tracks it (G5, "tool > agent")
 	recw := recworker.New(recworker.Options{Fleet: f, Summaries: sum, Recordings: rec, Exe: f.Executable(),
 		Dir: filepath.Join(paths.Home, "rec-workers"), Logger: log})
-	rec.SetFinished(recw.Finished)
+	rec.SetFinished(func(r model.Recording) {
+		if voice.ViaPeer() != "" {
+			sum.Finished(r)
+			return
+		}
+		recw.Finished(r)
+	})
 	wa := newWhatsApp(paths, st, f, log) // wa.go: the owner's WhatsApp, linked as a companion device
 	f.SetWhatsApp(wa)
 	ups := uploads.New(paths)
@@ -286,6 +292,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	var fleetPeers *peers.Client
 	if e.cfg.Production() && len(e.cfg.Peers) > 0 {
 		fleetPeers = peers.New(e.cfg, paths, log)
+		voice.SetPeer(fleetPeers)
 		f.SetPeerSender(fleetPeers, fleetPeers.Machine())
 		sum.SetPeer(fleetPeers) // summaries.via_peer: a peer's local model writes this machine's summaries
 		go fleetPeers.Run(ctx)

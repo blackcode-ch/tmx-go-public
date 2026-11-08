@@ -93,7 +93,7 @@ func New(cfg config.Config, p config.Paths, log *slog.Logger) *Client {
 		peers:   map[string]config.Peer{},
 		tokens:  NewTokens(p.PeersFile()),
 		// Never follow a redirect: it would resend the pair token wherever it points.
-		http:   &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
+		http:   &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }},
 		log:    log,
 		status: map[string]Status{},
 	}

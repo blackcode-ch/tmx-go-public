@@ -58,7 +58,8 @@ const voiceUsage = `usage: tmx voice [status]            engine, models, setting
        tmx voice auto on|off         transcribe finished recordings by themselves (default on)`
 
 const transcribeUsage = `usage: tmx transcribe FILE [--language auto|CODE] [--timestamps] [--json]
-       FILE: WAV, MP3, FLAC or Ogg (up to 512 MB); prints the text. Nothing is stored.`
+       FILE: WAV, MP3, FLAC or Ogg (up to 512 MB); prints the text.
+       Fleet mode retains audio and returns a transcript ID while work is pending.`
 
 func cmdVoice(e *env, args []string) error {
 	sub := "status"
@@ -307,6 +308,20 @@ func cmdTranscribe(e *env, args []string) error {
 			ae.Error = "the daemon answered " + resp.Status
 		}
 		return &client.APIError{Status: resp.StatusCode, Msg: ae.Error, Body: body}
+	}
+	if resp.StatusCode == http.StatusAccepted {
+		var pending struct {
+			TranscriptID string `json:"transcript_id"`
+		}
+		if err := json.Unmarshal(body, &pending); err != nil {
+			return err
+		}
+		if *asJSON {
+			fmt.Fprintln(e.out, string(body))
+		} else {
+			fmt.Fprintf(e.out, "transcription pending; audio saved locally, retrying automatically (transcript %s)\n", pending.TranscriptID)
+		}
+		return nil
 	}
 	var r transcribe.Result
 	if err := json.Unmarshal(body, &r); err != nil {
