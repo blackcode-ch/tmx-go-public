@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/blackcode-ch/tmx-go/internal/jobs"
 	"github.com/blackcode-ch/tmx-go/internal/model"
@@ -33,6 +34,7 @@ func (s *Service) fetchGoverned(f model.ChatFile, peer string) (bool, string) {
 	// comes from the authenticated chat membership path, never agent-supplied jobs.
 	identity := jobs.Identity{Caller: "chat-peer:" + peer, Owner: model.Owner, Key: "download/" + f.ChatID + "/" + f.ID}
 	var tmp *os.File
+	var blockedType atomic.Bool
 	task := jobs.AuditTask{
 		Peer: peer, Chat: f.ChatID,
 		ExpectedDigest: f.SHA256,
@@ -96,6 +98,10 @@ func (s *Service) fetchGoverned(f model.ChatFile, peer string) (bool, string) {
 			}
 			// This only places inert chat bytes. Existing sender/member and serving
 			// authorization is unchanged; no approval or execution authority is granted.
+			if err := validateStoredFile(f.Name, tmp.Name()); err != nil {
+				blockedType.Store(true)
+				return err
+			}
 			return os.Rename(tmp.Name(), s.filePath(f))
 		},
 		Cleanup: func() {
@@ -115,6 +121,9 @@ func (s *Service) fetchGoverned(f model.ChatFile, peer string) (bool, string) {
 	r, err = s.o.Jobs.Wait(s.ctx, r.ID, model.Owner, true)
 	if err != nil {
 		return false, "unreachable"
+	}
+	if blockedType.Load() {
+		return false, "blocked type"
 	}
 	switch r.State {
 	case "completed":

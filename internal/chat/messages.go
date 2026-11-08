@@ -56,6 +56,12 @@ func (s *Service) Send(c fleet.Caller, chatID, body string) (model.ChatMessage, 
 // SendWith is Send with attachments. "@label" in the body mentions people and agents
 // (see mentions.go).
 func (s *Service) SendWith(c fleet.Caller, chatID string, req SendRequest) (model.ChatMessage, error) {
+	return s.sendWith(c, chatID, req, false)
+}
+
+// agentFile is set only by SendFile after creating this caller's bounded upload.
+// Public SendWith cannot attach another caller's unsent uploads by guessing IDs.
+func (s *Service) sendWith(c fleet.Caller, chatID string, req SendRequest, agentFile bool) (model.ChatMessage, error) {
 	if !s.Enabled() {
 		return model.ChatMessage{}, ErrOff
 	}
@@ -63,7 +69,7 @@ func (s *Service) SendWith(c fleet.Caller, chatID string, req SendRequest) (mode
 	if strings.TrimSpace(body) == "" && len(req.Files) == 0 {
 		return model.ChatMessage{}, invalid("the message is empty")
 	}
-	if len(req.Files) > 0 && !c.Owner {
+	if len(req.Files) > 0 && !c.Owner && !agentFile {
 		return model.ChatMessage{}, forbidden("only the owner attaches files to chat messages")
 	}
 	if len(body) > MaxBodyBytes {

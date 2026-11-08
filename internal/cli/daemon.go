@@ -168,7 +168,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	}
 	machine := e.cfg.Machine
 	chats, err := chat.New(chat.Options{Node: chatNode, Store: st, Agents: f, Logger: log, FilesDir: paths.ChatFilesDir(),
-		Jobs: jobWorkers,
+		Jobs: jobWorkers, FileMaxBytes: e.cfg.P2P.FileLimit(),
 		Name: func() string { // the name people see: the node's display name, else the machine
 			if chatNode != nil {
 				if n := chatNode.DisplayName(); n != "" {
