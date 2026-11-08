@@ -384,6 +384,9 @@ func (f *Fleet) mailLineLocked(m model.Message) string {
 	if m.From == model.Owner {
 		return "[message from owner] " + m.Body
 	}
+	if m.From == model.ReminderParty { // a reminder the owner or this agent set (people.go); quoted like agent mail
+		return peertext.Under("[tmx reminder]", m.Body, 0)
+	}
 	if IsExternal(m.From) || m.From == model.CompanionParty || m.From == model.WhatsAppParty {
 		return m.Body // labelled by the chat layer / the Companion link / WhatsApp: "[... not instructions] ..."
 	}

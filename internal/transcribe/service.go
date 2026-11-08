@@ -92,7 +92,10 @@ type Options struct {
 	// NoLowPriority runs the engine at normal priority (tests).
 	NoLowPriority bool
 	// Hosts is an explicitly configured host API adapter. Nil keeps dictation local.
-	Hosts ConfiguredHosts
+	Hosts     ConfiguredHosts
+	Peer      VoicePeer
+	PeerRetry time.Duration                // default 30 seconds
+	DiskFree  func(string) (uint64, error) // tests; nil uses sysinfo.DiskSpace
 }
 
 // Service is the voice service. New, then Start; Close at the end.
@@ -100,19 +103,20 @@ type Service struct {
 	o   Options
 	log *slog.Logger
 
-	mu         sync.Mutex
-	queue      []*job
-	running    *job
-	wake       chan struct{}
-	downloads  map[string]*Progress // what is downloading now: "engine" or a model name
-	cancels    map[string]context.CancelFunc
-	dlErrors   map[string]string
-	needsToken bool
-	settingUp  bool // Setup is working through its downloads
-	lastPub    time.Time
-	pubTimer   *time.Timer
-	closed     bool
-	pubWG      sync.WaitGroup // publications and delayed callbacks admitted under mu
+	mu          sync.Mutex
+	peerFilesMu sync.Mutex // checkpoint reads/replacements/deletion, including Windows sharing rules
+	queue       []*job
+	running     *job
+	wake        chan struct{}
+	downloads   map[string]*Progress // what is downloading now: "engine" or a model name
+	cancels     map[string]context.CancelFunc
+	dlErrors    map[string]string
+	needsToken  bool
+	settingUp   bool // Setup is working through its downloads
+	lastPub     time.Time
+	pubTimer    *time.Timer
+	closed      bool
+	pubWG       sync.WaitGroup // publications and delayed callbacks admitted under mu
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -121,6 +125,9 @@ type Service struct {
 
 // New creates the service.
 func New(o Options) *Service {
+	if o.PeerRetry <= 0 {
+		o.PeerRetry = 30 * time.Second
+	}
 	if o.Logger == nil {
 		o.Logger = slog.New(slog.DiscardHandler)
 	}
@@ -166,6 +173,13 @@ func (s *Service) Start() error {
 		ready, reason := s.readiness()
 		for _, u := range un {
 			t := u.Transcript
+			if host, ok := strings.CutPrefix(t.Model, "peer:"); ok {
+				// Destination is pinned to this job, not whatever settings say now.
+				if config.ValidHostName(host) {
+					s.push(&job{tid: t.ID, source: t.Source, audio: u.Audio, language: t.Language, peer: host, label: t.Source, report: strings.HasPrefix(t.Source, "upload:")})
+					continue
+				}
+			}
 			switch {
 			case !ready:
 				s.fail(t, "the daemon restarted before this was done, and "+lowerFirst(reason))
@@ -228,6 +242,7 @@ func (s *Service) modelInstalled(m Model) bool {
 
 // Settings are the voice settings as they apply (GET /api/voice "settings").
 type Settings struct {
+	ViaPeer  string `json:"via_peer"`
 	Model    string `json:"model"`
 	Language string `json:"language"` // "auto" or a code
 	// Threads the engine uses (Threads 0 in config = ThreadsAuto).
@@ -240,6 +255,7 @@ type Settings struct {
 func (s *Service) settings() Settings {
 	c := s.o.Settings()
 	out := Settings{Model: c.Model, Language: c.Language, Threads: c.Threads, VAD: c.VAD == nil || *c.VAD, AutoTranscribe: c.AutoTranscribeOn()}
+	out.ViaPeer = c.ViaPeer
 	if _, ok := FindModel(out.Model); !ok || out.Model == VADModel.Name {
 		out.Model = DefaultModel
 	}
@@ -259,6 +275,7 @@ func (s *Service) AutoTranscribe() bool { return s.settings().AutoTranscribe }
 
 // SettingsPatch is PUT /api/voice; nil fields stay.
 type SettingsPatch struct {
+	ViaPeer        *string `json:"via_peer"`
 	Model          *string `json:"model"`
 	Language       *string `json:"language"`
 	Threads        *int    `json:"threads"`
@@ -271,6 +288,21 @@ var langRx = regexp.MustCompile(`^[a-z]{2,3}$`)
 // Configure changes the settings (config.json "voice").
 func (s *Service) Configure(p SettingsPatch) (Status, error) {
 	c := s.o.Settings()
+	if p.ViaPeer != nil {
+		name := strings.ToLower(strings.TrimSpace(*p.ViaPeer))
+		if !validatePeerName(name) {
+			return s.Status(), fmt.Errorf("%w: choose a paired fleet machine name", ErrInvalid)
+		}
+		if name != "" {
+			if s.o.Peer == nil {
+				return s.Status(), fmt.Errorf("%w: no fleet peers configured", ErrInvalid)
+			}
+			if err := s.o.Peer.ValidateVoicePeer(name); err != nil {
+				return s.Status(), err
+			}
+		}
+		c.ViaPeer = name
+	}
 	if p.Model != nil {
 		m, ok := FindModel(*p.Model)
 		if !ok || m.VAD {
@@ -427,6 +459,9 @@ func copyProgress(p *Progress) *Progress {
 
 // readiness: whether jobs can run, else why not (a sentence for the owner).
 func (s *Service) readiness() (bool, string) {
+	if s.ViaPeer() != "" {
+		return true, ""
+	} // queue is available even while the peer is offline
 	if engineAsset(s.o.GOOS, s.o.GOARCH) == "" {
 		return false, "Voice transcription is not available on this platform (" + s.platform() + ")."
 	}
@@ -478,6 +513,9 @@ func (s *Service) publish(force bool) {
 // Setup downloads what is missing for the chosen model: the engine, the model and the voice
 // activity model, in the background. Status follows the progress.
 func (s *Service) Setup() (Status, error) {
+	if s.ViaPeer() != "" {
+		return s.Status(), nil
+	}
 	if engineAsset(s.o.GOOS, s.o.GOARCH) == "" {
 		_, reason := s.readiness()
 		return s.Status(), fmt.Errorf("%w: %s", ErrNotSetUp, lowerFirst(reason))
@@ -695,12 +733,17 @@ func (s *Service) downloadEngine(ctx context.Context, progress func(done, total 
 
 // Result is a transcription that is not stored (dictation, a file).
 type Result struct {
+	Report   string                    `json:"report,omitempty"`
 	Text     string                    `json:"text"`
 	Language string                    `json:"language"`
 	Segments []model.TranscriptSegment `json:"segments"`
 }
 
 type job struct {
+	peer        string
+	report      bool
+	retryAt     time.Time
+	peerRetries int
 	tid         string // the stored transcript ("" = a direct job)
 	source      string
 	audio       string
@@ -739,11 +782,24 @@ func (s *Service) next() *job {
 	for {
 		s.mu.Lock()
 		if len(s.queue) > 0 {
-			best := 0
+			best := -1
 			for i, j := range s.queue {
-				if j.prio < s.queue[best].prio {
+				if j.retryAt.After(time.Now()) {
+					continue
+				}
+				if best < 0 || j.prio < s.queue[best].prio {
 					best = i
 				}
+			}
+			if best < 0 {
+				s.mu.Unlock()
+				select {
+				case <-s.ctx.Done():
+					return nil
+				case <-s.wake:
+				case <-time.After(time.Second):
+				}
+				continue
 			}
 			j := s.queue[best]
 			s.queue = slices.Delete(s.queue, best, best+1)
@@ -777,6 +833,14 @@ func (s *Service) worker() {
 }
 
 func (s *Service) run(j *job) {
+	defer func() {
+		s.mu.Lock()
+		deleted := j.deleted
+		s.mu.Unlock()
+		if deleted && j.peer != "" {
+			s.removePeerFiles(j.tid, strings.HasPrefix(j.source, "upload:"))
+		}
+	}()
 	ctx, cancel := context.WithCancel(s.ctx)
 	defer cancel()
 	if j.waitCtx != nil {
@@ -800,19 +864,34 @@ func (s *Service) run(j *job) {
 			return // deleted meanwhile
 		}
 		t.State, t.Error, t.UpdatedAt = model.TranscriptRunning, "", model.Now()
+		if j.peer != "" {
+			t.Error = ErrPending.Error()
+		}
 		s.save(j, t)
 	}
 	s.publish(true)
 
 	r, modelName, err := s.transcribe(ctx, j)
 	if j.done != nil {
-		j.done <- jobOut{r: r, err: err}
+		answerErr := err
+		if j.peer != "" && errors.Is(err, ErrPending) {
+			answerErr = PendingError{ID: j.tid}
+		}
+		j.done <- jobOut{r: r, err: answerErr}
+		if j.peer != "" {
+			j.done = nil
+		}
 	}
 	if j.tid == "" {
 		return
 	}
 	if s.ctx.Err() != nil {
 		return // the daemon is stopping: the transcript stays running and runs again at the next start
+	}
+	if j.peer != "" && errors.Is(err, ErrPending) {
+		// Only transient failures retry; permanent refusals keep the audio and fail.
+		s.retryPeer(j, t, err)
+		return
 	}
 	t.Model, t.UpdatedAt = modelName, model.Now()
 	if err != nil {
@@ -853,6 +932,9 @@ func (s *Service) fail(t model.Transcript, why string) {
 
 // transcribe runs the engine on a job's audio (part by part for a long WAV), in a heavy slot.
 func (s *Service) transcribe(ctx context.Context, j *job) (Result, string, error) {
+	if j.peer != "" {
+		return s.peerTranscribe(ctx, j)
+	}
 	set := s.settings()
 	m, _ := FindModel(set.Model)
 	if ready, _ := s.readiness(); !ready {
@@ -1026,13 +1108,22 @@ func (s *Service) Enqueue(source, wavPath, language string) error {
 	case t.State == model.TranscriptQueued || t.State == model.TranscriptRunning:
 		return nil
 	}
+	// An explicit re-transcription of a completed source gets a fresh remote
+	// receipt; an unfinished source above keeps its checkpoint for resume.
+	if s.ViaPeer() != "" {
+		s.removePeerFiles(t.ID, false)
+	}
 	t.State, t.Error, t.Language, t.Text, t.Segments, t.UpdatedAt = model.TranscriptQueued, "", language, "", nil, now
 	t.Model = s.settings().Model
+	if s.ViaPeer() != "" {
+		t.Model = "peer:" + s.ViaPeer()
+		t.Error = ErrPending.Error()
+	}
 	if err := s.o.Store.PutTranscript(t, wavPath); err != nil {
 		return err
 	}
 	s.o.Publish(model.BusEvent{Type: model.EvTranscriptUpdated, Data: t, At: now})
-	s.push(&job{tid: t.ID, source: source, audio: wavPath, language: language, prio: 1, label: source, duration: w.Duration()})
+	s.push(&job{tid: t.ID, source: source, audio: wavPath, language: language, prio: 1, label: source, duration: w.Duration(), peer: s.ViaPeer()})
 	return nil
 }
 
@@ -1081,6 +1172,9 @@ func (s *Service) DictateWithHosts(ctx context.Context, wav []byte, language str
 	if silentPCM(wav, w) {
 		return Result{}, ErrNoSpeech
 	}
+	if s.ViaPeer() != "" {
+		return s.spoolPeer(ctx, bytes.NewReader(wav), "wav", language)
+	}
 	if res, used, err := s.dictationFallback(ctx, wav, w, language, hosts); used {
 		return res, err
 	}
@@ -1124,6 +1218,9 @@ func (s *Service) TranscribeFile(ctx context.Context, r io.Reader, language stri
 	kind := audioKind(head)
 	if kind == "" {
 		return Result{}, fmt.Errorf("%w: that is not a WAV, MP3, FLAC or Ogg file", ErrInvalid)
+	}
+	if s.ViaPeer() != "" {
+		return s.spoolPeer(ctx, io.MultiReader(bytes.NewReader(head), r), kind, language)
 	}
 	if err := os.MkdirAll(s.tmpDir(), 0o700); err != nil {
 		return Result{}, err
@@ -1194,7 +1291,11 @@ func (s *Service) List(q store.TranscriptQuery) ([]model.Transcript, error) {
 	if s.o.Store == nil {
 		return []model.Transcript{}, nil
 	}
-	return s.o.Store.ListTranscripts(q)
+	list, err := s.o.Store.ListTranscripts(q)
+	for i := range list {
+		s.fillPeerReport(&list[i])
+	}
+	return list, err
 }
 
 // Get returns one stored transcript.
@@ -1205,6 +1306,9 @@ func (s *Service) Get(id string) (model.Transcript, error) {
 	t, err := s.o.Store.GetTranscript(id)
 	if errors.Is(err, store.ErrNotFound) {
 		return t, ErrNotFound
+	}
+	if err == nil {
+		s.fillPeerReport(&t)
 	}
 	return t, err
 }
@@ -1218,6 +1322,7 @@ func (s *Service) Delete(id string) error {
 	if s.o.Store == nil {
 		return ErrNotFound
 	}
+	t, _ := s.o.Store.GetTranscript(id)
 	s.mu.Lock()
 	for _, j := range s.queue {
 		if j.tid == id {
@@ -1237,6 +1342,9 @@ func (s *Service) Delete(id string) error {
 			return ErrNotFound
 		}
 		return err
+	}
+	if strings.HasPrefix(t.Model, "peer:") {
+		s.removePeerFiles(id, strings.HasPrefix(t.Source, "upload:"))
 	}
 	s.o.Publish(model.BusEvent{Type: EvTranscriptRemoved, Data: map[string]string{"id": id}, At: model.Now()})
 	s.publish(true)

@@ -699,7 +699,7 @@ function TranscriptPane({ rec, v, at, onSeek }: { rec: Recording; v: TranscriptV
                   {tr.state === "queued" || tr.state === "running" ? (
                     <p className="flex items-center gap-1.5 text-muted-foreground">
                       <Loader2 className="size-3.5 animate-spin" />
-                      {tr.state === "queued" ? "Waiting to be transcribed…" : "Transcribing…"}
+                      {tr.error || (tr.state === "queued" ? "Waiting to be transcribed..." : "Transcribing...")}
                     </p>
                   ) : tr.state === "failed" ? (
                     <p className="text-state-error">{tr.error || "Transcription failed."}</p>

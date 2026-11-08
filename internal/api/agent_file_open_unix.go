@@ -11,3 +11,12 @@ import (
 func openAgentFile(root *os.Root, name string) (*os.File, error) {
 	return root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 }
+
+func singleLinkFile(f *os.File) bool {
+	info, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	return ok && st.Nlink == 1
+}

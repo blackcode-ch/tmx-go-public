@@ -32,6 +32,7 @@ Daemon:
 Fleet:
   tmx ls                          head → projects → agents with state and model
   tmx project import PROJECT --file FILE
+  tmx people import [--from DIR] [--apply]   Python tmx's People/Clients/asks; dry run by default
   tmx project new NAME [--folder DIR] [--brief TEXT] [--harness claude|codex] [--model M]
   tmx project ls
   tmx project rm NAME --yes       stops and removes its agents; the folder stays
@@ -168,6 +169,7 @@ func init() {
 	}
 	commands["voice"], commands["transcribe"] = cmdVoice, cmdTranscribe // voice.go
 	commands["wa"], commands["whatsapp"] = cmdWa, cmdWa                 // wa.go
+	commands["people"] = cmdPeople                                      // people.go
 }
 
 // run is runIO with nothing on stdin (tests).

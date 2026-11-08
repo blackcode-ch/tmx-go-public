@@ -17,6 +17,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.messagePinRoutes(mux)
 	s.companionMailboxRoutes(mux)
 	s.taskRoutes(mux)
+	s.peopleRoutes(mux)
 	s.processRoutes(mux)
 	s.jobRoutes(mux)
 	mux.HandleFunc("GET /api/health", s.health)

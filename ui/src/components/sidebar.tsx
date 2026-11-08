@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, CircleDot, FolderClosed, Inbox, LayoutGrid, ListTree, Moon, Plus, Search, Settings, Sun } from "lucide-react";
 import { SquareTerminal } from "lucide-react"; // an agent in its own screen (harness-screen.tsx)
-import { Gauge, ListChecks } from "lucide-react";
+import { Briefcase, Gauge, Handshake, ListChecks, Users } from "lucide-react";
 import { UsageDot } from "./accounts/usage-bits";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -346,6 +346,9 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
             onNavigate={onNavigate}
             right={recording ? <span className="size-2 animate-pulse rounded-full bg-state-error" aria-label="Recording" /> : undefined}
           />
+          <NavItem to={paths.people()} icon={Users} label="People" active={path === paths.people()} onNavigate={onNavigate} />
+          <NavItem to={paths.clients()} icon={Briefcase} label="Clients" active={path === paths.clients()} onNavigate={onNavigate} />
+          <NavItem to={paths.promises()} icon={Handshake} label="Promises" active={path === paths.promises()} onNavigate={onNavigate} />
           <NavItem to={paths.usage()} icon={Gauge} label="Usage" active={path === paths.usage()} onNavigate={onNavigate} right={<UsageDot />} />
           <NavItem to={paths.features()} icon={ListChecks} label="Features" active={path === paths.features()} onNavigate={onNavigate} />
         </nav>

@@ -32,6 +32,7 @@ import { ChatsPage } from "@/pages/chats";
 import { CompanionPage } from "@/pages/companion";
 import { InboxPage } from "@/pages/inbox";
 import { OverviewPage } from "@/pages/overview";
+import { PeopleBookPage, PromisesPage } from "@/pages/people";
 import { ProjectPage } from "@/pages/project";
 import { ProfilePage } from "@/pages/profile";
 import { RecordingsPage } from "@/pages/recordings";
@@ -79,6 +80,12 @@ function Routes() {
       return <FeaturesPage />;
     case "usage":
       return <UsagePage />;
+    case "people":
+      return <PeopleBookPage key="people" page="people" />;
+    case "clients":
+      return <PeopleBookPage key="clients" page="clients" />;
+    case "promises":
+      return <PromisesPage />;
     default:
       return (
         <div className="flex flex-1 items-center justify-center p-6">

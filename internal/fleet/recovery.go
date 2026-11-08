@@ -62,6 +62,7 @@ func (f *Fleet) Start() error {
 	}
 	f.adoptTools()
 	f.startShelveLoop()
+	f.startReminderLoop() // fires what came due while the daemon was down, then keeps time
 	return nil
 }
 
