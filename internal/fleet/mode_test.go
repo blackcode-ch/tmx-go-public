@@ -264,7 +264,7 @@ func TestMailReachesTheAgentInBothModes(t *testing.T) {
 	send("two")
 	eventually(t, "typed mail", func() bool {
 		s := tui.Sent()
-		return len(s) == 1 && strings.Contains(s[0], "[message from o (worker)] two")
+		return len(s) == 1 && strings.Contains(s[0], "[message from o (worker)]\n│ two")
 	})
 	if !hasEntry(t, f, "w", model.EntryMessageIn, "two") {
 		t.Fatal("typed mail missing from the timeline")

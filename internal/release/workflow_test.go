@@ -52,3 +52,32 @@ func TestReleaseWorkflowTreatsTheTagAsData(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicReleaseActionsPinned(t *testing.T) {
+	b, err := os.ReadFile("../../public-ci/workflows/release.yml")
+	if os.IsNotExist(err) && os.Getenv("TMX_PUBLIC_SNAPSHOT") == "1" {
+		t.Skip("public-ci workflows are omitted from the public snapshot; workflows come from trusted main")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin := regexp.MustCompile(`^      - uses: [a-zA-Z0-9_/-]+@[0-9a-f]{40}$`)
+	count := 0
+	lines := strings.Split(string(b), "\n")
+	for i, line := range lines {
+		line = strings.TrimSuffix(line, "\r")
+		if !strings.Contains(line, "uses:") {
+			continue
+		}
+		count++
+		if !pin.MatchString(line) {
+			t.Errorf("unpinned action: %s", line)
+		}
+		if i == 0 || !strings.HasPrefix(lines[i-1], "      # ") {
+			t.Errorf("missing separate version comment: %s", line)
+		}
+	}
+	if count != 5 {
+		t.Fatalf("expected five pinned actions, got %d", count)
+	}
+}

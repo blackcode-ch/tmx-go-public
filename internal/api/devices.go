@@ -453,6 +453,11 @@ func (s *Server) revokeDevice(w http.ResponseWriter, r *http.Request) {
 	d.bootstrap = nil
 	d.ceremonies = map[string]*browserCeremony{}
 	delete(d.pinSess, id)
+	if s.push != nil {
+		if err := s.push.Unsubscribe(id); err != nil {
+			s.log.Warn("revoked device push cleanup failed")
+		}
+	}
 	s.deviceEvent("revoked", id)
 	w.WriteHeader(204)
 }

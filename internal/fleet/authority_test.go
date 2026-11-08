@@ -85,7 +85,7 @@ func TestFleetAuthorityMailIsMarked(t *testing.T) {
 	}
 	eventually(t, "marked", func() bool {
 		s := lp.Sent()
-		return len(s) >= 2 && s[len(s)-1] == "[message from tmx-lead@hostc (fleet lead, other machine, verified sender)] launch a worker for the fix"
+		return len(s) >= 2 && s[len(s)-1] == "[message from tmx-lead@hostc (fleet lead, other machine, verified sender)]\n│ launch a worker for the fix"
 	})
 	// Anyone else from that machine stays an ordinary colleague.
 	lp.State(model.StateIdle)
@@ -95,7 +95,7 @@ func TestFleetAuthorityMailIsMarked(t *testing.T) {
 	}
 	eventually(t, "plain", func() bool {
 		s := lp.Sent()
-		return len(s) >= 3 && s[len(s)-1] == "[message from bob@hostc (other machine)] hello"
+		return len(s) >= 3 && s[len(s)-1] == "[message from bob@hostc (other machine)]\n│ hello"
 	})
 }
 

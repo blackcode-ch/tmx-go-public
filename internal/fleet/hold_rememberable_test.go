@@ -33,14 +33,24 @@ func TestOnlyRememberableRulesAreRemembered(t *testing.T) {
 			continue // a fixed Block never becomes a hold at all
 		}
 		req := HoldRequest{Tool: "Bash", Command: "placeholder-" + r.ID, Rule: r.ID, Cwd: "/w"}
-		first, err := f.Hold(me, req)
+		hold := func() (model.Approval, error) {
+			switch r.ID {
+			case guard.RuleP2PInvite:
+				return f.HoldP2P(me, ToolP2PInvite, "Create an invite")
+			case guard.RuleP2PJoin:
+				return f.HoldP2P(me, ToolP2PJoin, "Join another tmx")
+			default:
+				return f.Hold(me, req)
+			}
+		}
+		first, err := hold()
 		if err != nil || first.State != model.ApprovalPending {
 			t.Fatalf("%s: first hold: %+v %v", r.ID, first, err)
 		}
 		if _, err := f.Decide(OwnerCaller, first.ID, DecideRequest{Decision: "allow"}); err != nil {
 			t.Fatalf("%s: allow: %v", r.ID, err)
 		}
-		again, err := f.Hold(me, req)
+		again, err := hold()
 		if err != nil || again.State != model.ApprovalPending {
 			t.Fatalf("%s: the same call after an Allow did not bring a card: %+v %v", r.ID, again, err)
 		}

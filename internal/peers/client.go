@@ -36,26 +36,39 @@ const (
 
 // Session is one agent on a peer, as its /api/sessions lists it (a subset; display only).
 type Session struct {
-	Name           string `json:"name"`
-	Host           string `json:"host"`
-	State          string `json:"state"`
-	Title          string `json:"title,omitempty"`
-	Project        string `json:"project,omitempty"`
-	Role           string `json:"role,omitempty"`
-	StateSeconds   int64  `json:"state_seconds,omitempty"`
-	QueuedMessages int    `json:"queued_messages,omitempty"`
+	ID             string   `json:"id,omitempty"`
+	Rooms          []string `json:"rooms"`
+	Tier           string   `json:"tier,omitempty"`
+	Cwd            string   `json:"cwd,omitempty"`
+	Adapter        string   `json:"adapter,omitempty"`
+	ConversationID string   `json:"conversation_id,omitempty"`
+	Name           string   `json:"name"`
+	Host           string   `json:"host"`
+	State          string   `json:"state"`
+	Title          string   `json:"title,omitempty"`
+	Project        string   `json:"project,omitempty"`
+	Role           string   `json:"role,omitempty"`
+	StateSeconds   int64    `json:"state_seconds,omitempty"`
+	QueuedMessages int      `json:"queued_messages,omitempty"`
 }
 
 // Status is what this daemon last saw of a peer.
 type Status struct {
-	Name     string    `json:"name"`
-	URL      string    `json:"url"`
-	OK       bool      `json:"ok"`
-	Error    string    `json:"error,omitempty"`
-	Commit   string    `json:"commit,omitempty"`
-	Paired   bool      `json:"paired"`
-	Seen     int64     `json:"seen,omitempty"` // Unix ms of the last good reading
-	Sessions []Session `json:"sessions"`       // the last good reading (stale when !OK)
+	Supervisor *SupervisorRef `json:"supervisor"`
+	Name       string         `json:"name"`
+	URL        string         `json:"url"`
+	OK         bool           `json:"ok"`
+	Error      string         `json:"error,omitempty"`
+	Commit     string         `json:"commit,omitempty"`
+	Paired     bool           `json:"paired"`
+	Seen       int64          `json:"seen,omitempty"` // Unix ms of the last good reading
+	Sessions   []Session      `json:"sessions"`       // the last good reading (stale when !OK)
+}
+
+// SupervisorRef matches Python's roster wire object (or null when absent).
+type SupervisorRef struct {
+	Name string `json:"name"`
+	Host string `json:"host"`
 }
 
 // Client talks to the configured peers. It implements fleet.PeerSender.
@@ -114,6 +127,13 @@ func (c *Client) Statuses() []Status {
 	out := make([]Status, 0, len(c.status))
 	for _, s := range c.status {
 		s.Sessions = append([]Session{}, s.Sessions...)
+		for i := range s.Sessions {
+			s.Sessions[i].Rooms = cloneRooms(s.Sessions[i].Rooms)
+		}
+		if s.Supervisor != nil {
+			v := *s.Supervisor
+			s.Supervisor = &v
+		}
 		out = append(out, s)
 	}
 	c.mu.Unlock()
@@ -242,9 +262,10 @@ func (c *Client) PollAll(ctx context.Context) {
 
 func (c *Client) poll(ctx context.Context, peer config.Peer) {
 	var res struct {
-		Host     string    `json:"host"`
-		Commit   string    `json:"commit"`
-		Sessions []Session `json:"sessions"`
+		Supervisor json.RawMessage `json:"supervisor"`
+		Host       string          `json:"host"`
+		Commit     string          `json:"commit"`
+		Sessions   []Session       `json:"sessions"`
 	}
 	_, err := c.do(ctx, peer, http.MethodGet, "/api/sessions", nil, &res, sessionTimeout)
 	if err == nil && !strings.EqualFold(res.Host, peer.Name) {
@@ -259,6 +280,22 @@ func (c *Client) poll(ctx context.Context, peer config.Peer) {
 		return
 	}
 	st.OK, st.Error, st.Commit, st.Seen = true, "", clean(res.Commit, 64), time.Now().UnixMilli()
+	st.Supervisor = nil
+	var supervisor SupervisorRef
+	if json.Unmarshal(res.Supervisor, &supervisor) != nil {
+		// Older Go daemons emitted a string. Accept it while upgrading the fleet.
+		var legacy string
+		if json.Unmarshal(res.Supervisor, &legacy) == nil {
+			supervisor.Name, supervisor.Host, _ = strings.Cut(legacy, "@")
+		}
+	}
+	if supervisor.Name != "" {
+		supervisor.Name, supervisor.Host = clean(supervisor.Name, 40), clean(supervisor.Host, 80)
+		if supervisor.Host == "" {
+			supervisor.Host = peer.Name
+		}
+		st.Supervisor = &supervisor
+	}
 	st.Sessions = []Session{}
 	for i, s := range res.Sessions {
 		if i == 500 {
@@ -268,10 +305,28 @@ func (c *Client) poll(ctx context.Context, peer config.Peer) {
 			continue
 		}
 		s.Host = peer.Name // a peer lists its own agents only
+		// A peer's opaque local ID may collide with one on this machine. Roster
+		// selection must always route back to the authenticated peer by name.
+		s.ID = s.Name + "@" + peer.Name
+		s.Rooms = cloneRooms(s.Rooms)
 		s.State, s.Title, s.Project, s.Role = clean(s.State, 40), clean(s.Title, 200), clean(s.Project, 80), clean(s.Role, 80)
+		s.Tier, s.Cwd, s.Adapter, s.ConversationID = clean(s.Tier, 40), clean(s.Cwd, 4096), clean(s.Adapter, 40), clean(s.ConversationID, 256)
 		st.Sessions = append(st.Sessions, s)
 	}
 	c.status[peer.Name] = st
+}
+
+func cloneRooms(rooms []string) []string {
+	out := make([]string, 0, min(len(rooms), 100))
+	for _, room := range rooms {
+		if len(out) == 100 {
+			break
+		}
+		if len(room) <= 512 {
+			out = append(out, room)
+		}
+	}
+	return out
 }
 
 // clean clamps a peer's string and drops control and format characters: it is display text.

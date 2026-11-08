@@ -106,6 +106,12 @@ func (n *Host) handleFile(s network.Stream) {
 	remote := s.Conn().RemotePeer()
 	_ = s.SetDeadline(time.Now().Add(streamTimeout))
 	reply := func(h fileHeader) { _ = writeMsg(s, h) }
+	ctx, cancel := context.WithTimeout(n.ctx, streamTimeout)
+	defer cancel()
+	if err := n.waitIncomingPairReady(ctx, remote); err != nil {
+		_ = s.Reset()
+		return
+	}
 	if !n.isPeer(remote) {
 		reply(fileHeader{Error: "not paired with this tmx"})
 		return
@@ -203,6 +209,9 @@ func (n *Host) Fetch(ctx context.Context, peerID, chatID, fileID string, w io.Wr
 	}
 	if err := checkFileIDs(chatID, fileID); err != nil {
 		return 0, err
+	}
+	if err := n.waitPairReady(ctx, p); err != nil {
+		return 0, fmt.Errorf("%w: pairing is not ready: %v", ErrUnreachable, err)
 	}
 	if !n.isPeer(p) {
 		return 0, fmt.Errorf("%w: %s is not a paired peer", ErrNoFile, peerID)

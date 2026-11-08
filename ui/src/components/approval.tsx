@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ArrowUpToLine, Check, CirclePause, Fingerprint, MessageCircleQuestion, Play, ShieldAlert, Sparkles, SquareTerminal, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -191,9 +191,25 @@ export interface ApprovalActionsHandle {
 /** Allow / Deny (with an optional reason) for permissions; option buttons + free text for questions. */
 export const ApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; size?: "sm" | "default"; showKeys?: boolean }>(
   function ApprovalActions(props, ref) {
-    return props.a.card && props.a.kind === "question" && !terminalMenuOf(props.a)
+    const seenRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      const node = seenRef.current;
+      if (!node || props.a.state !== "pending") return;
+      let visible = false, sent = false;
+      const mark = () => {
+        if (visible && document.visibilityState === "visible" && !sent) {
+          sent = true;
+          api.seenApproval(props.a.id).catch(() => { sent = false; });
+        }
+      };
+      const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; mark(); });
+      observer.observe(node);
+      document.addEventListener("visibilitychange", mark);
+      return () => { observer.disconnect(); document.removeEventListener("visibilitychange", mark); };
+    }, [props.a.id, props.a.state]);
+    return <div ref={seenRef}>{props.a.card && props.a.kind === "question" && !terminalMenuOf(props.a)
       ? <OwnerCardActions ref={ref} a={props.a} size={props.size} />
-      : <LegacyApprovalActions {...props} ref={ref} />;
+      : <LegacyApprovalActions {...props} ref={ref} />}</div>;
   },
 );
 
@@ -212,10 +228,11 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
     const menu = terminalMenuOf(a);
     const decidable = a.tool !== "owner_recovery_notice" && !menu && (a.kind === "permission" || a.kind === "guard" || a.kind === "whatsapp" || isCompanionSend(a));
     const guarded = a.kind === "guard";
+    const pairing = a.tool === "p2p_invite_create" || a.tool === "p2p_join";
     const [always, setAlways] = useState(false);
     const companionQ = isCompanionQuestion(a);
     // The owner gate asks before allowing a guard hold, or a hand-off to Companion with effects.
-    const gated = gateOn && (guarded || (isCompanionSend(a) && companionEffects(a) !== "none"));
+    const gated = pairing || (gateOn && (guarded || (isCompanionSend(a) && companionEffects(a) !== "none")));
 
     async function decide(decision: DecideBody["decision"], extra: { message?: string; answer?: string; scope?: DecideBody["scope"] } = {}) {
       if (busy) return;
@@ -389,13 +406,13 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
       // Settings > Safety. Always asks for your confirmation, even inside the grace window.
       return (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button size={size} onClick={() => void decide("allow_always", { scope: "agent" })} disabled={busy} title="Needs your confirmation on this machine">
+          <Button size={size} onClick={() => void decide("allow_always", { scope: "agent" })} disabled={busy} title={pairing ? "Confirm with your owner PIN on your phone" : "Needs your confirmation on this machine"}>
             <Fingerprint />
             Always, agents like {name}
           </Button>
-          <Button size={size} variant="outline" onClick={() => void decide("allow_always", { scope: "any" })} disabled={busy} title="Needs your confirmation on this machine">
+          <Button size={size} variant="outline" onClick={() => void decide("allow_always", { scope: "any" })} disabled={busy} title={pairing ? "Confirm with your owner PIN on your phone" : "Needs your confirmation on this machine"}>
             <Fingerprint />
-            Always, any agent
+            Always, {pairing ? "any head or lead" : "any agent"}
           </Button>
           <Button size={size} variant="ghost" onClick={() => setAlways(false)} disabled={busy}>
             Cancel
@@ -406,13 +423,13 @@ const LegacyApprovalActions = forwardRef<ApprovalActionsHandle, { a: Approval; s
 
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button size={size} onClick={() => void decide("allow")} disabled={busy} title={gated ? "Needs your confirmation on this machine" : undefined}>
+        <Button size={size} onClick={() => void decide("allow")} disabled={busy} title={pairing ? "Confirm with your owner PIN on your phone" : gated ? "Needs your confirmation on this machine" : undefined}>
           {gated ? <Fingerprint /> : isCompanionSend(a) ? <Sparkles /> : <Check />}
           {guarded ? "Allow once" : isCompanionSend(a) ? "Send to Companion" : "Allow"}
           {showKeys && <Kbd className="ml-0.5 hidden h-4 min-w-4 bg-primary-foreground/15 text-[0.625rem] text-primary-foreground/80 sm:inline-flex">A</Kbd>}
         </Button>
         {guarded && (
-          <Button size={size} variant="outline" onClick={() => setAlways(true)} disabled={busy} title="Stop asking for this exact command">
+          <Button size={size} variant="outline" onClick={() => setAlways(true)} disabled={busy} title={pairing ? "Stop asking for this pairing tool; head and leads only" : "Stop asking for this exact command"}>
             Allow always…
           </Button>
         )}

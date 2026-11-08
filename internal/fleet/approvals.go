@@ -64,7 +64,7 @@ func (f *Fleet) addPermissionLocked(r *agentRec, proc runner.Process, req runner
 	r.waiting++
 	r.a.State = model.StateWaiting
 	f.saveAgentLocked(r)
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
 }
 
 // AskOwner records a question from an agent; the answer arrives later as owner mail.
@@ -138,7 +138,7 @@ func (f *Fleet) saveOwnerQuestionLocked(c Caller, req AskRequest, card *model.Ow
 	if err := f.st.PutApproval(ap); err != nil {
 		return model.Approval{}, err
 	}
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalCreated, AgentID: r.a.ID, ProjectID: r.a.ProjectID, Data: ap})
 	return ap, nil
 }
 
@@ -309,7 +309,7 @@ func (f *Fleet) finishApprovalLocked(ap *model.Approval, state model.ApprovalSta
 	if err := f.st.PutApproval(*ap); err != nil {
 		f.log.Error("store approval", "err", err)
 	}
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalResolved, AgentID: ap.AgentID, Data: *ap})
+	f.Publish(model.BusEvent{Type: model.EvApprovalResolved, AgentID: ap.AgentID, Data: *ap})
 }
 
 // cancelPermissionLocked expires a permission request the harness withdrew.

@@ -282,7 +282,76 @@ func unzipBundle(zipPath, dir string) (string, error) {
 
 // swap puts s in place of t and returns the executable to start.
 func swap(t target, s staged) (string, error) {
+	if err := keepPrevious(t); err != nil {
+		return "", fmt.Errorf("cannot retain previous executable: %w", err)
+	}
 	return swapWithOps(t, s, time.Now(), os.Rename, os.RemoveAll)
+}
+
+// keepPrevious retains an executable beside the install, named by its full SHA-256.
+// Unlike .old-* staging files, these copies survive cleanup and later updates.
+// A bundle's executable is kept beside the bundle; the rollback checkpoint still
+// retains the complete bundle and database for automatic recovery.
+func keepPrevious(t target) error {
+	src, err := os.Open(t.executable(t.path))
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	info, err := src.Stat()
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(t.path), stagePrefix+"prev-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	h := sha256.New()
+	_, err = io.Copy(io.MultiWriter(tmp, h), src)
+	if err == nil {
+		err = tmp.Chmod(info.Mode().Perm())
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	name := t.path + ".prev-" + hex.EncodeToString(h.Sum(nil))
+	if t.goos == "windows" {
+		name += ".exe"
+	}
+	// Link publishes the complete copy without ever overwriting an older backup.
+	if err := os.Link(tmp.Name(), name); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		existing, err := os.Open(name)
+		if err != nil {
+			return err
+		}
+		defer existing.Close()
+		oldHash := sha256.New()
+		if _, err := io.Copy(oldHash, existing); err != nil {
+			return err
+		}
+		if !bytes.Equal(oldHash.Sum(nil), h.Sum(nil)) {
+			return errors.New("previous executable backup has unexpected content")
+		}
+	}
+	now := time.Now()
+	if err := os.Chtimes(name, now, now); err != nil {
+		return err
+	}
+	running, err := os.Executable()
+	if err != nil {
+		return err
+	} // Fail closed: do not prune without identifying ourselves.
+	return prunePrevious(t, name, running)
 }
 
 // swapWithOps keeps failure injection local to one swap; production uses OS operations.

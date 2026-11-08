@@ -452,8 +452,11 @@ func TestInstallsBundle(t *testing.T) {
 	}
 	cleanup(h.u.target)
 	entries, _ := os.ReadDir(apps)
-	if len(entries) != 1 || entries[0].Name() != "tmxg.app" {
+	if len(entries) != 2 || entries[0].Name() != "tmxg.app" || !strings.HasPrefix(entries[1].Name(), "tmxg.app.prev-") {
 		t.Fatalf("Applications holds %v", entries)
+	}
+	if b, err := os.ReadFile(filepath.Join(apps, entries[1].Name())); err != nil || string(b) != "binary fleet-v0.1.1" {
+		t.Fatalf("retained bundle executable: %q %v", b, err)
 	}
 }
 

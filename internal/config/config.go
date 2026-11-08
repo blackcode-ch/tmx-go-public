@@ -35,15 +35,16 @@ const EnvPort = "TMXG_PORT"
 
 // Config is config.json. Zero fields take their defaults on Load.
 type Config struct {
-	Supervisor    *string   `json:"supervisor,omitempty"`  // nil = architect; explicit empty = unique-head fallback
-	AutoShelve    *bool     `json:"auto_shelve,omitempty"` // nil = on; workers idle two hours or explicitly done
-	Warnings      []string  `json:"-"`                     // runtime notices; never persisted or used to enable services
-	API           APIConfig `json:"api,omitempty"`
-	Profile       string    `json:"profile,omitempty"`
-	Machine       string    `json:"machine"`
-	Workspace     string    `json:"workspace"`
-	Port          int       `json:"port"`
-	ClaudeCommand string    `json:"claude_command,omitempty"` // "" = claude on PATH
+	Tasks         *TaskConfig `json:"tasks,omitempty"`
+	Supervisor    *string     `json:"supervisor,omitempty"`  // nil = architect; explicit empty = unique-head fallback
+	AutoShelve    *bool       `json:"auto_shelve,omitempty"` // nil = on; workers idle two hours or explicitly done
+	Warnings      []string    `json:"-"`                     // runtime notices; never persisted or used to enable services
+	API           APIConfig   `json:"api,omitempty"`
+	Profile       string      `json:"profile,omitempty"`
+	Machine       string      `json:"machine"`
+	Workspace     string      `json:"workspace"`
+	Port          int         `json:"port"`
+	ClaudeCommand string      `json:"claude_command,omitempty"` // "" = claude on PATH
 	// SignInCommands are the executables the AI accounts' sign-in, sign-out and checks run for
 	// codex and agy ("codex", "antigravity"), when the one on PATH must not be used (Hostb's
 	// production start puts exit-78 stubs first so no Codex/agy agent starts); agents still
@@ -113,7 +114,8 @@ type UpdateConfig struct {
 	Channel string `json:"channel,omitempty"`
 	// CheckHours between checks; 0 = 6.
 	CheckHours int `json:"check_hours,omitempty"`
-	// Repo the releases come from (owner/name); "" = blackcode-ch/tmx-go.
+	// Repo the releases come from (owner/name); "" = DefaultUpdateRepo.
+	// PublicUpdateRepo serves fleet releases without requiring a GitHub token.
 	Repo string `json:"repo,omitempty"`
 	// FleetPublicKey is the base64 Ed25519 fleet key (the pre-fleet_keys form, read as one
 	// ed25519 entry with id "fleet-release-v1"). Empty and no FleetKeys disables updates.
@@ -135,8 +137,10 @@ type UpdateConfig struct {
 
 // Update channels.
 const (
-	ChannelStable = "stable"
-	ChannelLatest = "latest"
+	ChannelStable     = "stable"
+	ChannelLatest     = "latest"
+	DefaultUpdateRepo = "blackcode-ch/tmx-go"
+	PublicUpdateRepo  = "blackcode-ch/tmx-go-public"
 )
 
 // Resolved returns the update settings with the defaults filled in (u may be nil).
@@ -156,7 +160,7 @@ func (u *UpdateConfig) Resolved() UpdateConfig {
 		out.CheckHours = 6
 	}
 	if out.Repo == "" {
-		out.Repo = "blackcode-ch/tmx-go"
+		out.Repo = DefaultUpdateRepo
 	}
 	return out
 }

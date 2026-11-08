@@ -596,6 +596,10 @@ ALTER TABLE agents ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;`,
 		state TEXT NOT NULL CHECK(state IN ('active','done','unpinned'))
 	);
 	CREATE INDEX message_pins_agent ON message_pins(agent_id, state, pinned_at);`,
+	`CREATE TABLE task_receipts (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, state TEXT NOT NULL, data BLOB NOT NULL);
+CREATE INDEX task_receipts_active ON task_receipts(state,agent_id);`,
+	`CREATE TABLE agent_project_views (agent_id TEXT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE, data TEXT NOT NULL);`,
+	`CREATE TABLE approval_delivery (id TEXT PRIMARY KEY REFERENCES approvals(id) ON DELETE CASCADE, notified TEXT NOT NULL DEFAULT 'not_attempted', seen_at INTEGER NOT NULL DEFAULT 0);`,
 }
 
 func (s *Store) migrate() error {

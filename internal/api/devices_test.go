@@ -48,6 +48,7 @@ func newDeviceFixture(t *testing.T) *deviceFixture {
 	f.s.pin.Now = func() time.Time { return f.now }
 	mux := http.NewServeMux()
 	f.s.deviceRoutes(mux)
+	f.s.pushRoutes(mux)
 	f.s.gatePINRoutes(mux)
 	mux.HandleFunc("PUT /api/gate", f.s.ownerOnly(f.s.putGate))
 	mux.HandleFunc("PUT /api/gate/grace", f.s.ownerOnly(f.s.putGrace))

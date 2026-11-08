@@ -549,7 +549,7 @@ func TestMailBatchingAtIdle(t *testing.T) {
 	lp.Turn("planned", 0.25, 1)
 	eventually(t, "batched delivery", func() bool { return len(lp.Sent()) == 2 })
 	batch := lp.Sent()[1]
-	if batch != "[message from w1 (worker)] step 1 done\n\n[message from w1 (worker)] step 2 done" {
+	if batch != "[message from w1 (worker)]\n│ step 1 done\n\n[message from w1 (worker)]\n│ step 2 done" {
 		t.Fatalf("batch: %q", batch)
 	}
 	a := mustAgent(t, f, "alpha-lead")

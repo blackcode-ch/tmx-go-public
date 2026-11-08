@@ -81,10 +81,20 @@ func LoadKey(home, id string) (ed25519.PrivateKey, error) {
 	if err := validID(id); err != nil {
 		return nil, err
 	}
-	b, err := os.ReadFile(KeyFile(home, id))
+	key, err := LoadKeyFile(KeyFile(home, id))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("no release key %q on this machine (tmx release keygen --id %s)", id, id)
+	}
+	return key, err
+}
+
+// LoadKeyFile reads an existing base64 Ed25519 seed, never creating a key.
+// Errors deliberately do not include the file's contents.
+func LoadKeyFile(path string) (ed25519.PrivateKey, error) {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("no release key %q on this machine (tmx release keygen --id %s)", id, id)
+			return nil, fmt.Errorf("release key file is missing; provision the existing fleet key on the signing machine: %w", fs.ErrNotExist)
 		}
 		return nil, errors.New("release key unreadable")
 	}

@@ -152,7 +152,7 @@ func (f *Fleet) closeProjectOwnerCardLocked(c Caller, project, id, reason string
 	if err := f.st.PutApproval(a); err != nil {
 		return model.Approval{}, err
 	}
-	f.bus.Publish(model.BusEvent{Type: model.EvApprovalResolved, AgentID: a.AgentID, ProjectID: p.ID, Data: a})
+	f.Publish(model.BusEvent{Type: model.EvApprovalResolved, AgentID: a.AgentID, ProjectID: p.ID, Data: a})
 	return a, nil
 }
 

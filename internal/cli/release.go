@@ -15,9 +15,31 @@ var releaseGitHub release.GitHub = release.Gh{}
 // cmdRelease is the fleet release signer (DESIGN.md "Signing a release"); it runs on the release
 // machine only and needs no daemon.
 func cmdRelease(e *env, args []string) error {
-	const use = "usage: tmx release keygen [--id ID] | tmx release pubkey [--id ID] | tmx release sign TAG [--repo OWNER/NAME] [--id ID] [--reviewer LOGIN] [--dry-run] | tmx release sign-extra whisper-engine-vX.Y.Z [--id ID] [--dry-run] | tmx release keys --serial N --set NEW-SET.json [--id ID] [--repo OWNER/NAME] [--dir DIR]"
+	const use = "usage: tmx release keygen [--id ID] | tmx release pubkey [--id ID] | tmx release sign TAG [--repo OWNER/NAME] [--id ID] [--reviewer LOGIN] [--dry-run] | tmx release sign-file SHA256SUMS --source CHECKOUT --commit SHA --key PATH --out SIG --tag TAG [--repo OWNER/NAME] [--id ID] | tmx release sign-extra whisper-engine-vX.Y.Z [--id ID] [--dry-run] | tmx release keys --serial N --set NEW-SET.json [--id ID] [--repo OWNER/NAME] [--dir DIR]"
 	if len(args) == 0 {
 		return usageErr("%s", use)
+	}
+	if args[0] == "sign-file" {
+		fs := newFlags("release sign-file")
+		source := fs.String("source", "", "local public source repository for mandatory rebuild")
+		commit := fs.String("commit", "", "independently reviewed full public commit SHA")
+		key := fs.String("key", "", "existing fleet release key file (offline only)")
+		out := fs.String("out", "", "new detached signature file")
+		repo := fs.String("repo", config.PublicUpdateRepo, "signature repository binding")
+		tag := fs.String("tag", "", "signature release tag binding")
+		id := fs.String("id", config.LegacyFleetKeyID, "pinned key id")
+		rest, err := parse(fs, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(rest) != 1 || *key == "" || *out == "" || *tag == "" || *source == "" || *commit == "" {
+			return usageErr("usage: tmx release sign-file SHA256SUMS --source CHECKOUT --commit SHA --key PATH --out SHA256SUMS.sig --tag fleet-vX.Y.Z [--repo OWNER/NAME] [--id ID]")
+		}
+		if err := release.SignFile(rest[0], *key, *out, *repo, *tag, *id, *source, *commit); err != nil {
+			return err
+		}
+		fmt.Fprintln(e.out, "Detached release signature written. No files uploaded.")
+		return nil
 	}
 	home, err := release.Home()
 	if err != nil {
