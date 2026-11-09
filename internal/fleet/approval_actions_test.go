@@ -82,8 +82,19 @@ func TestApprovalActionLifecycle(t *testing.T) {
 			if state != want {
 				t.Fatalf("state %s, want %s", state, want)
 			}
+			wantLogs := []string{"approval created", "approval notified", "approval resolved", "notified=fake_phone:", "state=" + string(want)}
+			// Notification receipts and resolution callbacks can precede their audit logs.
+			eventually(t, "approval lifecycle audit logs", func() bool {
+				text := logs.text()
+				for _, part := range wantLogs {
+					if !strings.Contains(text, part) {
+						return false
+					}
+				}
+				return true
+			})
 			text := logs.text()
-			for _, part := range []string{"approval created", "approval notified", "approval resolved", "notified=fake_phone:", "state=" + string(want)} {
+			for _, part := range wantLogs {
 				if !strings.Contains(text, part) {
 					t.Fatalf("missing %q in %s", part, text)
 				}

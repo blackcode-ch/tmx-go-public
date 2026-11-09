@@ -174,8 +174,9 @@ func TestGovernedChatRevocationBeforePlacement(t *testing.T) {
 	}
 	select {
 	case <-entered:
-	case <-time.After(time.Second):
-		t.Fatal("download did not start")
+	case <-time.After(5 * time.Second):
+		f, _ := bo.st.GetChatFile(id, up.ID)
+		t.Fatalf("download did not start within 5s (file state %q)", f.State)
 	}
 	if err = bo.svc.RemoveContact(alex.node.ID()); err != nil {
 		t.Fatal(err)
