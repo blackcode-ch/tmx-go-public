@@ -24,17 +24,33 @@ For phone access through a configured trusted HTTPS address, see
 
 ## Build from source
 
+This is an automatically scrubbed public snapshot. Work from this repository;
+private source files and private repository access are not needed or offered.
+Outside contributors fork this repository, branch from `main`, and open a pull
+request against its public `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+tests, public CI, Windows commands, and safe use of throwaway state.
+
+Use Go 1.26.6 (`go.mod` declares Go 1.26.0 and selects the 1.26.6 toolchain),
+Node.js 24, and pnpm 12.14.0. The Node/pnpm versions are pinned in
+[the checked-in setup action](.github/actions/setup/action.yml).
+
+From the repository root, build the web UI before the headless binary so the
+binary embeds it:
+
 ```sh
-make tools     # Wails CLI for desktop builds
-make           # desktop app where supported; bin/tmxg is the CLI
-bin/tmxg up    # start the local daemon
-bin/tmxg open  # print the private local UI URL
-make help      # available build and test targets
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui build
+CGO_ENABLED=0 go build -trimpath -o bin/tmxg .
 ```
 
-Source builds need the Go version in `go.mod`, Node and pnpm. Linux desktop
-builds also need WebKitGTK. Public headless releases embed the web UI and do
-not require a desktop toolkit.
+This headless build needs no Wails CLI or desktop toolkit. To build the native
+desktop window instead, install Wails v2.17.0 (`make tools`) and the
+[Wails v2 platform prerequisites](https://v2.wails.io/docs/gettingstarted/installation/).
+Windows needs WebView2; macOS needs Xcode Command Line Tools; Linux needs the
+appropriate compiler and GTK/WebKit development libraries. The Makefile uses
+Bash and standard Unix tools (on Windows, Git Bash and GNU Make). `make` defaults
+to headless on Linux and desktop on Windows/macOS; `make app` explicitly builds
+the desktop app. `make help` lists the targets.
 
 `tmxg skill` prints the [agent skill](internal/skill/SKILL.md), including the
 trial and production feature defaults. Automatic updates are forced off on
@@ -46,7 +62,10 @@ Copyright 2026 blackcode GmbH and contributors. Licensed under the
 [Apache License 2.0](LICENSE).
 
 ---
-*This is a scrubbed CI snapshot of a private repository, made automatically. Personal and machine
-names are replaced, so a few identifiers differ from the private build (the MCP tool `announce_set`
-has another name there), and internal docs are left out. Headless release binaries are built from
-reviewed main snapshots; the updater accepts them only with a valid fleet release signature.*
+*Personal and machine names are replaced in this snapshot, and private documentation is
+omitted. Public CI runs on GitHub-hosted runners. The manually dispatched
+[public release workflow](.github/workflows/release.yml) builds unsigned headless
+binaries and checksums as an expiring Actions artifact; it does not publish or
+sign a release. Reviewed releases require a separate signing/publishing step.
+Contributors do not need signing secrets. The updater accepts a release only
+with a valid configured fleet release signature.*
