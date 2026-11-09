@@ -11,15 +11,38 @@ import (
 // request/response JSON routes only: never on streams, upgrades or ranged files.
 func gzipped(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !acceptsGzip(r) || r.Header.Get("Upgrade") != "" {
+		if r.Header.Get("Upgrade") != "" {
 			h(w, r)
 			return
 		}
-		w.Header().Add("Vary", "Accept-Encoding")
+		// The response for a URL varies with Accept-Encoding whether or not
+		// this particular request is compressed: a gzip client gets a
+		// compressed body, everyone else gets plain JSON. Advertise that
+		// variation on every response so a shared cache never serves one
+		// client's variant to another.
+		addAcceptEncodingVary(w.Header())
+		if !acceptsGzip(r) {
+			h(w, r)
+			return
+		}
 		gw := &gzipWriter{ResponseWriter: w}
 		defer gw.close()
 		h(gw, r)
 	}
+}
+
+// addAcceptEncodingVary adds Accept-Encoding to the Vary header unless it is
+// already listed (in any letter case, on any of the Vary lines) or Vary is
+// the wildcard "*". Existing tokens are preserved unchanged.
+func addAcceptEncodingVary(header http.Header) {
+	for _, line := range header.Values("Vary") {
+		for _, token := range strings.Split(line, ",") {
+			if token = strings.TrimSpace(token); token == "*" || strings.EqualFold(token, "Accept-Encoding") {
+				return
+			}
+		}
+	}
+	header.Add("Vary", "Accept-Encoding")
 }
 
 // acceptsGzip reports whether Accept-Encoding lists gzip without q=0.
