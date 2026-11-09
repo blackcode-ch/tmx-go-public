@@ -13,7 +13,16 @@ workers under each lead. The same binary is the daemon, the CLI, the MCP server 
 It also has peer-to-peer chats with other people's tmx (QR invites, DMs, groups), a link to
 Companion, and a Board: the head's conversation as strings of cards, one string per topic.
 
-## Build and install
+## Install
+
+Use the [Windows, macOS and Linux installation guide](docs/INSTALL.md) for
+signed public headless releases. It includes checksum and signature verification
+before running the downloaded binary.
+
+For phone access through a configured trusted HTTPS address, see
+[phone pairing and owner approvals](docs/PHONE-PAIRING.md).
+
+## Build from source
 
 This repository is a scrubbed public snapshot of Tiamatrix (`tmx`). It can be built and tested
 entirely with open-source tools:
@@ -34,6 +43,14 @@ make headless
 make tools
 make app
 ```
+
+Source builds need the Go version in `go.mod`, Node and pnpm. Linux desktop
+builds also need WebKitGTK. Public headless releases embed the web UI and do
+not require a desktop toolkit.
+
+`tmxg skill` prints the [agent skill](internal/skill/SKILL.md), including the
+trial and production feature defaults. Automatic updates are forced off on
+config load; signed manual updates require owner-configured release trust.
 
 ## Running tests
 
@@ -59,7 +76,7 @@ export TMXG_HOME="$(mktemp -d)"
 export TMXG_PORT=0
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full contribution guidelines, public CI details, and safe local testing procedures.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full contribution guidelines, public CI details, release artifact distinctions, and safe local testing procedures.
 
 ## License
 
