@@ -11,14 +11,14 @@ import (
 // request/response JSON routes only: never on streams, upgrades or ranged files.
 func gzipped(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !acceptsGzip(r) || r.Header.Get("Upgrade") != "" {
+		if r.Header.Get("Upgrade") != "" {
 			h(w, r)
 			return
 		}
-		w.Header().Add("Vary", "Accept-Encoding")
-		gw := &gzipWriter{ResponseWriter: w}
+		gw := &gzipWriter{ResponseWriter: w, compress: acceptsGzip(r)}
 		defer gw.close()
 		h(gw, r)
+		gw.ensureVary()
 	}
 }
 
@@ -37,8 +37,9 @@ func acceptsGzip(r *http.Request) bool {
 // gzipWriter compresses the body unless the response has none (204, 304) or is already encoded.
 type gzipWriter struct {
 	http.ResponseWriter
-	zw     *gzip.Writer
-	headed bool
+	zw       *gzip.Writer
+	compress bool
+	headed   bool
 }
 
 func (g *gzipWriter) WriteHeader(code int) {
@@ -46,7 +47,8 @@ func (g *gzipWriter) WriteHeader(code int) {
 		return
 	}
 	g.headed = true
-	if code != http.StatusNoContent && code != http.StatusNotModified && g.Header().Get("Content-Encoding") == "" {
+	g.ensureVary()
+	if g.compress && code != http.StatusNoContent && code != http.StatusNotModified && g.Header().Get("Content-Encoding") == "" {
 		g.Header().Set("Content-Encoding", "gzip")
 		g.Header().Del("Content-Length")
 		g.zw = gzip.NewWriter(g.ResponseWriter)
@@ -62,6 +64,17 @@ func (g *gzipWriter) Write(b []byte) (int, error) {
 		return g.zw.Write(b)
 	}
 	return g.ResponseWriter.Write(b)
+}
+
+func (g *gzipWriter) ensureVary() {
+	for _, value := range g.Header().Values("Vary") {
+		for _, token := range strings.Split(value, ",") {
+			if strings.TrimSpace(token) == "*" || strings.EqualFold(strings.TrimSpace(token), "Accept-Encoding") {
+				return
+			}
+		}
+	}
+	g.Header().Add("Vary", "Accept-Encoding")
 }
 
 func (g *gzipWriter) close() {
