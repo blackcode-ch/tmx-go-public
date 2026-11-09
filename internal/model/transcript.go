@@ -29,6 +29,7 @@ type TranscriptSegment struct {
 // Transcript is GET /api/transcripts/{id}. Source names what was transcribed, e.g.
 // "recording:<id>/<segment>". Segments is never null in JSON.
 type Transcript struct {
+	Report    string              `json:"report,omitempty"` // fleet report, filled from the durable voice checkpoint
 	ID        string              `json:"id"`
 	Source    string              `json:"source"`
 	State     TranscriptState     `json:"state"`

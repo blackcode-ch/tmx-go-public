@@ -5,6 +5,31 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Phone Settings: keep prose and controls on usable rows, even with large text
+   and a desktop sidebar width saved on this device. */
+@media (max-width: 767px) {
+  .settings-page { font-size: 18px; overflow-wrap: anywhere; }
+  .settings-page :where(div, section, form, p, label, span, button, input, select, textarea, a, h1, h2, h3, ul, ol, li, code, pre) {
+    min-width: 0;
+    max-width: 100%;
+    font-size: max(18px, 1em);
+  }
+  .settings-page :where(div.flex, form.flex):not(.flex-col) { flex-wrap: wrap; }
+  .settings-page .sm\:w-56 { width: 100%; }
+  .settings-page .sm\:flex-row:has(> .sm\:w-56) { flex-direction: column; }
+  .settings-page .flex-1 { flex-basis: 120px; }
+  .settings-page :where(button, input, select, textarea, a) {
+    min-height: 44px;
+    min-width: 44px;
+    height: auto;
+    white-space: normal;
+  }
+  .settings-page [role="radiogroup"] { flex-wrap: wrap; }
+  .settings-page [role="radiogroup"] button { flex: 1 1 auto; }
+  .settings-page [data-slot="switch"] { min-width: 64px; }
+  .settings-page :where(p, label) { overflow-wrap: anywhere; }
+}
+
 /*
   tmx design tokens. Neutral palette, one restrained accent (--brand, a quiet blue), hairline
   borders. State colours are used only for small indicators, never for large surfaces.

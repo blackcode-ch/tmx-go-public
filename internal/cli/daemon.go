@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/blackcode-ch/tmx-go/internal/desktop"
+	"github.com/blackcode-ch/tmx-go/internal/transfers"
 	"github.com/blackcode-ch/tmx-go/internal/update"
 	"github.com/blackcode-ch/tmx-go/internal/uploads"
 	"io"
@@ -168,7 +169,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	}
 	machine := e.cfg.Machine
 	chats, err := chat.New(chat.Options{Node: chatNode, Store: st, Agents: f, Logger: log, FilesDir: paths.ChatFilesDir(),
-		Jobs: jobWorkers,
+		Jobs: jobWorkers, FileMaxBytes: e.cfg.P2P.FileLimit(),
 		Name: func() string { // the name people see: the node's display name, else the machine
 			if chatNode != nil {
 				if n := chatNode.DisplayName(); n != "" {
@@ -267,7 +268,13 @@ func cmdDaemon(e *env, args []string) (err error) {
 	// recworker: on Stop the recorder launches its own short-lived report worker and tracks it (G5, "tool > agent")
 	recw := recworker.New(recworker.Options{Fleet: f, Summaries: sum, Recordings: rec, Exe: f.Executable(),
 		Dir: filepath.Join(paths.Home, "rec-workers"), Logger: log})
-	rec.SetFinished(recw.Finished)
+	rec.SetFinished(func(r model.Recording) {
+		if voice.ViaPeer() != "" {
+			sum.Finished(r)
+			return
+		}
+		recw.Finished(r)
+	})
 	wa := newWhatsApp(paths, st, f, log) // wa.go: the owner's WhatsApp, linked as a companion device
 	f.SetWhatsApp(wa)
 	ups := uploads.New(paths)
@@ -286,12 +293,32 @@ func cmdDaemon(e *env, args []string) (err error) {
 	var fleetPeers *peers.Client
 	if e.cfg.Production() && len(e.cfg.Peers) > 0 {
 		fleetPeers = peers.New(e.cfg, paths, log)
+		voice.SetPeer(fleetPeers)
 		f.SetPeerSender(fleetPeers, fleetPeers.Machine())
 		sum.SetPeer(fleetPeers) // summaries.via_peer: a peer's local model writes this machine's summaries
 		go fleetPeers.Run(ctx)
 	}
+	var copies *transfers.Service
+	if fleetPeers != nil {
+		protected := []string{}
+		if pythonHome, err := peers.PythonHome(); err == nil {
+			protected = append(protected, pythonHome)
+		}
+		hold := e.cfg.Transfers != nil && e.cfg.Transfers.HoldNeedsHuman
+		ownerNames, err := config.InspectionOwnerNames(paths, e.cfg)
+		if err != nil {
+			log.Warn("inspection owner names: using configured names and generic defaults", "err", err)
+		}
+		copies, err = transfers.New(transfers.Options{OwnerNames: ownerNames, Home: paths.Home, Install: filepath.Dir(currentExe), Protected: protected,
+			SecretFolders: e.cfg.SecretFolders, TrustedBackupRoots: e.cfg.TrustedBackupRoots, HoldNeedsHuman: hold, Peers: fleetPeers, Logger: log})
+		if err != nil {
+			return err
+		}
+		defer copies.Close()
+		copies.Resume()
+	}
 	srv := api.New(api.Options{SystemWarnings: e.cfg.Warnings, Fleet: f, OwnerToken: token, Port: e.cfg.Port, TrustedHosts: e.cfg.API.TrustedHosts, Shutdown: stop, Restart: func() { restartExe = currentExe; stop() }, Gate: g, Logger: log,
-		Jobs:      jobWorkers,
+		Jobs: jobWorkers, Transfers: copies,
 		Resources: rm, Slots: sl, Chats: chats, P2P: node, P2PLog: netLog, Companion: comp, Uploads: ups, Updater: upd, Recorder: rec,
 		Voice: voice, Summaries: sum, RecWorker: recw, WhatsApp: wa, Accounts: accts, Peers: fleetPeers,
 		SaveP2PName: func(name string) error {
@@ -355,6 +382,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 	select {
 	case <-ctx.Done():
 	case serveErr = <-served:
+		served = nil // the result is already consumed, even when Serve returns nil
 		stop()
 	}
 	log.Info("tmx daemon stopping")
@@ -373,7 +401,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 		log.Warn("fleet close", "err", err)
 	}
 	rm.Close()
-	if serveErr == nil {
+	if served != nil {
 		serveErr = <-served
 	}
 	if serveErr != nil && !errors.Is(serveErr, context.Canceled) {

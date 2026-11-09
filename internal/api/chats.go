@@ -16,6 +16,9 @@ import (
 // Everything is owner-only except listing/reading/writing the chats an agent takes part in.
 // While peer-to-peer is off every route answers 503.
 func (s *Server) chatRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/p2p/files/send", s.p2pOn(s.p2pSendFile))
+	mux.HandleFunc("POST /api/p2p/files/list", s.p2pOn(s.p2pFiles))
+	mux.HandleFunc("POST /api/p2p/files/fetch", s.p2pOn(s.p2pFetchFile))
 	o := func(h http.HandlerFunc) http.HandlerFunc { return s.p2pOn(s.ownerOnly(h)) }
 	mux.HandleFunc("POST /api/invites", o(s.createInvite))
 	mux.HandleFunc("GET /api/invites", o(s.listInvites))

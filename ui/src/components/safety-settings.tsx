@@ -39,12 +39,12 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-start gap-4 px-4 py-3">
-      <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
+    <div className="grid grid-cols-1 items-start gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:gap-4">
+      <label htmlFor={id} className="min-w-0 cursor-pointer">
         <div className="text-sm">{label}</div>
         {hint && <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>}
       </label>
-      <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} className="mt-0.5" />
+      <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} className="order-first mt-0.5 md:order-none" />
     </div>
   );
 }
@@ -165,8 +165,8 @@ function RuleRow({ r, onSaved }: { r: GuardRule; onSaved: (g: GuardSettings, rul
   const cur = r.state ?? r.outcome;
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="flex w-full items-start gap-3 px-4 py-2.5">
-        <CollapsibleTrigger className="flex min-w-0 flex-1 items-start gap-3 text-left outline-none hover:opacity-90 focus-visible:underline">
+      <div className="grid w-full grid-cols-1 items-start gap-3 px-4 py-2.5 md:flex">
+        <CollapsibleTrigger className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 text-left outline-none hover:opacity-90 focus-visible:underline md:flex md:w-auto md:flex-1">
           {cur === "block" ? (
             <Ban className="mt-0.5 size-3.5 shrink-0 text-state-error" />
           ) : cur === "hold" ? (
@@ -174,7 +174,7 @@ function RuleRow({ r, onSaved }: { r: GuardRule; onSaved: (g: GuardSettings, rul
           ) : (
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-state-ok" />
           )}
-          <span className="min-w-0 flex-1">
+          <span className="min-w-0 md:flex-1">
             <span className="block text-[0.8125rem] font-medium">{r.name}</span>
             <span className="block text-xs text-muted-foreground">{r.summary}</span>
             {r.always_on && <span className="mt-0.5 block text-2xs text-foreground/75">Always on: {r.always_on}</span>}
@@ -222,7 +222,7 @@ function AlwaysCard({ items }: { items: GuardAlwaysAllow[] }) {
   return (
     <Card className="divide-y">
       {items.map((al) => (
-        <div key={al.id} className="flex items-start gap-3 px-4 py-3">
+        <div key={al.id} className="grid grid-cols-1 items-start justify-items-start gap-3 px-4 py-3 md:flex">
           <div className="min-w-0 flex-1">
             <pre className="font-mono text-[0.75rem] whitespace-pre-wrap text-foreground/90 [overflow-wrap:anywhere]">{al.command}</pre>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -253,7 +253,7 @@ function RulesCard({ rules, log }: { rules: GuardRule[]; log?: GuardSettings["ru
     <div className="space-y-3">
       {groups.map((gr) => (
         <Card key={gr.title} className="overflow-hidden">
-          <div className="flex items-baseline gap-2 border-b px-4 py-2.5">
+          <div className="grid grid-cols-1 gap-2 border-b px-4 py-2.5 md:flex md:items-baseline">
             <h3 className="text-[0.8125rem] font-semibold">{gr.title}</h3>
             <p className="text-xs text-muted-foreground">{gr.hint}</p>
           </div>
@@ -270,12 +270,12 @@ function RulesCard({ rules, log }: { rules: GuardRule[]; log?: GuardSettings["ru
           <div className="border-b px-4 py-2.5 text-[0.8125rem] font-semibold">Changes</div>
           <ul className="max-h-56 divide-y overflow-auto text-xs">
             {[...log].reverse().slice(0, 50).map((ch, i) => (
-              <li key={i} className="flex items-baseline gap-2 px-4 py-1.5">
-                <span className="min-w-0 flex-1 truncate">{rules.find((r) => r.id === ch.rule)?.name ?? ch.rule}</span>
+              <li key={i} className="grid min-w-0 grid-cols-1 gap-2 px-4 py-1.5 md:flex md:items-baseline">
+                <span className="min-w-0 w-full whitespace-normal break-words md:w-auto md:flex-1 md:truncate">{rules.find((r) => r.id === ch.rule)?.name ?? ch.rule}</span>
                 <span className="text-muted-foreground">
                   {STATE_LABEL[ch.old] ?? ch.old} → <span className="text-foreground">{STATE_LABEL[ch.new] ?? ch.new}</span>
                 </span>
-                <span className="tabular w-36 shrink-0 text-right text-2xs text-subtle-foreground">
+                <span className="tabular min-w-0 w-full text-2xs text-subtle-foreground md:w-36 md:shrink-0 md:text-right">
                   {ch.by === "tmx" ? "tmx defaults · " : ""}
                   {new Date(ch.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
                 </span>
@@ -462,7 +462,7 @@ function GateCard() {
 
   return (
     <Card className="divide-y">
-      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start">
+      <div className="grid grid-cols-1 items-start justify-items-start gap-3 px-4 py-3 md:flex">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-sm font-medium">
             <Fingerprint className={cn("size-4", gate.enabled ? "text-brand" : "text-subtle-foreground")} />
@@ -497,7 +497,7 @@ function GateCard() {
       {!remote && gate.pin_set !== undefined && <HelloRow gate={gate} />}
       <div className="px-4 py-3">
         <div className="mb-1.5 text-xs font-medium text-muted-foreground">{gate.enabled ? "Asks before" : "Will ask before"}</div>
-        <ul className="grid gap-1 text-[0.8125rem] sm:grid-cols-2">
+        <ul className="grid gap-1 text-[0.8125rem] md:grid-cols-2">
           {gate.gated.map((x) => (
             <li key={x} className="flex items-start gap-1.5">
               <span className="mt-[0.4375rem] size-1 shrink-0 rounded-full bg-subtle-foreground" />

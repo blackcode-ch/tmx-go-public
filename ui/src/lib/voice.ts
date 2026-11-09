@@ -2,6 +2,8 @@
 // model on demand and transcribes on this machine. The UI shows the state ("voice.status"
 // events), lets the owner set it up, and sends dictation (lib/dictation.ts).
 import { create } from "zustand";
+import { toast } from "sonner";
+import { ApiError } from "./transport";
 import { onBusEvent, useStore } from "./store";
 import type { BusEvent, Transcript, TranscriptSegment } from "./types";
 
@@ -39,6 +41,7 @@ export interface VoiceModel {
 }
 
 export interface VoiceSettings {
+	via_peer?: string;
   model: string;
   /** "auto" or a language code */
   language: string;
@@ -75,6 +78,7 @@ export interface VoiceStatus {
 }
 
 export interface VoiceSettingsPatch {
+	via_peer?: string;
   model?: string;
   language?: string;
   threads?: number;
@@ -84,12 +88,13 @@ export interface VoiceSettingsPatch {
 
 /** POST /api/transcribe: dictation's answer (not stored). */
 export interface TranscribeResult {
+	report?: string;
   text: string;
   language: string;
   segments: TranscriptSegment[];
 }
 
-export const useVoice = create<{ status: VoiceStatus | null; loaded: boolean }>(() => ({ status: null, loaded: false }));
+export const useVoice = create<{ status: VoiceStatus | null; loaded: boolean; pending: boolean }>(() => ({ status: null, loaded: false, pending: false }));
 
 function t() {
   const tr = useStore.getState().transport;
@@ -111,8 +116,24 @@ export const voiceApi = {
   getModel: (name: string) => t().request<VoiceStatus>("POST", `/api/voice/models/${enc(name)}`).then(keep),
   removeModel: (name: string) => t().request<VoiceStatus>("DELETE", `/api/voice/models/${enc(name)}`).then(keep),
   /** data: a base64 16 kHz mono PCM16 WAV of at most 2 minutes */
-  transcribe: (data: string, language?: string) =>
-    t().request<TranscribeResult>("POST", "/api/transcribe", { data, ...(language ? { language } : {}) }),
+  transcribe: async (data: string, language?: string): Promise<TranscribeResult> => {
+    const answer = await t().request<TranscribeResult | { state: "pending"; transcript_id: string }>("POST", "/api/transcribe", { data, ...(language ? { language } : {}) });
+    if (!("transcript_id" in answer)) return answer;
+    useVoice.setState({ pending: true });
+    toast.info("Transcription pending", { description: "The recording is saved on this machine and will retry automatically." });
+    try {
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const tr = await voiceApi.transcript(answer.transcript_id).catch((e: unknown) => {
+          if (e instanceof ApiError && e.status >= 400 && e.status < 500) throw e;
+          return null; // the recording and retry live on the daemon; reconnect without re-uploading
+        });
+        if (!tr) continue;
+        if (tr.state === "done") return tr;
+        if (tr.state === "failed") throw new Error(tr.error || "Transcription failed; recording retained locally.");
+      }
+    } finally { useVoice.setState({ pending: false }); }
+  },
   transcripts: (q?: { q?: string; source_prefix?: string; limit?: number }) => {
     const p = new URLSearchParams();
     if (q?.q) p.set("q", q.q);

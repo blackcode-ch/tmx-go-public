@@ -58,6 +58,8 @@ type Options struct {
 	Logger *slog.Logger
 	// FilesDir stores chat files (config.Paths.ChatFilesDir); "" = files are refused.
 	FilesDir string
+	// FileMaxBytes may lower the 25 MiB protocol ceiling; zero uses that ceiling.
+	FileMaxBytes int64
 
 	RetryMin    time.Duration // first retry after a failed send (default 2 s), doubling ...
 	RetryMax    time.Duration // ... up to this (default 5 min)

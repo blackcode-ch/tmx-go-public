@@ -1,0 +1,115 @@
+{
+  "incoming": {
+    "body": {
+      "backup": false,
+      "dest": "$DEST",
+      "force": false,
+      "from": "source",
+      "kind": "file",
+      "name": "hello.txt",
+      "out_id": "1111111111111111",
+      "sha256": "67b4078227b360a2b74efb694ac4158371fd4b792b21fb72de05a5f2e9a2461b",
+      "size": 18,
+      "ticket": "abcdefghijklmnopqrstuvwxABCDEFGH",
+      "trusted_backup": false
+    },
+    "method": "POST",
+    "path": "/api/transfers/incoming",
+    "response": {
+      "created": 1800000000.0,
+      "dest": "$DEST",
+      "dir": "in",
+      "force": false,
+      "from": "source",
+      "host": "target",
+      "id": "2222222222222222",
+      "kind": "file",
+      "name": "hello.txt",
+      "out_id": "1111111111111111",
+      "received": 0,
+      "sha256": "67b4078227b360a2b74efb694ac4158371fd4b792b21fb72de05a5f2e9a2461b",
+      "size": 18,
+      "state": "queued",
+      "ticket": "abcdefghijklmnopqrstuvwxABCDEFGH",
+      "updated": 1800000000.0,
+      "via": null
+    },
+    "status": 202
+  },
+  "list": {
+    "host": "target",
+    "transfers": [
+      {
+        "created": 1800000000.0,
+        "dest": "$DEST",
+        "dir": "in",
+        "force": false,
+        "from": "source",
+        "host": "target",
+        "id": "2222222222222222",
+        "kind": "file",
+        "name": "hello.txt",
+        "out_id": "1111111111111111",
+        "received": 0,
+        "sha256": "67b4078227b360a2b74efb694ac4158371fd4b792b21fb72de05a5f2e9a2461b",
+        "size": 18,
+        "state": "queued",
+        "ticket": "abcdefghijklmnopqrstuvwxABCDEFGH",
+        "updated": 1800000000.0,
+        "via": null
+      }
+    ]
+  },
+  "offered": {
+    "backup": false,
+    "by": "source",
+    "created": 1800000000.0,
+    "dest": "$DEST",
+    "dir": "out",
+    "force": false,
+    "host": "source",
+    "id": "1111111111111111",
+    "kind": "file",
+    "name": "hello.txt",
+    "remote_id": "2222222222222222",
+    "sha256": "67b4078227b360a2b74efb694ac4158371fd4b792b21fb72de05a5f2e9a2461b",
+    "size": 18,
+    "skipped": [],
+    "src": "$SRC",
+    "state": "offered",
+    "ticket": "abcdefghijklmnopqrstuvwxABCDEFGH",
+    "to": "target",
+    "trusted_backup": false,
+    "updated": 1800000000.0
+  },
+  "payload": "hello from Python\n",
+  "reference_commit": "39a6ae9267783f76f7feaecdf9ae45aee2ff3590",
+  "start": {
+    "method": "POST",
+    "path": "/api/transfers",
+    "request": {
+      "dest": "$DEST",
+      "force": false,
+      "src": "$SRC",
+      "to": "target"
+    },
+    "response": {
+      "backup": false,
+      "by": "source",
+      "created": 1800000000.0,
+      "dest": "$DEST",
+      "dir": "out",
+      "force": false,
+      "host": "source",
+      "id": "1111111111111111",
+      "kind": "file",
+      "name": "hello.txt",
+      "src": "$SRC",
+      "state": "offering",
+      "to": "target",
+      "trusted_backup": false,
+      "updated": 1800000000.0
+    },
+    "status": 202
+  }
+}

@@ -224,6 +224,7 @@ interface WailsApp {
   TerminalSend(handle: string, frame: string): Promise<void>;
   TerminalClose(handle: string): Promise<void>;
   OpenURL(url: string): Promise<void>;
+  SaveChatFile?(chatId: string, fileId: string): Promise<void>;
   /** Windows: lets the daemon bring the Windows Hello dialog to the front (older builds lack it). */
   AllowForeground?(): Promise<void>;
 }

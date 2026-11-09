@@ -52,6 +52,7 @@ function listing(items: string[]) {
 }
 
 function headline(s: VoiceStatus): { icon: React.ReactNode; text: string; tone?: "warn" | "ok" } {
+  if (s.settings.via_peer) return { icon: <CheckCircle2 className="size-4" />, text: `Audio and reports use ${s.settings.via_peer}. Recordings are kept locally while transcription is pending.`, tone: "ok" };
   if (!s.engine.available) return { icon: <TriangleAlert className="size-4" />, text: s.reason ?? "Not available on this machine.", tone: "warn" };
   if (s.busy) return { icon: <Loader2 className="size-4 animate-spin" />, text: "Downloading and checking…" };
   if (s.ready) return { icon: <CheckCircle2 className="size-4" />, text: "Voice is ready. Dictation and transcripts are made on this machine.", tone: "ok" };
@@ -120,6 +121,8 @@ export function VoiceSection() {
   const s = useVoice((x) => x.status);
   const status = useStore((x) => x.status);
   const [busy, setBusy] = useState<string | null>(null);
+  const [peer, setPeer] = useState("");
+  useEffect(() => { setPeer(s?.settings.via_peer ?? ""); }, [s?.settings.via_peer]);
 
   useEffect(() => {
     if (status === "ready") void loadVoice();
@@ -149,6 +152,13 @@ export function VoiceSection() {
   return (
     <div id="voice" className="scroll-mt-6">
       <Section title="Voice">
+		<SavedFleetTranscripts />
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <label htmlFor="voice-peer">Transcription machine</label>
+          <input id="voice-peer" className="rounded border bg-background px-2 py-1" value={peer} onChange={(e) => setPeer(e.target.value)} placeholder="This machine (leave empty)" />
+          <Button size="sm" disabled={!!busy} onClick={() => run("peer", () => voiceApi.configure({ via_peer: peer }))}>Save</Button>
+          <p className="w-full text-xs text-muted-foreground">Enter a paired fleet machine name. Audio stays within your fleet; there is no cloud fallback.</p>
+        </div>
         <div className="divide-y rounded-xl border bg-card px-4">
           <div className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-center">
             <div className={cn("flex min-w-0 flex-1 items-start gap-2.5 text-sm", h.tone === "warn" && "text-state-waiting", h.tone === "ok" && "text-foreground")}>
@@ -156,7 +166,7 @@ export function VoiceSection() {
               <div className="min-w-0">
                 <p className="[overflow-wrap:anywhere]">{h.text}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {s.engine.available && !s.ready && needs.length > 0 && !s.busy
+                  {s.settings.via_peer ? "All recordings use the authenticated fleet connection." : s.engine.available && !s.ready && needs.length > 0 && !s.busy
                     ? `Set up downloads and checks ${listing(needs)}. Nothing you say leaves this machine.`
                     : "Speech is transcribed by whisper.cpp on this machine; nothing is sent anywhere."}
                 </p>
@@ -264,4 +274,30 @@ export function VoiceSection() {
       </Section>
     </div>
   );
+}
+
+function SavedFleetTranscripts() {
+  const connected = useStore((s) => s.status === "ready");
+  const [items, setItems] = useState<Awaited<ReturnType<typeof voiceApi.transcripts>>>([]);
+  useEffect(() => {
+    if (!connected) return;
+    let active = true;
+    const refresh = () => void voiceApi.transcripts({ source_prefix: "upload:", limit: 20 }).then((rows) => { if (active) setItems(rows); }).catch(() => {});
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [connected]);
+  if (!items.length) return null;
+  return <details className="mb-3 rounded border p-3">
+    <summary>Saved fleet dictation and uploads ({items.length})</summary>
+    <p className="my-2 text-xs text-muted-foreground">Audio stays on this machine until you delete its transcript. Pending work retries automatically.</p>
+    {items.map((tr) => <article key={tr.id} className="border-t py-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs">{new Date(tr.created_at).toLocaleString()} · {tr.state === "done" ? "Ready" : tr.state === "failed" ? tr.error : "Transcription pending"}</span>
+        <Button size="sm" variant="ghost" onClick={() => void voiceApi.deleteTranscript(tr.id).then(() => setItems((rows) => rows.filter((r) => r.id !== tr.id))).catch((e: Error) => toast.error(e.message))}>Delete</Button>
+      </div>
+      {tr.text && <p className="whitespace-pre-wrap text-sm">{tr.text}</p>}
+      {tr.report && <details className="mt-2 text-sm"><summary>Report</summary><p className="whitespace-pre-wrap">{tr.report}</p></details>}
+    </article>)}
+  </details>;
 }

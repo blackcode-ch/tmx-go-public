@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cancelDictating, dictationElapsed, stopDictating, useDictation } from "@/lib/dictation-session";
+import { useVoice } from "@/lib/voice";
 import { navigate } from "@/lib/router";
 
 function clock(ms: number) {
@@ -13,6 +14,7 @@ function clock(ms: number) {
 }
 
 export function DictationBar() {
+  const pending = useVoice((s) => s.pending);
   const phase = useDictation((s) => s.phase);
   const target = useDictation((s) => s.target);
   const [elapsed, setElapsed] = useState(0);
@@ -39,7 +41,7 @@ export function DictationBar() {
         {recording && <span className="absolute inline-flex size-full animate-ping rounded-full bg-state-error opacity-60" />}
         <span className="relative inline-flex size-2.5 rounded-full bg-state-error" />
       </span>
-      <span className="shrink-0 font-medium">{recording ? "Dictating" : phase === "starting" ? "Waiting for the microphone…" : "Transcribing…"}</span>
+      <span className="shrink-0 font-medium">{recording ? "Dictating" : phase === "starting" ? "Waiting for the microphone…" : pending ? "Transcription pending" : "Transcribing…"}</span>
       {recording && (
         <span className="tabular shrink-0 font-mono text-[0.7812rem]" data-dictation-time>
           {clock(elapsed)}

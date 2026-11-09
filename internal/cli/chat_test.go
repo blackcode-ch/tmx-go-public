@@ -277,7 +277,7 @@ func TestSkillCommands(t *testing.T) {
 		t.Setenv("USERPROFILE", home) // os.UserHomeDir reads USERPROFILE here
 	}
 	out, _, code := tmx(t, "skill")
-	if code != 0 || !strings.HasPrefix(out, "---\nname: tmxg\ndescription: ") || !strings.Contains(out, "tmxg fleet trial") {
+	if code != 0 || !strings.HasPrefix(out, "---\nname: tmxg\ndescription: ") || !strings.Contains(out, "\n# tmxg fleet\n") {
 		t.Fatalf("skill: %d %q", code, out[:min(len(out), 200)])
 	}
 	if p, _, code := tmx(t, "skill", "path"); code != 0 || !strings.HasSuffix(strings.TrimSpace(p), filepath.Join(".claude", "skills", "tmxg", "SKILL.md")) {

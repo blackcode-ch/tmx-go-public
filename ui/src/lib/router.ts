@@ -17,6 +17,9 @@ export type Route =
   | { name: "companion" }
   | { name: "usage" }
   | { name: "features" }
+  | { name: "people" }
+  | { name: "clients" }
+  | { name: "promises" }
   | { name: "notfound"; path: string };
 
 function currentPath(): string {
@@ -44,6 +47,9 @@ export function parse(path: string): Route {
   if (parts[0] === "companion" && parts.length === 1) return { name: "companion" };
   if (parts[0] === "usage" && parts.length === 1) return { name: "usage" };
   if (parts[0] === "features" && parts.length === 1) return { name: "features" };
+  if (parts[0] === "people" && parts.length === 1) return { name: "people" };
+  if (parts[0] === "clients" && parts.length === 1) return { name: "clients" };
+  if (parts[0] === "promises" && parts.length === 1) return { name: "promises" };
   return { name: "notfound", path: p };
 }
 
@@ -99,6 +105,10 @@ export const paths = {
   usage: () => "/usage",
   /** every ordered feature with its status and evidence */
   features: () => "/features",
+  /** People without their own tmx, clients, and the promises to them (docs/PEOPLE_PROMISES.md) */
+  people: () => "/people",
+  clients: () => "/clients",
+  promises: () => "/promises",
 };
 
 export function href(path: string): string {

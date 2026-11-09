@@ -234,7 +234,18 @@ function HeadHarnessSection() {
   );
 }
 
+const SETTINGS_SECTIONS = [
+  ["phone-notifications", "Phone notifications"], ["system-tools", "System tools"],
+  ["project-tools", "Project tools"], ["profiles", "Profiles"], ["head-agent", "Head agent"],
+  ["safety", "Safety"], ["owner-devices", "Owner devices"], ["companion", "Companion"],
+  ["peer-to-peer", "Peer-to-peer"], ["resources", "Resources"], ["harnesses", "Harnesses"],
+  ["running-outside-tmx", "Running outside tmx"], ["updates", "Updates"], ["voice", "Voice"],
+  ["recordings", "Recordings"], ["whatsapp", "WhatsApp"], ["appearance", "Appearance"],
+  ["this-machine", "This machine"],
+];
+
 export function SettingsPage() {
+  const [section, setSection] = useState(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("section") || "phone-notifications");
   const workspace = useStore((s) => s.workspace);
   const machine = useStore((s) => s.machine);
   const version = useStore((s) => s.version);
@@ -250,11 +261,21 @@ export function SettingsPage() {
   const via = transport?.kind === "mock" ? "Mock data" : transport?.kind === "bridge" ? "Desktop bridge" : transport?.desktop ? "Direct (desktop)" : "Direct";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="settings-page flex min-h-0 min-w-0 flex-1 flex-col">
       <PageHeader>
         <PageTitle>Settings</PageTitle>
       </PageHeader>
+      <nav aria-label="Settings sections" className="shrink-0 border-b px-4 py-2 md:hidden">
+        <label htmlFor="settings-section" className="sr-only">Settings section</label>
+        <select id="settings-section" value={section} className="min-h-11 w-full min-w-0 rounded-md border bg-background px-3 text-[18px]" onChange={e => {
+          setSection(e.target.value);
+          document.getElementById(e.target.value)?.scrollIntoView({ block: "start" });
+        }}>
+          {SETTINGS_SECTIONS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+      </nav>
       <PageBody width="max-w-[51.25rem]" className="space-y-10">
+        <PhoneNotifications />
         <ProcessList />
         <ProcessList projectTools />
         <ProfilesSection />
@@ -263,7 +284,6 @@ export function SettingsPage() {
 
         <SafetySection />
         <OwnerDevices />
-        <PhoneNotifications />
 
         <div id="companion" className="scroll-mt-6">
           <CompanionSection />

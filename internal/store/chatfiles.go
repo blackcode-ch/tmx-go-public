@@ -38,6 +38,23 @@ func (s *Store) GetChatFile(chatID, id string) (model.ChatFile, error) {
 	return f, err
 }
 
+func (s *Store) ReceivedChatFiles(chatID string) ([]model.ChatFile, error) {
+	rows, err := s.db.Query(`SELECT `+chatFileCols+` FROM chat_files WHERE chat_id = ? AND sender != ? AND message_id != '' ORDER BY created_at, id`, chatID, model.ChatMe)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []model.ChatFile{}
+	for rows.Next() {
+		f, err := scanChatFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
 // UpdateChatFile writes a file's message, state, error and retry fields.
 func (s *Store) UpdateChatFile(f model.ChatFile) error {
 	_, err := s.db.Exec(`UPDATE chat_files SET message_id = ?, state = ?, error = ?, tries = ?, next_at = ?
