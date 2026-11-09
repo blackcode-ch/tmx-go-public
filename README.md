@@ -26,16 +26,26 @@ For phone access through a configured trusted HTTPS address, see
 
 ```sh
 make tools     # Wails CLI for desktop builds
-make           # desktop app where supported; bin/tmxg is the CLI
-bin/tmxg up    # start the local daemon
+make           # headless on Linux; desktop app on macOS/Windows
+make app       # desktop app explicitly, where supported
+make headless  # headless-only build (daemon, CLI, MCP; no window)
+bin/tmxg up    # start the local daemon (see below)
 bin/tmxg open  # print the private local UI URL
 make help      # available build and test targets
 ```
 
 Source builds need Go 1.26.0 (toolchain go1.26.6, per `go.mod`), Node 24 and
 pnpm 12.14.0. Linux desktop builds also need WebKitGTK. Public headless
-releases embed the web UI and do not require a desktop toolkit. A headless-only
-build is `make headless`.
+releases embed the web UI and do not require a desktop toolkit.
+
+To try the daemon without touching a real install, use a throwaway home
+directory and an isolated port:
+
+```sh
+export TMXG_HOME=$(mktemp -d) TMXG_PORT=18797
+bin/tmxg up
+bin/tmxg open
+```
 
 `tmxg skill` prints the [agent skill](internal/skill/SKILL.md), including the
 trial and production feature defaults. Automatic updates are forced off on

@@ -23,11 +23,18 @@ A headless build embeds the web UI and does not require a desktop toolkit:
 make headless
 ```
 
+`make` builds the one binary for the machine: headless on Linux, and the
+desktop app on macOS/Windows. To build the desktop app explicitly:
+
+```sh
+make app
+```
+
 A desktop build needs the Wails CLI and, on Linux, WebKitGTK:
 
 ```sh
 make tools     # install the Wails CLI
-make           # desktop app where supported; bin/tmxg is the CLI
+make app       # desktop app where supported; bin/tmxg is the CLI
 ```
 
 Run `make help` for all build and test targets.
@@ -49,7 +56,7 @@ make test
 Run the UI tests:
 
 ```sh
-pnpm --dir ui test
+pnpm --dir ui test test/*.test.mjs
 ```
 
 Run lint, typecheck, vet, tests and a build together:
