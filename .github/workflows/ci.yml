@@ -24,4 +24,6 @@ jobs:
           if ($actual -ne '641412395705243c90cdbb9627edb6bcd355bba8') { throw "Unexpected head $actual" }
           Write-Output "Testing exact PR4 head $actual"
       - name: Repeat recorded-host stop test 20 times
-        run: go test -v -run '^TestStopEndsTheRecordedHost$' -count=20 -timeout=15m ./internal/runner/host
+        run: go test -tags tmx_ci -run '^TestStopEndsTheRecordedHost$' -count=20 -timeout=5m ./internal/runner/host
+      - name: Test full host package with CI tag
+        run: go test -tags tmx_ci -count=1 -timeout=5m ./internal/runner/host
