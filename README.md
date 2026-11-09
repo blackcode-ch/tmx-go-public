@@ -8,37 +8,60 @@
   Your coding agents, run as a team on your own machine.
 </p>
 
-<p align="center">
-  <img src="docs/images/matrix.png" alt="tmx's Matrix: every thread on a canvas, one string per project; a thread open on the right with the head's turns on it, its state and its events" width="100%">
-</p>
-
 One binary that runs a tree of coding agents on your machine: a head agent, a lead per project, and
 workers under each lead. The same binary is the daemon, the CLI, the MCP server and the desktop app.
 It also has peer-to-peer chats with other people's tmx (QR invites, DMs, groups), a link to
 Companion, and a Board: the head's conversation as strings of cards, one string per topic.
 
+## Quick start (headless build & throwaway state)
+
+Always use a throwaway `TMXG_HOME` directory and an isolated `TMXG_PORT` when testing or running locally so you never touch an existing daemon's state:
+
 ```sh
-make tools   # once: the Wails CLI (for the desktop window)
-make         # build/bin/tmx.app on macOS; bin/tmx is the CLI
-bin/tmx up   # start the daemon (127.0.0.1:8787), then open the app or the URL it prints
-make help    # every target: headless, dist (all platforms), test, check, ...
+# 1. Install UI packages and build the embedded React bundle (ui/dist)
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui build
+
+# 2. Build the headless binary (bin/tmxg; no CGO or desktop window required)
+make headless
+
+# 3. Run against a throwaway state directory (never against an existing user's state)
+export TMXG_HOME="$(mktemp -d)"
+export TMXG_PORT=18797
+./bin/tmxg up
+./bin/tmxg status
+./bin/tmxg down
+rm -rf "$TMXG_HOME"
 ```
 
-Needs Go 1.26+, Node with pnpm, and on Linux desktop builds WebKitGTK (headless builds need nothing).
-CI (GitHub Actions, on a self-hosted Mac set up with `scripts/ci-runner.sh`) tests and builds every merge to `main`
-and publishes the binaries as the rolling `latest` pre-release; a `v*` tag publishes them as a versioned GitHub Release.
-AI agents (Claude Code, Codex, ...): `tmx skill` prints a skill file for setting tmx up on a server, joining chats
-and using the CLI (`tmx skill install` puts it in `~/.claude/skills/tmx`).
-Release builds update themselves from the signed GitHub releases once no agent is busy (`tmx update`,
-Settings → Updates); `make release-key` sets up the signing key once, and `make signing-cert` the macOS
-code-signing certificate (so macOS keeps tmx's microphone and screen permissions across updates).
-[DESIGN.md](DESIGN.md) is the design contract: process model, API, MCP tools, safety, chats.
+For desktop builds (`make` / `make app`) and full build targets, see [CONTRIBUTING.md](CONTRIBUTING.md) and `make help`.
 
-For phone access through a configured trusted HTTPS address, see
-[phone pairing and owner passkeys](docs/phone-pairing.md).
+## Requirements
+
+- **Go:** `1.26.0` (`toolchain go1.26.6` in [go.mod](go.mod)).
+- **Node.js & pnpm:** Node `24` and `pnpm` `12.14.0` (pinned in [.github/actions/setup/action.yml](.github/actions/setup/action.yml)).
+- **Headless builds (`make headless`, `CGO_ENABLED=0 go build ./...`):** Pure Go (`CGO_ENABLED=0`); no C toolchain or desktop libraries required.
+- **Desktop builds (`make app`):** Wails CLI `v2.17.0` (`make tools`), plus platform webview prerequisites (Xcode command-line tools on macOS, WebView2 on Windows, WebKitGTK on Linux).
+
+## Testing
+
+```sh
+# Focused Go package test
+go test -count=1 ./internal/api
+
+# UI unit tests (ui/test/*.test.mjs)
+pnpm --dir ui test test/*.test.mjs
+```
+
+## Public CI and releases
+
+- **Public CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)):** Runs entirely on GitHub-hosted runners (`ubuntu-latest`, `windows-latest`, `macos-15`). First-time outside contributors may need a maintainer to approve their workflow run.
+- **Public release builds ([.github/workflows/release.yml](.github/workflows/release.yml)):** Manual `workflow_dispatch` on `blackcode-ch/tmx-go-public` builds **unsigned** four-platform binaries and SHA-256 checksums as workflow artifacts (`cmd/public-release -mode build`). Contributors do **not** need signing keys or certificates. Reviewed, signed releases require detached signatures supplied outside CI (`internal/update`).
+
+## Architecture & intent
+
+- [INTENT.md](INTENT.md) documents the product intent, architecture, and operating model.
+- [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing, and submitting pull requests to this public repository.
 
 ---
-*This is a scrubbed CI snapshot of a private repository, made automatically. Personal and machine
-names are replaced, so a few identifiers differ from the private build (the MCP tool `announce_set`
-has another name there), and internal docs are left out. Headless release binaries are built from
-reviewed main snapshots; the updater accepts them only with a valid fleet release signature.*
+*This repository (`blackcode-ch/tmx-go-public`) is an automatic, scrubbed public snapshot of the private repository. Personal and machine names are replaced and internal-only documents are omitted. Outside contributors work directly in this public repository by forking `blackcode-ch/tmx-go-public`, branching from `main`, and opening a pull request against `main`.*
