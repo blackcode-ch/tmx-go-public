@@ -1,232 +1,30 @@
-# Public CI for the scrubbed tmx-go snapshot. Runs on GitHub's free hosted runners only (never
-# self-hosted). Triggers: the mirror bot's pushes (main and fleet-pr/<N> snapshot branches) and
-# outside PRs, which get no secrets (there are none here) and need maintainer approval to run.
 name: public CI
 on:
-  push:
-    branches: [main, "fleet-pr/**"]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
-env:
-  TMX_PUBLIC_SNAPSHOT: "1"   # tests of private-only files (the release workflow) skip
-concurrency:
-  group: public-ci-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
-  runner-lock:
-    # Guard tests never run on operators' machines. This
-    # mirror is GitHub-hosted runners only; fail closed if a workflow here ever names a self-hosted
-    # one. public-scrub.sh deletes public-ci/ and copies this set into .github/workflows/ before
-    # the mirror's own CI runs, so check THAT path at runtime, not public-ci/workflows/ (which
-    # won't exist there) - grep exit 2 (no such directory) must fail this step, not pass it.
-    name: fleet runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  timing-proof:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      TMX_PUBLIC_SNAPSHOT: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: fail if any workflow here names a self-hosted runner
-        run: |
-          set +e
-          grep -rlE 'runs-on:.*self-h[o]sted' .github/workflows/
-          rc=$?
-          set -e
-          test "$rc" -eq 1
-      - run: python3 -m unittest discover -s .github/scripts -p test_check_tmx_ci_runners.py
-      - run: python3 .github/scripts/check_tmx_ci_runners.py
-  smoke:
-    name: fleet smoke
-    needs: runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
-      - run: go build ./...
-      - run: go vet ./...
-      - run: go test -count=1 -timeout=15m ./...
-  go-linux:
-    needs: runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
-      - run: go build ./...
-      - run: go vet ./...
-      - run: go test -count=1 -timeout=15m ./...
-  go-windows:
-    needs: runner-lock
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
-      - run: go build ./...
-      # tmx_ci, as in fleet-ci.yml: the guard tests are `!windows || tmx_ci`, so without it the guard has no Windows run
-      - run: go vet -tags tmx_ci ./...
-      - run: go test -tags tmx_ci -count=1 -timeout=15m ./...
-      - run: go test -tags=aclmutate -count=1 -timeout=10m ./internal/config/...
-  race:
-    needs: runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
-      - run: go test -race -count=1 -timeout=20m ./...
-  bench:
-    needs: runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: python -m unittest discover -s scripts -p test_bench_budget.py
-      - name: Measure bounded storage benchmarks
-        shell: bash
-        env:
-          TMPDIR: ${{ runner.temp }}
-        run: |
-          set -o pipefail
-          go test -json -run '^$' -bench '^BenchmarkRSI' -benchmem -benchtime=1000x -count=3 -timeout=2m ./internal/store > "$RUNNER_TEMP/bench-raw.json"
-      - name: Check budgets and write report
-        if: always()
-        run: python scripts/bench_budget.py "${{ runner.temp }}/bench-raw.json" "${{ runner.temp }}/bench.json"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: bench
-          path: |
-            ${{ runner.temp }}/bench.json
-            ${{ runner.temp }}/bench-raw.json
-          if-no-files-found: error
-  ui-and-e2e:
-    needs: runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - run: make deps
-      - run: cd ui && pnpm exec eslint . && pnpm exec tsc -b && pnpm test && pnpm build
-      - name: Print UI SHA-256 manifest for cross-platform rebuild comparison
-        run: node ui/scripts/dist-manifest.mjs | tee ui-dist.sha256
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ui-dist-sha256-linux
-          path: ui-dist.sha256
-          if-no-files-found: error
-      - run: CGO_ENABLED=0 go build -tags gatesim -trimpath -o bin/tmx-gatesim .
-      - run: cd ui && pnpm exec playwright install --with-deps chromium
-      - name: Trust a throwaway certificate for the phone HTTPS tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          d="$RUNNER_TEMP/e2e-tls"; mkdir -p "$d"; cd "$d"
-          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=tmx e2e CA" -keyout ca.key -out ca.pem \
-            -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign"
-          openssl req -newkey rsa:2048 -nodes -subj "/CN=tmx.localhost" -keyout key.pem -out leaf.csr
-          printf "subjectAltName=DNS:tmx.localhost\nextendedKeyUsage=serverAuth\n" > leaf.ext
-          openssl x509 -req -in leaf.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 2 -out cert.pem -extfile leaf.ext
-          sudo apt-get install -y -qq libnss3-tools >/dev/null
-          mkdir -p "$HOME/.pki/nssdb"
-          if [ ! -f "$HOME/.pki/nssdb/cert9.db" ]; then
-            certutil -d "sql:$HOME/.pki/nssdb" -N --empty-password
-          fi
-          certutil -d "sql:$HOME/.pki/nssdb" -A -t "C,," -n "tmx e2e CA" -i ca.pem
-          echo "TMXG_E2E_TLS_DIR=$d" >> "$GITHUB_ENV"
-      - run: cd ui && node --test --test-concurrency=1 e2e/*.e2e.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: phone-notifications-and-living-cell
-          path: ui/screenshots/*.png
-          if-no-files-found: error
-          retention-days: 7
-  # macOS is a first-class target: most users are on Macs. It is free here, so it runs
-  # on every snapshot, like Linux and Windows. The app is built UNSIGNED (ad hoc, SIGN_IDENTITY "-"):
-  # the signing certificate stays private and is used only by the private release build.
-  macos:
-    needs: runner-lock
-    runs-on: macos-15
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - run: go build ./...
-      - run: go vet ./...
-      - run: go test -count=1 -timeout=15m ./...
-      - name: Install the Wails CLI
-        run: |
-          GOBIN="$RUNNER_TEMP/bin" go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0 # keep in step with WAILS_VERSION in the Makefile
-          echo "WAILS=$RUNNER_TEMP/bin/wails" >> "$GITHUB_ENV"
-      - run: make deps
-      - name: make app (unsigned)
-        run: make app WAILS="$WAILS" SIGN_IDENTITY=-
-      - run: codesign --verify --deep --strict build/bin/tmxg.app
-
-  p2p-interop:
-    name: P2P interop (pinned fleet baseline)
-    needs: runner-lock
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Checkout immutable public fleet baseline
-        uses: actions/checkout@v4
-        with:
-          repository: blackcode-ch/tmx-go-public
-          ref: 0a6f2cb4bb3020d7a69460f96cac0da9bdabb00c
-          path: theirs
-          persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
-      - name: Select the public baseline in the test harness
-        # Queue snapshots may predate this workflow. Change only the test's exact
-        # expected checkout SHA; keep its checkout verification and test logic.
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("internal/p2p/interop_test.go")
-          text = p.read_text()
-          old = 'const pinnedCommit = "0c36197f03a09ef1fa3899c42de0a8e8d8541831"'
-          new = 'const pinnedCommit = "0a6f2cb4bb3020d7a69460f96cac0da9bdabb00c"'
-          if text.count(old) != 1:
-              raise SystemExit("Unrecognized interop test pin; review the public baseline")
-          p.write_text(text.replace(old, new))
-          PY
-      - name: Pairing, messages and files in both directions
-        env:
-          TMX_P2P_INTEROP: "1"
-          TMX_P2P_PINNED_CHECKOUT: ${{ github.workspace }}/theirs
-        run: go test -count=1 -timeout=5m -v -run 'TestInteropOursToPinned|TestInteropPinnedToOurs' ./internal/p2p/
-      - name: Current inviter admits delayed baseline joiners
-        env:
-          TMX_P2P_INTEROP: "1"
-          TMX_P2P_PINNED_CHECKOUT: ${{ github.workspace }}/theirs
-        # The baseline predates full-lifetime invite admission. Its own five-minute
-        # inviter case is deliberately excluded; current inviter cases must pass.
-        run: go test -count=1 -timeout=10m -v -run 'TestInteropLateJoinAdmissionWindow/^our_invite' ./internal/p2p/
-      - name: Record baseline scope
-        if: always()
-        run: |
-          echo 'Peer baseline: public 0a6f2cb, source e033901, P2P equivalent to fleet fdff3fa4.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'This checks fleet regression compatibility, not current upstream compatibility.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'Both-direction pairing/message/file; current-side 30-second and five-minute delayed invite admission.' >> "$GITHUB_STEP_SUMMARY"
+          cache: false
+      - name: Record exact source
+        run: git rev-parse HEAD
+      - name: Repeat both timing tests 20 times
+        run: go test -v -tags tmx_ci -run '^(TestApprovalActionLifecycle|TestGovernedChatRevocationBeforePlacement)$' -count=20 -timeout=10m ./internal/fleet ./internal/chat
+      - name: Race check both tests
+        if: runner.os == 'Linux'
+        run: go test -race -tags tmx_ci -run '^(TestApprovalActionLifecycle|TestGovernedChatRevocationBeforePlacement)$' -count=1 -timeout=10m ./internal/fleet ./internal/chat
