@@ -162,17 +162,54 @@ func Stop(dir string) (gone bool, err error) {
 	if err := killProgram(in); err != nil && childOfHost(in) {
 		return false, fmt.Errorf("the agent's program could not be ended: %w", err)
 	}
-	if err := killHost(in); err != nil && alive(in) != hostGone {
-		// Not proven ended (still there, or unsure): keep host.json, so nothing starts a copy.
-		return false, err
+	if err := killHost(in); err != nil {
+		if err := awaitHostExit(in, err); err != nil {
+			// Not proven ended (still there, or unsure): keep host.json, so nothing starts a copy.
+			return false, err
+		}
 	}
 	_ = os.Remove(filepath.Join(dir, infoFile))
 	_ = os.Remove(filepath.Join(dir, stateFile))
 	return false, nil
 }
 
+// awaitHostExit follows a failed host kill. On Windows, TerminateProcess on a process that is
+// already exiting (its program just ended, so the host is on its way out) fails with "Access is
+// denied" while the process list still shows it for a moment. Wait a bounded time
+// (stopExitWait, at most two seconds) for the recorded host to be gone, retrying the kill by
+// its recorded identity while it still runs. Gone: nil. Still running or unsure at the
+// deadline: an error, and the caller keeps host.json. A persistent kill failure is reported as
+// itself.
+func awaitHostExit(in info, killErr error) error {
+	deadline := now().Add(stopExitWait)
+	for {
+		state := alive(in)
+		if state == hostGone {
+			return nil
+		}
+		if !now().Before(deadline) {
+			return killErr // still that host, or unsure: not proven ended
+		}
+		sleep(stopExitPoll)
+		if state == hostAlive {
+			// Again by the recorded PID, start time and image only (sysinfo.KillHost).
+			if err := killHost(in); err == nil {
+				return nil
+			} else {
+				killErr = err
+			}
+		}
+	}
+}
+
 // Stop's steps, variables for tests.
 var (
+	// stopExitWait bounds the extra wait in Stop after a failed host kill (at most 2s).
+	stopExitWait = 2 * time.Second
+	stopExitPoll = 50 * time.Millisecond
+	now          = time.Now
+	sleep        = time.Sleep
+
 	killHost    = func(in info) error { return sysinfo.KillHost(in.PID, in.Start, in.Image) }
 	killProgram = func(in info) error {
 		sysinfo.RegisterHosted(in.ChildPID, in.PID, in.Start, false)

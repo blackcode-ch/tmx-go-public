@@ -423,6 +423,7 @@ func stubStop(t *testing.T, answers []liveness, program, hostErr error, child bo
 	t.Helper()
 	oa, op, oh, oc := alive, killProgram, killHost, childOfHost
 	t.Cleanup(func() { alive, killProgram, killHost, childOfHost = oa, op, oh, oc })
+	fakeClock(t)
 	n := 0
 	alive = func(info) liveness {
 		a := answers[min(n, len(answers)-1)]
@@ -480,5 +481,108 @@ func TestStopEndsTheHostWhenTheProgramIsGone(t *testing.T) {
 	killed := stubStop(t, []liveness{hostAlive, hostGone}, errors.New("no such process"), nil, false)
 	if gone, err := Stop(dir); err != nil || gone || !*killed {
 		t.Fatalf("gone=%v err=%v killed=%v", gone, err, *killed)
+	}
+}
+
+// fakeClock makes Stop's bounded wait deterministic: sleep only advances a fake now.
+func fakeClock(t *testing.T) (waited *time.Duration) {
+	t.Helper()
+	on, os_ := now, sleep
+	t.Cleanup(func() { now, sleep = on, os_ })
+	t0 := time.Unix(1_000_000, 0)
+	var d time.Duration
+	now = func() time.Time { return t0.Add(d) }
+	sleep = func(s time.Duration) { d += s }
+	return &d
+}
+
+// stubHostKill counts host kills and checks each targets the recorded identity only.
+func stubHostKill(t *testing.T, errs func(n int) error) (calls *int) {
+	t.Helper()
+	n := 0
+	killHost = func(in info) error {
+		if in.PID != 1 || in.Start != 1 || in.Image != "tmx-host-x" {
+			t.Errorf("host kill not tied to the recorded identity: %+v", in)
+		}
+		n++
+		return errs(n)
+	}
+	return &n
+}
+
+// Windows: the kill fails ("Access is denied") while the host is still exiting; it is gone a
+// moment later. Stop waits for that, within its bound, and reports the host ended.
+func TestStopWaitsForADelayedHostExit(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive, hostAlive, hostAlive, hostGone}, nil, nil, false)
+	waited := fakeClock(t)
+	stubHostKill(t, func(int) error { return errors.New("Access is denied.") })
+	gone, err := Stop(dir)
+	if err != nil || gone {
+		t.Fatalf("gone=%v err=%v", gone, err)
+	}
+	if *waited == 0 || *waited > stopExitWait {
+		t.Fatalf("waited %v, want >0 and <= %v", *waited, stopExitWait)
+	}
+	if _, err := os.Stat(filepath.Join(dir, infoFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("host.json kept after the host ended: %v", err)
+	}
+}
+
+// A retried kill that succeeds within the bound ends the stop.
+func TestStopRetriesTheHostKill(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive}, nil, nil, false)
+	calls := stubHostKill(t, func(n int) error {
+		if n == 1 {
+			return errors.New("Access is denied.")
+		}
+		return nil
+	})
+	if gone, err := Stop(dir); err != nil || gone || *calls != 2 {
+		t.Fatalf("gone=%v err=%v kills=%d", gone, err, *calls)
+	}
+}
+
+// The host keeps running and every kill fails: after at most stopExitWait the error is
+// returned and host.json kept, never hidden.
+func TestStopPersistentKillFailureKeepsTheHost(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive}, nil, nil, false)
+	waited := fakeClock(t)
+	denied := errors.New("Access is denied.")
+	calls := stubHostKill(t, func(int) error { return denied })
+	if _, err := Stop(dir); !errors.Is(err, denied) {
+		t.Fatalf("stop: %v", err)
+	}
+	if *waited < stopExitWait || *waited > stopExitWait+stopExitPoll {
+		t.Fatalf("waited %v, want about %v", *waited, stopExitWait)
+	}
+	if *calls < 2 {
+		t.Fatalf("kill not retried: %d", *calls)
+	}
+	if _, err := os.Stat(filepath.Join(dir, infoFile)); err != nil {
+		t.Fatalf("host.json removed: %v", err)
+	}
+}
+
+// After a failed kill, liveness cannot be told for the whole bound: not reported ended,
+// host.json kept, and no kill is retried blindly while unsure.
+func TestStopUnknownLivenessAfterAFailedKill(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive, hostUnknown}, nil, nil, false)
+	waited := fakeClock(t)
+	calls := stubHostKill(t, func(int) error { return errors.New("Access is denied.") })
+	if _, err := Stop(dir); err == nil {
+		t.Fatal("reported stopped")
+	}
+	if *waited > stopExitWait+stopExitPoll {
+		t.Fatalf("waited %v, past the bound %v", *waited, stopExitWait)
+	}
+	if *calls != 1 {
+		t.Fatalf("kill retried while unsure: %d", *calls)
+	}
+	if _, err := os.Stat(filepath.Join(dir, infoFile)); err != nil {
+		t.Fatalf("host.json removed: %v", err)
 	}
 }
