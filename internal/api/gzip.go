@@ -11,15 +11,71 @@ import (
 // request/response JSON routes only: never on streams, upgrades or ranged files.
 func gzipped(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !acceptsGzip(r) || r.Header.Get("Upgrade") != "" {
+		if r.Header.Get("Upgrade") != "" {
 			h(w, r)
 			return
 		}
-		w.Header().Add("Vary", "Accept-Encoding")
-		gw := &gzipWriter{ResponseWriter: w}
+		vw := newVaryWriter(w)
+		defer addVaryAcceptEncoding(w.Header())
+		if !acceptsGzip(r) {
+			h(vw, r)
+			return
+		}
+		gw := &gzipWriter{ResponseWriter: vw}
 		defer gw.close()
 		h(gw, r)
 	}
+}
+
+// varyWriter adds cache variation just before response headers are committed,
+// after the wrapped handler has had a chance to set its own Vary values.
+type varyWriter struct {
+	http.ResponseWriter
+}
+
+func (v *varyWriter) Unwrap() http.ResponseWriter { return v.ResponseWriter }
+
+func (v *varyWriter) WriteHeader(code int) {
+	addVaryAcceptEncoding(v.Header())
+	v.ResponseWriter.WriteHeader(code)
+}
+
+func (v *varyWriter) Write(p []byte) (int, error) {
+	addVaryAcceptEncoding(v.Header())
+	return v.ResponseWriter.Write(p)
+}
+
+// Only advertise Flusher when the original writer supports it.
+// Flush must also commit Vary before emitting response headers.
+type varyFlushWriter struct {
+	*varyWriter
+}
+
+func (v *varyFlushWriter) Flush() {
+	addVaryAcceptEncoding(v.Header())
+	v.ResponseWriter.(http.Flusher).Flush()
+}
+
+func newVaryWriter(w http.ResponseWriter) http.ResponseWriter {
+	v := &varyWriter{ResponseWriter: w}
+	if _, ok := w.(http.Flusher); ok {
+		return &varyFlushWriter{varyWriter: v}
+	}
+	return v
+}
+
+// addVaryAcceptEncoding preserves existing Vary fields, treating tokens case-insensitively.
+// A wildcard already covers all request headers, including Accept-Encoding.
+func addVaryAcceptEncoding(header http.Header) {
+	for _, line := range header.Values("Vary") {
+		for _, token := range strings.Split(line, ",") {
+			token = strings.TrimSpace(token)
+			if token == "*" || strings.EqualFold(token, "Accept-Encoding") {
+				return
+			}
+		}
+	}
+	header.Add("Vary", "Accept-Encoding")
 }
 
 // acceptsGzip reports whether Accept-Encoding lists gzip without q=0.
