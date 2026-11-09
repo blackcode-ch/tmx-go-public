@@ -16,7 +16,7 @@ Companion, and a Board: the head's conversation as strings of cards, one string 
 ## Install
 
 Use the [Windows, macOS and Linux installation guide](docs/INSTALL.md) for
-signed public headless releases. It includes checksum and signature verification
+public headless releases. It includes checksum and signature verification
 before running the downloaded binary.
 
 For phone access through a configured trusted HTTPS address, see
@@ -32,13 +32,31 @@ bin/tmxg open  # print the private local UI URL
 make help      # available build and test targets
 ```
 
-Source builds need the Go version in `go.mod`, Node and pnpm. Linux desktop
-builds also need WebKitGTK. Public headless releases embed the web UI and do
-not require a desktop toolkit.
+Source builds need Go 1.26.0 (toolchain go1.26.6, per `go.mod`), Node 24 and
+pnpm 12.14.0. Linux desktop builds also need WebKitGTK. Public headless
+releases embed the web UI and do not require a desktop toolkit. A headless-only
+build is `make headless`.
 
 `tmxg skill` prints the [agent skill](internal/skill/SKILL.md), including the
 trial and production feature defaults. Automatic updates are forced off on
 config load; signed manual updates require owner-configured release trust.
+
+## Contributing
+
+This repository is a public snapshot. Outside contributors fork this public
+repository, branch from `main`, and open a pull request against public `main`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full build, test and
+pull-request guide. Public CI runs on GitHub-hosted runners only, and a
+maintainer may need to approve a first-time contributor's run.
+
+## Releases
+
+Public release binaries are built by a manually dispatched workflow
+(`.github/workflows/release.yml`) that produces unsigned build artifacts;
+detached release signatures are supplied outside CI. Reviewed, signed releases
+are separate: headless release binaries are built from reviewed `main`
+snapshots, and the updater accepts them only with a valid fleet release
+signature.
 
 ## License
 
