@@ -13,55 +13,61 @@ workers under each lead. The same binary is the daemon, the CLI, the MCP server 
 It also has peer-to-peer chats with other people's tmx (QR invites, DMs, groups), a link to
 Companion, and a Board: the head's conversation as strings of cards, one string per topic.
 
-## Quick start (headless build & throwaway state)
+## Build and install
 
-Always use a throwaway `TMXG_HOME` directory and an isolated `TMXG_PORT` when testing or running locally so you never touch an existing daemon's state:
+This repository is a scrubbed public snapshot of Tiamatrix (	mx). It can be built and tested
+entirely with open-source tools:
 
-```sh
-# 1. Install UI packages and build the embedded React bundle (ui/dist)
+- **Go**: 1.26.0 or later (uses Go toolchain go1.26.6 as specified in [go.mod](go.mod)).
+- **Node.js**: Node 24 (24.x) and pnpm (12.14.0 or later, as configured in [.github/actions/setup/action.yml](.github/actions/setup/action.yml)).
+- **CGO**: Pure-Go headless builds require CGO_ENABLED=0 and no desktop C libraries. Desktop GUI builds require Wails v2.17.0 and platform GUI libraries (such as WebKitGTK on Linux).
+
+`sh
+# 1. Install frontend dependencies and build the UI bundle
 pnpm --dir ui install --frozen-lockfile
 pnpm --dir ui build
 
-# 2. Build the headless binary (bin/tmxg; no CGO or desktop window required)
+# 2. Build the headless binary
 make headless
 
-# 3. Run against a throwaway state directory (never against an existing user's state)
-export TMXG_HOME="$(mktemp -d)"
-export TMXG_PORT=18797
-./bin/tmxg up
-./bin/tmxg status
-./bin/tmxg down
-rm -rf "$TMXG_HOME"
-```
+# 3. Desktop app (where desktop toolkits are installed)
+make tools
+make app
+`
 
-For desktop builds (`make` / `make app`) and full build targets, see [CONTRIBUTING.md](CONTRIBUTING.md) and `make help`.
+## Running tests
 
-## Requirements
-
-- **Go:** `1.26.0` (`toolchain go1.26.6` in [go.mod](go.mod)).
-- **Node.js & pnpm:** Node `24` and `pnpm` `12.14.0` (pinned in [.github/actions/setup/action.yml](.github/actions/setup/action.yml)).
-- **Headless builds (`make headless`, `CGO_ENABLED=0 go build ./...`):** Pure Go (`CGO_ENABLED=0`); no C toolchain or desktop libraries required.
-- **Desktop builds (`make app`):** Wails CLI `v2.17.0` (`make tools`), plus platform webview prerequisites (Xcode command-line tools on macOS, WebView2 on Windows, WebKitGTK on Linux).
-
-## Testing
-
-```sh
-# Focused Go package test
+`sh
+# Focused package tests (safe on a public checkout)
 go test -count=1 ./internal/api
+go test -count=1 ./internal/runner/host
 
-# UI unit tests (ui/test/*.test.mjs)
-pnpm --dir ui test test/*.test.mjs
-```
+# On Windows CI runners:
+go test -tags tmx_ci -count=1 ./internal/runner/host
 
-## Public CI and releases
+# Frontend tests
+pnpm --dir ui test
+`
 
-- **Public CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)):** Runs entirely on GitHub-hosted runners (`ubuntu-latest`, `windows-latest`, `macos-15`). First-time outside contributors may need a maintainer to approve their workflow run.
-- **Public release builds ([.github/workflows/release.yml](.github/workflows/release.yml)):** Manual `workflow_dispatch` on `blackcode-ch/tmx-go-public` builds **unsigned** four-platform binaries and SHA-256 checksums as workflow artifacts (`cmd/public-release -mode build`). Contributors do **not** need signing keys or certificates. Reviewed, signed releases require detached signatures supplied outside CI (`internal/update`).
+## Contributing and safety
 
-## Architecture & intent
+Outside contributors fork [blackcode-ch/tmx-go-public](https://github.com/blackcode-ch/tmx-go-public), branch from main, and submit pull requests against main.
 
-- [INTENT.md](INTENT.md) documents the product intent, architecture, and operating model.
-- [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing, and submitting pull requests to this public repository.
+When testing commands that start daemons or mutate local databases, always use throwaway state:
+`sh
+export TMXG_HOME="$(mktemp -d)"
+export TMXG_PORT=0
+`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full contribution guidelines, public CI details, and safe local testing procedures.
+
+## License
+
+Copyright 2026 blackcode GmbH and contributors. Licensed under the
+[Apache License 2.0](LICENSE).
 
 ---
-*This repository (`blackcode-ch/tmx-go-public`) is an automatic, scrubbed public snapshot of the private repository. Personal and machine names are replaced and internal-only documents are omitted. Outside contributors work directly in this public repository by forking `blackcode-ch/tmx-go-public`, branching from `main`, and opening a pull request against `main`.*
+*This is a scrubbed CI snapshot of a private repository, made automatically. Personal and machine
+names are replaced, so a few identifiers differ from the private build (the MCP tool `announce_set`
+has another name there), and internal docs are left out. Headless release binaries are built from
+reviewed main snapshots; the updater accepts them only with a valid fleet release signature.*

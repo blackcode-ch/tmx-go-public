@@ -1,89 +1,84 @@
-# Contributing to `tmx-go-public`
+# Contributing to tmx (public snapshot)
 
-## Overview of this repository
+Thank you for contributing to 	mx!
 
-`blackcode-ch/tmx-go-public` is an automatically scrubbed public snapshot of the `tmx-go` codebase. Internal operational docs and private machine identifiers are omitted from the public tree.
+lackcode-ch/tmx-go-public is an automatic, scrubbed public snapshot of the 	mx codebase. Outside contributors work entirely within this public repository without needing access to private repositories, private credentials, or internal signing keys.
 
-Outside contributors work **entirely within this public repository**:
-1. Fork `https://github.com/blackcode-ch/tmx-go-public`.
-2. Create a topic branch from current `main`.
-3. Open a pull request against `blackcode-ch/tmx-go-public` `main`.
+---
 
-No private repository access or signing secrets are needed or offered.
+## 1. Prerequisites
 
-## Toolchain & prerequisites
+- **Go**: 1.26.0 or later (matching [go.mod](go.mod), toolchain go1.26.6).
+- **Node.js & pnpm**: Node 24 and pnpm 12.14.0 (matching [.github/actions/setup/action.yml](.github/actions/setup/action.yml)).
+- **Build tool**: make (see [Makefile](Makefile)).
 
-| Tool | Version | Source in repository |
-|---|---|---|
-| Go | `1.26.0` (`toolchain go1.26.6`) | [go.mod](go.mod) |
-| Node.js | `24` | [.github/actions/setup/action.yml](.github/actions/setup/action.yml) |
-| pnpm | `12.14.0` | [.github/actions/setup/action.yml](.github/actions/setup/action.yml) |
-| Wails CLI *(desktop only)* | `v2.17.0` | [Makefile](Makefile) (`make tools`) |
+---
 
-### Headless vs. desktop prerequisites
-- **Headless builds (`make headless` or `CGO_ENABLED=0 go build ./...`):** Pure Go (`CGO_ENABLED=0`) plus the built React UI (`ui/dist`). No C compiler, CGO, or system GUI libraries are needed.
-- **Desktop builds (`make app` / `make app-windows`):** Require the Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0` via `make tools`) and native webview headers on Linux (`WebKitGTK`). On macOS, public/local builds use ad-hoc signing (`SIGN_IDENTITY="-"`).
+## 2. Public Build Commands
 
-## Copyable build and test commands
-
-### 1. Headless build
-```sh
+### Headless binary (Pure Go, no CGO or GUI toolkits)
+`sh
+# Install UI dependencies and build the static UI dist
 pnpm --dir ui install --frozen-lockfile
 pnpm --dir ui build
+
+# Build the pure-Go headless binary (CGO_ENABLED=0)
 make headless
-```
-This produces `bin/tmxg` (or `bin/tmxg.exe` on Windows) with `CGO_ENABLED=0`.
+`
+The compiled headless binary is placed at in/tmxg (or in/tmxg.exe on Windows).
 
-*(Note: `go build ./...` compiles all Go packages directly using the committed `ui/dist` placeholder without rebuilding the UI first.)*
+### Desktop application
+Desktop builds require Wails v2.17.0 (make tools) and platform desktop dependencies (WebKitGTK on Linux).
+`sh
+make tools
+make app
+`
 
-### 2. Focused Go test
-```sh
+---
+
+## 3. Testing Commands
+
+### Focused Go Package Tests
+Run focused package tests for your area of change:
+`sh
 go test -count=1 ./internal/api
-```
-On Windows, include the `tmx_ci` build tag when running guard/host tests as in CI:
-```sh
+go test -count=1 ./internal/runner/host
+`
+On Windows environments:
+`sh
 go test -tags tmx_ci -count=1 ./internal/runner/host
-```
+`
 
-### 3. Existing UI tests
-```sh
-pnpm --dir ui install --frozen-lockfile
-pnpm --dir ui test test/*.test.mjs
-```
-You can also run the UI linter and TypeScript checks:
-```sh
-pnpm --dir ui lint
-pnpm --dir ui typecheck
-```
+### UI Unit Tests
+`sh
+pnpm --dir ui test
+# Or directly:
+cd ui && node --test test/*.test.mjs
+`
 
-## Safe local execution (always use throwaway state)
+---
 
-**Never start a daemon against an existing user's state directory.** By default, `tmxg` resolves its state directory from `TMXG_HOME` (falling back to `~/.local/state/tmxg-trial`, `~/Library/Application Support/tmxg-trial`, or `%LOCALAPPDATA%\tmxg-trial`; see [internal/config/paths.go](internal/config/paths.go)) and its port from `TMXG_PORT` (default `8797`; see [internal/config/config.go](internal/config/config.go)).
+## 4. Throwaway State Safety
 
-Whenever you run a command that touches daemon state, explicitly create and clean up a throwaway directory:
+Local commands must never pollute or conflict with an existing user's local daemon state or database:
 
-```sh
-export TMXG_HOME="$(mktemp -d)"
-export TMXG_PORT=18797
-./bin/tmxg status || true
-rm -rf "$TMXG_HOME"
-```
+- Set a clean temporary directory for TMXG_HOME:
+  `sh
+  export TMXG_HOME="$(mktemp -d)"
+  `
+  (Referenced in [internal/config/paths.go](internal/config/paths.go)).
+- Use an ephemeral port for testing:
+  `sh
+  export TMXG_PORT=0
+  `
+  (Referenced in [internal/config/config.go](internal/config/config.go)).
 
-## Public CI and releases
+---
 
-### Public CI ([.github/workflows/ci.yml](.github/workflows/ci.yml))
-- All jobs (`runner-lock`, `smoke`, `go-linux`, `go-windows`, `race`, `bench`, `ui-and-e2e`, `macos`) run on **GitHub-hosted runners** (`ubuntu-latest`, `windows-latest`, `macos-15`).
-- Self-hosted runners are forbidden in `.github/workflows/` and enforced by `runner-lock` ([.github/scripts/check_tmx_ci_runners.py](.github/scripts/check_tmx_ci_runners.py)).
-- First-time contributors may need a maintainer to approve their public CI workflow run.
+## 5. Public CI & Pull Request Workflow
 
-### Unsigned build artifacts vs. signed releases ([.github/workflows/release.yml](.github/workflows/release.yml))
-- `.github/workflows/release.yml` is a manual `workflow_dispatch` workflow that runs `go run ./cmd/public-release -mode build` ([cmd/public-release/main.go](cmd/public-release/main.go)) to produce **unsigned** four-platform binaries and checksums as a workflow artifact (`fleet-release-binaries`).
-- Contributors never need signing keys, certificates, or secrets.
-- Reviewed, signed releases require detached signatures generated outside CI (`tmx release sign` / `tmx release sign-file`) and verified against pinned keys in `internal/update`.
-
-## Pull request checklist
-
-1. Keep changes focused on the target issue and its tests.
-2. Format Go files with `gofmt` and ensure `go vet ./...` passes.
-3. Verify all local Markdown links in `README.md` and `CONTRIBUTING.md` resolve to files present in this public tree.
-4. Open a pull request against `blackcode-ch/tmx-go-public` `main` describing the change, the commands/tests run, and links to public CI runs.
+1. Fork https://github.com/blackcode-ch/tmx-go-public to your GitHub account.
+2. Create a feature branch from the latest public main.
+3. Open a Pull Request targeting main.
+4. Tests run on GitHub-hosted runners (ubuntu-latest, windows-latest, macos-15) per [.github/workflows/ci.yml](.github/workflows/ci.yml). Maintainers approve public CI runs for first-time contributors.
+5. Release binaries in public CI are built unsigned via [cmd/public-release/main.go](cmd/public-release/main.go). Signed releases use detached signatures generated outside the public CI pipeline.
