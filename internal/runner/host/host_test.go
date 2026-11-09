@@ -482,3 +482,31 @@ func TestStopEndsTheHostWhenTheProgramIsGone(t *testing.T) {
 		t.Fatalf("gone=%v err=%v killed=%v", gone, err, *killed)
 	}
 }
+
+func TestWaitHostGoneBounded(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		answers []liveness
+		want    bool
+	}{
+		{"delayed exit", []liveness{hostAlive, hostAlive, hostGone}, true},
+		{"persistent failure", []liveness{hostAlive}, false},
+		{"unknown liveness", []liveness{hostUnknown}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := alive
+			t.Cleanup(func() { alive = old })
+			n := 0
+			alive = func(info) liveness { v := tc.answers[min(n, len(tc.answers)-1)]; n++; return v }
+			clock := time.Unix(0, 0)
+			now := func() time.Time { return clock }
+			sleep := func(d time.Duration) { clock = clock.Add(d) }
+			if got := waitHostGone(info{}, 2*time.Second, 25*time.Millisecond, now, sleep); got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			if elapsed := clock.Sub(time.Unix(0, 0)); elapsed > 2*time.Second {
+				t.Fatalf("exceeded deadline: %v", elapsed)
+			}
+		})
+	}
+}
