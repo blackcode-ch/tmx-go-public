@@ -162,7 +162,7 @@ func Stop(dir string) (gone bool, err error) {
 	if err := killProgram(in); err != nil && childOfHost(in) {
 		return false, fmt.Errorf("the agent's program could not be ended: %w", err)
 	}
-	if err := killHost(in); err != nil && alive(in) != hostGone {
+	if err := killHost(in); err != nil && !waitHostGone(in) {
 		// Not proven ended (still there, or unsure): keep host.json, so nothing starts a copy.
 		return false, err
 	}
@@ -171,8 +171,36 @@ func Stop(dir string) (gone bool, err error) {
 	return false, nil
 }
 
+const (
+	stopWaitTimeout  = 2 * time.Second
+	stopWaitInterval = 25 * time.Millisecond
+)
+
+// waitHostGone rechecks the recorded host identity within a bounded deadline after a failed
+// kill (on Windows, process teardown can complete shortly after KillHost returns an error).
+// Only hostGone counts as exited; hostAlive and hostUnknown at the deadline return false.
+func waitHostGone(in info) bool {
+	deadline := stopNow().Add(stopWaitTimeout)
+	for {
+		if alive(in) == hostGone {
+			return true
+		}
+		rem := deadline.Sub(stopNow())
+		if rem <= 0 {
+			return false
+		}
+		if rem < stopWaitInterval {
+			stopSleep(rem)
+		} else {
+			stopSleep(stopWaitInterval)
+		}
+	}
+}
+
 // Stop's steps, variables for tests.
 var (
+	stopNow     = time.Now
+	stopSleep   = time.Sleep
 	killHost    = func(in info) error { return sysinfo.KillHost(in.PID, in.Start, in.Image) }
 	killProgram = func(in info) error {
 		sysinfo.RegisterHosted(in.ChildPID, in.PID, in.Start, false)

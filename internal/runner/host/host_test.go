@@ -482,3 +482,80 @@ func TestStopEndsTheHostWhenTheProgramIsGone(t *testing.T) {
 		t.Fatalf("gone=%v err=%v killed=%v", gone, err, *killed)
 	}
 }
+// After a failed killHost call, Stop waits up to stopWaitTimeout (2 s) for the recorded host to
+// finish exiting, succeeds if it reaches hostGone before the deadline, and fails while keeping
+// host.json on persistent hostAlive or hostUnknown.
+func TestStopWaitsBoundedForRecordedHostExit(t *testing.T) {
+	cases := []struct {
+		name      string
+		answers   []liveness
+		wantErr   bool
+		wantKept  bool
+		maxWaited time.Duration
+	}{
+		{
+			name:      "delayed exit succeeds within deadline",
+			answers:   []liveness{hostAlive, hostAlive, hostAlive, hostGone},
+			wantErr:   false,
+			wantKept:  false,
+			maxWaited: 50 * time.Millisecond,
+		},
+		{
+			name:      "persistent failure returns error and keeps state",
+			answers:   []liveness{hostAlive},
+			wantErr:   true,
+			wantKept:  true,
+			maxWaited: stopWaitTimeout,
+		},
+		{
+			name:      "unknown liveness returns error and keeps state",
+			answers:   []liveness{hostAlive, hostUnknown},
+			wantErr:   true,
+			wantKept:  true,
+			maxWaited: stopWaitTimeout,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeInfo(t)
+			if err := writeJSON(dir, stateFile, map[string]int{"offset": 1}); err != nil {
+				t.Fatal(err)
+			}
+			killed := stubStop(t, tc.answers, nil, errors.New("access is denied"), false)
+
+			oldNow, oldSleep := stopNow, stopSleep
+			t.Cleanup(func() { stopNow, stopSleep = oldNow, oldSleep })
+			now := time.Unix(1000, 0)
+			var waited time.Duration
+			stopNow = func() time.Time { return now }
+			stopSleep = func(d time.Duration) {
+				waited += d
+				now = now.Add(d)
+			}
+
+			gone, err := Stop(dir)
+			if !*killed {
+				t.Fatal("killHost was not called")
+			}
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Stop err=%v, wantErr=%v", err, tc.wantErr)
+			}
+			if gone {
+				t.Fatalf("gone=%v, want false", gone)
+			}
+			if waited <= 0 || waited > tc.maxWaited {
+				t.Fatalf("waited=%v, want in (0, %v]", waited, tc.maxWaited)
+			}
+			for _, f := range []string{infoFile, stateFile} {
+				_, statErr := os.Stat(filepath.Join(dir, f))
+				if tc.wantKept && statErr != nil {
+					t.Fatalf("expected %s to be kept, got %v", f, statErr)
+				}
+				if !tc.wantKept && !errors.Is(statErr, os.ErrNotExist) {
+					t.Fatalf("expected %s to be removed, got %v", f, statErr)
+				}
+			}
+		})
+	}
+}
