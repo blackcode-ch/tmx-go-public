@@ -43,10 +43,13 @@ func TestPublicOfMatchesKeygen(t *testing.T) {
 // docs/RECOVERY.md is where an owner copies the fleet key from: its public key must be a valid
 // ed25519 pin and its fingerprint must be that key's, so a typo there is caught here.
 func TestRecoveryDocKeyMatchesItsFingerprint(t *testing.T) {
-	// The public mirror omits internal docs and marks its README explicitly.
+	// Public CI marks snapshots explicitly; keep the README fallback for local public checkouts.
 	// Missing or malformed recovery docs in a private checkout must still fail.
 	b, err := os.ReadFile("../../docs/RECOVERY.md")
 	if os.IsNotExist(err) {
+		if os.Getenv("TMX_PUBLIC_SNAPSHOT") == "1" {
+			t.Skip("public CI snapshot omits the private recovery document")
+		}
 		readme, _ := os.ReadFile("../../README.md")
 		if strings.Contains(string(readme), "*This is a scrubbed CI snapshot of a private repository, made automatically.") {
 			t.Skip("public CI snapshot omits the private recovery document")

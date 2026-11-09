@@ -162,13 +162,36 @@ func Stop(dir string) (gone bool, err error) {
 	if err := killProgram(in); err != nil && childOfHost(in) {
 		return false, fmt.Errorf("the agent's program could not be ended: %w", err)
 	}
-	if err := killHost(in); err != nil && alive(in) != hostGone {
-		// Not proven ended (still there, or unsure): keep host.json, so nothing starts a copy.
-		return false, err
+	if err := killHost(in); err != nil {
+		// A failed kill on Windows can race the completion of an earlier termination.
+		// Observe only the recorded identity, and retain the state unless it is gone.
+		if !waitHostGone(in, 2*time.Second, 25*time.Millisecond, time.Now, time.Sleep) {
+			return false, err
+		}
 	}
 	_ = os.Remove(filepath.Join(dir, infoFile))
 	_ = os.Remove(filepath.Join(dir, stateFile))
 	return false, nil
+}
+
+// waitHostGone bounds the additional wait and never treats unknown liveness as proof of exit.
+// Injecting time makes deadline and delayed-exit cases deterministic in tests.
+func waitHostGone(in info, timeout, interval time.Duration, now func() time.Time, sleep func(time.Duration)) bool {
+	deadline := now().Add(timeout)
+	for {
+		if alive(in) == hostGone {
+			return true
+		}
+		remaining := deadline.Sub(now())
+		if remaining <= 0 {
+			return false
+		}
+		if remaining < interval {
+			sleep(remaining)
+		} else {
+			sleep(interval)
+		}
+	}
 }
 
 // Stop's steps, variables for tests.
