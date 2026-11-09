@@ -24,12 +24,24 @@ For phone access through a configured trusted HTTPS address, see
 
 ## Build from source
 
+This repository is a scrubbed public snapshot of Tiamatrix (`tmx`). It can be built and tested
+entirely with open-source tools:
+
+- **Go**: 1.26.0 or later (uses Go toolchain `go1.26.6` as specified in [`go.mod`](go.mod)).
+- **Node.js**: Node 24 (`v24.x`) and `pnpm` 12.14.0 (as configured in [`.github/actions/setup/action.yml`](.github/actions/setup/action.yml)).
+- **CGO**: Pure-Go headless builds require `CGO_ENABLED=0` and no desktop C libraries. Desktop GUI builds require Wails v2.17.0 and platform GUI libraries (such as WebKitGTK on Linux).
+
 ```sh
-make tools     # Wails CLI for desktop builds
-make           # desktop app where supported; bin/tmxg is the CLI
-bin/tmxg up    # start the local daemon
-bin/tmxg open  # print the private local UI URL
-make help      # available build and test targets
+# 1. Install frontend dependencies and build the UI bundle
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui build
+
+# 2. Build the headless binary
+make headless
+
+# 3. Desktop app (where desktop toolkits are installed)
+make tools
+make app
 ```
 
 Source builds need the Go version in `go.mod`, Node and pnpm. Linux desktop
@@ -39,6 +51,32 @@ not require a desktop toolkit.
 `tmxg skill` prints the [agent skill](internal/skill/SKILL.md), including the
 trial and production feature defaults. Automatic updates are forced off on
 config load; signed manual updates require owner-configured release trust.
+
+## Running tests
+
+```sh
+# Focused package tests (safe on a public checkout)
+go test -count=1 ./internal/api
+go test -count=1 ./internal/runner/host
+
+# On Windows CI runners:
+go test -tags tmx_ci -count=1 ./internal/runner/host
+
+# Frontend unit tests
+pnpm --dir ui test test/*.test.mjs
+```
+
+## Contributing and safety
+
+Outside contributors fork [blackcode-ch/tmx-go-public](https://github.com/blackcode-ch/tmx-go-public), branch from `main`, and submit pull requests against `main`.
+
+When testing commands that start daemons or mutate local databases, always use throwaway state:
+```sh
+export TMXG_HOME="$(mktemp -d)"
+export TMXG_PORT=0
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full contribution guidelines, public CI details, release artifact distinctions, and safe local testing procedures.
 
 ## License
 
