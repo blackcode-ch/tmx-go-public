@@ -72,6 +72,11 @@ type Config struct {
 	// FleetAuthorities: "name@host" senders whose peer mail counts as the owner's standing order
 	// (internal/fleet/authority.go); nil = the default (architect@hosta, tmx-lead@hosta).
 	FleetAuthorities []string `json:"fleet_authorities,omitempty"`
+	// Teammates: people the owner marked as teammates of a project (model.Teammate; matched by
+	// peer ID or WhatsApp number, never by name), besides People of kind team that name shared
+	// projects. Their requests within that project count as the owner's standing order
+	// (internal/fleet/authority.go); nil or empty = none from here.
+	Teammates []model.Teammate `json:"teammates,omitempty"`
 	// AgentBypass: Claude agents guarded by tmx's hook run in bypass mode, so the guard alone
 	// decides what asks the owner (internal/fleet/guard.go); nil = on, false = Claude's prompts.
 	AgentBypass *bool `json:"agent_bypass,omitempty"` // the Python fleet's other machines (peers.go); production only

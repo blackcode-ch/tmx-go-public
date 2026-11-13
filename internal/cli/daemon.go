@@ -129,7 +129,7 @@ func cmdDaemon(e *env, args []string) (err error) {
 		Supervisor:     e.cfg.Supervisor,
 		Store:          st, Paths: paths, Runners: runners(),
 		Machine: e.cfg.Machine, Version: config.Version, Workspace: e.cfg.Workspace,
-		FleetAuthorities: e.cfg.FleetAuthorities, AgentBypass: e.cfg.AgentBypass,
+		FleetAuthorities: e.cfg.FleetAuthorities, Teammates: e.cfg.Teammates, AgentBypass: e.cfg.AgentBypass,
 		URL: e.cfg.URL(), ClaudeCommand: e.cfg.ClaudeCommand, HeadHarness: e.cfg.HeadHarness,
 		Policy: e.cfg.EffectivePolicy(), // seeds the built-in profiles on first start only
 		Guard:  e.cfg.Guard,

@@ -296,7 +296,10 @@ are from the Go parity page of 3 Nov (60 stories).
 - *Intended:* Today it runs over the peer pair-token API through Tailscale HTTPS (Python-compatible). In the end
   state it runs over our own mesh. Verified orders from the fleet leadership (`architect@hosta`,
   `tmx-lead@hosta` by default) count as the owner's standing order for ordinary fleet work, but never for
-  machine-protection actions.
+  machine-protection actions. People the owner marks as teammates of a project (People of kind team with that
+  project, or config.json `teammates`; matched by WhatsApp number or peer ID, never by name) count the same way
+  within that project only; money, credentials, sending outward, client data, machine protection or his access,
+  and anything outside the project still ask him.
 - *Where:* `internal/api/peers.go`, `internal/peers/`, `internal/fleet/peer.go`, `peermail.go`, `authority.go`,
   `internal/config/peers.go`, `DESIGN.md` "Production profile and Python fleet interop".
 - *Status:* **Mostly built**. Mail and sessions between machines are built. A paired, attested peer machine is

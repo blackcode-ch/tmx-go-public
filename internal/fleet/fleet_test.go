@@ -31,7 +31,8 @@ type env struct {
 	chat      *fake.Runner
 	term      *fake.Runner
 	guard     *guard.Settings
-	bypass    *bool // Options.AgentBypass (nil = the default, on)
+	bypass    *bool            // Options.AgentBypass (nil = the default, on)
+	teammates []model.Teammate // Options.Teammates (nil = none)
 	accounts  AccountHomes
 	// hostExe and termRunner: session hosts (hosting_test.go); nil/"" = none, e.term.
 	hostExe    string
@@ -84,6 +85,7 @@ func (e *env) fleet() *Fleet {
 		Executable:  "/opt/tmx/tmx",
 		Guard:       e.guard,
 		AgentBypass: e.bypass,
+		Teammates:   e.teammates,
 		Accounts:    e.accounts,
 	})
 	if err != nil {

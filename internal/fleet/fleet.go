@@ -73,6 +73,9 @@ type Options struct {
 	// FleetAuthorities are "name@host" senders whose peer mail counts as the owner's standing
 	// order (authority.go); nil = DefaultFleetAuthorities.
 	FleetAuthorities []string
+	// Teammates are the people the owner marked as teammates of a project (authority.go);
+	// nil or empty = none.
+	Teammates []model.Teammate
 	// Accounts are the harnesses' named accounts (internal/accounts); nil = one account each.
 	Accounts AccountHomes
 }
@@ -83,6 +86,7 @@ type Fleet struct {
 	hostRetry       time.Duration                  // hosting.go
 	stopHost        func(dir string) (bool, error) // hosting.go
 	authorities     map[string]bool                // authority.go
+	teammates       []model.Teammate               // authority.go
 	processes       *processes.Registry
 	processRequests map[string]ownedProcessRequest
 	opts            Options
@@ -193,6 +197,7 @@ func New(opts Options) (*Fleet, error) {
 	f := &Fleet{
 		hostRetry: hostRetry, stopHost: stopHost, // hosting.go
 		authorities: normalizeAuthorities(opts.FleetAuthorities),
+		teammates:   normalizeTeammates(opts.Teammates),
 		processes:   processes.New(),
 		opts:        opts, st: opts.Store, log: opts.Logger, bus: newBus(),
 		ctx: ctx, cancel: cancel,

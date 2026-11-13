@@ -14,9 +14,12 @@ type Person struct {
 	Kind      string            `json:"kind"` // team | external | client
 	Preferred string            `json:"preferred,omitempty"`
 	Aliases   []string          `json:"aliases,omitempty"`
-	Channels  map[string]string `json:"channels,omitempty"` // whatsapp, email, github
+	Channels  map[string]string `json:"channels,omitempty"` // whatsapp, email, github, tmx (their install's peer ID)
 	Notes     string            `json:"notes,omitempty"`
-	UpdatedAt int64             `json:"updated_at"`
+	// Projects a team member shares with the owner (slug, name or id): within them their requests
+	// count as the owner's standing order (internal/fleet/authority.go, Teammate). Team members only.
+	Projects  []string `json:"projects,omitempty"`
+	UpdatedAt int64    `json:"updated_at"`
 }
 
 // PublicPerson is what an agent sees: whether a channel exists, never the number or address.
@@ -31,12 +34,15 @@ type PublicPerson struct {
 	GitHub       string   `json:"github,omitempty"`
 	HasWhatsApp  bool     `json:"has_whatsapp"`
 	HasEmail     bool     `json:"has_email"`
+	HasTmx       bool     `json:"has_tmx"` // their own tmx install is known (never the peer ID itself)
+	Projects     []string `json:"projects,omitempty"`
 	OpenPromises int      `json:"open_promises"`
 }
 
 func (p Person) Public() PublicPerson {
 	return PublicPerson{Key: p.Key, Name: p.Name, Role: p.Role, Lang: p.Lang, Kind: p.Kind, Preferred: p.Preferred,
-		Aliases: p.Aliases, GitHub: p.Channels["github"], HasWhatsApp: p.Channels["whatsapp"] != "", HasEmail: p.Channels["email"] != ""}
+		Aliases: p.Aliases, GitHub: p.Channels["github"], HasWhatsApp: p.Channels["whatsapp"] != "", HasEmail: p.Channels["email"] != "",
+		HasTmx: p.Channels["tmx"] != "", Projects: p.Projects}
 }
 
 // Promise is a tracked commitment to or from a person (Python's People "ask").
