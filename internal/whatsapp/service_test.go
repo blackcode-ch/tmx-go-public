@@ -31,9 +31,16 @@ type fakeFleet struct {
 	profiles  map[string]string // agent id → profile slug
 	approvals map[string]model.Approval
 	mails     []mail
+	teammates map[string]model.TeammateMark // by sender JID: the owner's teammate marks
 }
 
 func (f *fakeFleet) HeadID() string { return f.head }
+func (f *fakeFleet) TeammateOf(peer, jid string) (model.TeammateMark, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	tm, ok := f.teammates[jid]
+	return tm, ok
+}
 func (f *fakeFleet) AgentProfile(id string) (model.Profile, error) {
 	if p, ok := f.profiles[id]; ok {
 		return model.Profile{Slug: p}, nil

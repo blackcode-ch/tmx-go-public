@@ -32,6 +32,9 @@ type PersonInput struct {
 	Notes     *string           `json:"notes,omitempty"`
 	Aliases   []string          `json:"aliases,omitempty"`
 	Channels  map[string]string `json:"channels,omitempty"`
+	// Projects the person shares with the owner (authority.go: a team member's requests within
+	// them proceed without asking). nil = unchanged; empty = none.
+	Projects []string `json:"projects,omitempty"`
 }
 
 func storeErr(err error, what string) error {
@@ -165,13 +168,31 @@ func (f *Fleet) PutPerson(c Caller, in PersonInput) (model.Person, error) {
 			if len(v) > 64 {
 				err = errors.New("github name too long")
 			}
+		case "tmx": // the peer ID of their own tmx install (Contacts shows it), for chats between installs
+			if len(v) < 8 || len(v) > 128 || strings.ContainsAny(v, " \t\r\n") {
+				err = errors.New("tmx must be the peer ID of their install")
+			}
 		default:
-			err = errors.New("channel must be whatsapp, email or github")
+			err = errors.New("channel must be whatsapp, email, github or tmx")
 		}
 		if err != nil {
 			return model.Person{}, errf(KindInvalid, "%s: %v", ch, err)
 		}
 		p.Channels[ch] = v
+	}
+	if in.Projects != nil {
+		var projects []string
+		for _, name := range in.Projects {
+			name = limitRunes(strings.TrimSpace(name), 80)
+			if name == "" || contains(projects, name) {
+				continue
+			}
+			if len(projects) == 32 {
+				return model.Person{}, errf(KindInvalid, "at most 32 projects per person")
+			}
+			projects = append(projects, name)
+		}
+		p.Projects = projects
 	}
 	p.UpdatedAt = model.Now()
 	return p, f.st.PutPerson(p)

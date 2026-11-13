@@ -19,9 +19,10 @@ import (
 
 // stubAgents is the fleet side: one head ("head", id h1) and a worker ("helper", id w1).
 type stubAgents struct {
-	mu     sync.Mutex
-	mail   []mailItem
-	events []model.BusEvent
+	mu        sync.Mutex
+	mail      []mailItem
+	events    []model.BusEvent
+	teammates map[string]model.TeammateMark // by peer ID: the owner's teammate marks (teammateSource)
 }
 
 func (a *stubAgents) Agent(id string) (model.Agent, error) {
@@ -34,6 +35,20 @@ func (a *stubAgents) Agent(id string) (model.Agent, error) {
 	return model.Agent{}, fmt.Errorf("no agent %q", id)
 }
 func (a *stubAgents) HeadID() string { return "h1" }
+func (a *stubAgents) TeammateOf(peer, jid string) (model.TeammateMark, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	tm, ok := a.teammates[peer]
+	return tm, ok
+}
+func (a *stubAgents) markTeammate(peer string, tm model.TeammateMark) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.teammates == nil {
+		a.teammates = map[string]model.TeammateMark{}
+	}
+	a.teammates[peer] = tm
+}
 func (a *stubAgents) DeliverExternal(agentID, from, text string) (model.Message, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
