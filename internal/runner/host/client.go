@@ -166,6 +166,13 @@ func Stop(dir string) (gone bool, err error) {
 		// A failed kill on Windows can race the completion of an earlier termination.
 		// Observe only the recorded identity, and retain the state unless it is gone.
 		if !waitHostGone(in, 2*time.Second, 25*time.Millisecond, time.Now, time.Sleep) {
+			// One final identity check: if the host is no longer provably alive, treat the stop as done.
+			// Clear stale host.json/state.json so a new host can be spawned.
+			if alive(in) != hostAlive {
+				_ = os.Remove(filepath.Join(dir, infoFile))
+				_ = os.Remove(filepath.Join(dir, stateFile))
+				return false, nil
+			}
 			return false, err
 		}
 	}
