@@ -168,6 +168,13 @@ func Stop(dir string) (gone bool, err error) {
 		if !waitHostGone(in, 2*time.Second, 25*time.Millisecond, time.Now, time.Sleep) {
 			return false, err
 		}
+	} else {
+		// Even on a successful kill, Windows processes can take a moment to disappear
+		// from the process table after TerminateProcess. Wait for the recorded host
+		// to be gone so a subsequent Dial cannot reconnect to a terminating host.
+		if !waitHostGone(in, 2*time.Second, 25*time.Millisecond, time.Now, time.Sleep) {
+			return false, fmt.Errorf("host did not end within the stop deadline: %w", ErrHostUnknown)
+		}
 	}
 	_ = os.Remove(filepath.Join(dir, infoFile))
 	_ = os.Remove(filepath.Join(dir, stateFile))
