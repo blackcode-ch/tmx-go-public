@@ -162,16 +162,50 @@ func Stop(dir string) (gone bool, err error) {
 	if err := killProgram(in); err != nil && childOfHost(in) {
 		return false, fmt.Errorf("the agent's program could not be ended: %w", err)
 	}
-	if err := killHost(in); err != nil {
-		// A failed kill on Windows can race the completion of an earlier termination.
-		// Observe only the recorded identity, and retain the state unless it is gone.
-		if !waitHostGone(in, 2*time.Second, 25*time.Millisecond, time.Now, time.Sleep) {
-			return false, err
-		}
+	if err := stopHost(in, killHost, 2*time.Second, 25*time.Millisecond, time.Now, time.Sleep); err != nil {
+		return false, err
 	}
 	_ = os.Remove(filepath.Join(dir, infoFile))
 	_ = os.Remove(filepath.Join(dir, stateFile))
 	return false, nil
+}
+
+// stopHost ends the recorded host within a bounded deadline. A failed kill on Windows can
+// race the completion of an earlier termination: wait for the recorded identity to disappear,
+// then retry the kill while time remains. Unknown liveness or a host still alive at the
+// deadline is an error, so Stop keeps the recorded state and a second host cannot start.
+func stopHost(in info, kill func(info) error, timeout, interval time.Duration, now func() time.Time, sleep func(time.Duration)) error {
+	deadline := now().Add(timeout)
+	var lastErr error
+	for {
+		lastErr = kill(in)
+		if lastErr == nil {
+			if waitHostGone(in, deadline.Sub(now()), interval, now, sleep) {
+				return nil
+			}
+			return fmt.Errorf("the host did not exit within %s", timeout)
+		}
+		switch alive(in) {
+		case hostGone:
+			return nil
+		case hostUnknown:
+			return lastErr
+		}
+		remaining := deadline.Sub(now())
+		if remaining <= 0 {
+			return lastErr
+		}
+		wait := 4 * interval
+		if wait > remaining {
+			wait = remaining
+		}
+		if waitHostGone(in, wait, interval, now, sleep) {
+			return nil
+		}
+		if now().After(deadline) {
+			return lastErr
+		}
+	}
 }
 
 // waitHostGone bounds the additional wait and never treats unknown liveness as proof of exit.

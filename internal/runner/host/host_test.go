@@ -523,6 +523,47 @@ func TestStopFailedKillUnsureKeepsTheHost(t *testing.T) {
 	}
 }
 
+// A failed kill is retried while the recorded host is still exiting: a delayed exit is
+// handled, the state is cleared, and the first stop still reports that it stopped something.
+func TestStopRetriesFailedKillUntilGone(t *testing.T) {
+	dir := writeInfo(t)
+	killed := stubStop(t, []liveness{hostAlive, hostAlive, hostGone}, nil, errors.New("access denied"), false)
+	if gone, err := Stop(dir); err != nil || gone || !*killed {
+		t.Fatalf("gone=%v err=%v killed=%v", gone, err, *killed)
+	}
+	for _, f := range []string{infoFile, stateFile} {
+		if _, err := os.Stat(filepath.Join(dir, f)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stale %s kept: %v", f, err)
+		}
+	}
+}
+
+// A kill that keeps failing while the host stays alive is not reported as stopped, and the
+// recorded state stays so a second host cannot start beside it.
+func TestStopPersistentKillFailureKeepsHost(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive}, nil, errors.New("access denied"), false)
+	if gone, err := Stop(dir); err == nil || gone {
+		t.Fatalf("gone=%v err=%v", gone, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, infoFile)); err != nil {
+		t.Fatalf("host.json removed: %v", err)
+	}
+}
+
+// A kill that succeeds but leaves the host alive at the deadline is not reported as stopped;
+// the recorded state stays so a second host cannot start beside it.
+func TestStopKillSucceedsButHostStaysAliveKeepsState(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive}, nil, nil, false)
+	if gone, err := Stop(dir); err == nil || gone {
+		t.Fatalf("gone=%v err=%v", gone, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, infoFile)); err != nil {
+		t.Fatalf("host.json removed: %v", err)
+	}
+}
+
 // The program's tree could not be ended and it still runs under its host: the host is not
 // killed (that would orphan the program), and the stop says so. o5, #249.
 func TestStopNeverOrphansTheProgram(t *testing.T) {
