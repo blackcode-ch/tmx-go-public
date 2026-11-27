@@ -551,6 +551,19 @@ func TestStopPersistentKillFailureKeepsHost(t *testing.T) {
 	}
 }
 
+// A kill that succeeds but leaves the host alive at the deadline is not reported as stopped;
+// the recorded state stays so a second host cannot start beside it.
+func TestStopKillSucceedsButHostStaysAliveKeepsState(t *testing.T) {
+	dir := writeInfo(t)
+	stubStop(t, []liveness{hostAlive}, nil, nil, false)
+	if gone, err := Stop(dir); err == nil || gone {
+		t.Fatalf("gone=%v err=%v", gone, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, infoFile)); err != nil {
+		t.Fatalf("host.json removed: %v", err)
+	}
+}
+
 // The program's tree could not be ended and it still runs under its host: the host is not
 // killed (that would orphan the program), and the stop says so. o5, #249.
 func TestStopNeverOrphansTheProgram(t *testing.T) {
