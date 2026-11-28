@@ -160,7 +160,11 @@ func (f *Fleet) InterruptAgent(c Caller, idOrName string) (model.Agent, error) {
 	if proc == nil {
 		return model.Agent{}, errf(KindConflict, "the agent is not running")
 	}
-	if err := proc.Interrupt(); err != nil {
+	interrupt := proc.Interrupt
+	if owner, ok := proc.(runner.OwnerInterrupter); c.Owner && ok {
+		interrupt = owner.InterruptByOwner
+	}
+	if err := interrupt(); err != nil {
 		return model.Agent{}, err
 	}
 	return f.Agent(id)

@@ -5,6 +5,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { bytesBase64 } from '../src/lib/rec-upload.ts';
 
 const source = readFileSync(new URL('../src/lib/recorder.ts', import.meta.url), 'utf8');
+const transport = readFileSync(new URL('../src/lib/transport.ts', import.meta.url), 'utf8');
 const between = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 // Execute the production handlers without starting the browser application/store.
 const code = stripTypeScriptTypes(`
@@ -23,6 +24,16 @@ const MAX_FRAMES = 400;
 const bytesBase64 = (bytes) => Buffer.from(bytes).toString('base64');
 class ApiError extends Error {
   constructor(status, message, data) { super(message); this.status = status; this.data = data; }
+}
+const window = { location: { origin: 'https://phone.invalid' } };
+const parseJSON = JSON.parse;
+const errorFromBody = (status, text) => new ApiError(status, '', JSON.parse(text));
+let lockedHook;
+export class HttpTransport {
+  constructor(token = '', baseURL = window.location.origin) {
+    Object.assign(this, { token, baseURL, apiBase: baseURL });
+  }
+  ${transport.slice(transport.indexOf('  async recordingRequest'), transport.indexOf('  private wsURL'))}
 }
 export class Harness {
   constructor() {
@@ -45,18 +56,18 @@ export class Harness {
   ${between('  private async frame(', '  /** Every 2 s:')}
   ${between('  async stop()', '  /** Ends the capture')}
 }
-export ${source.slice(source.indexOf('async function putRaw('))}
+${source.slice(source.indexOf('function blobBase64('))}
 `);
 const runtime = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
-const { Harness, putRaw } = runtime;
+const { Harness, HttpTransport } = runtime;
 
 test('base64 handles empty, binary, block boundaries and large buffers without Blob/FileReader', () => {
   for (const length of [0, 1, 2, 3, 24575, 24576, 24577, 2 * 1024 * 1024 + 1]) {
     const bytes = Uint8Array.from({ length }, (_, i) => i % 256);
     assert.equal(bytesBase64(bytes), Buffer.from(bytes).toString('base64'));
   }
-  assert.doesNotMatch(source, /new Blob/);
+  assert.doesNotMatch(between('  private async send(c:', '  // ---- still frames:'), /new Blob/);
 });
 
 class FakeRecorder extends EventTarget {
@@ -127,12 +138,32 @@ test('HTTP uploads bytes directly and consumes success/error acknowledgement bod
   try {
     for (const status of [200, 409]) {
       const response = new Response('{"error":"gap","size":12}', { status });
-      globalThis.fetch = async (_url, options) => { assert.equal(options.body, bytes); return response; };
-      const send = putRaw({ baseURL: 'https://example.invalid', token: '' }, '/chunk', bytes, 'application/octet-stream');
+      globalThis.fetch = async (_url, options) => {
+        assert.equal(options.body, bytes);
+        assert.equal(options.headers.Authorization, undefined);
+        return response;
+      };
+      const send = new HttpTransport().recordingRequest('PUT', '/chunk', bytes, 'application/octet-stream');
       if (status === 200) await send;
       else await assert.rejects(send, (e) => e.status === 409 && e.data.size === 12);
       assert.equal(response.bodyUsed, true);
     }
+  } finally { globalThis.fetch = previous; }
+});
+
+test('recorder preserves bearer uploads and falls back to an authenticated same-origin cookie after a 401', async () => {
+  const previous = globalThis.fetch;
+  const headers = [];
+  const bytes = Uint8Array.of(1, 2, 3);
+  try {
+    globalThis.fetch = async (_url, options) => {
+      headers.push(options.headers.Authorization);
+      assert.equal(options.body, bytes);
+      return headers.length === 2 ? new Response('{}', { status: 401 }) : new Response('{}');
+    };
+    const t = new HttpTransport('fixture');
+    for (let i = 0; i < 3; i++) await t.recordingRequest('PUT', '/chunk', bytes, 'application/octet-stream');
+    assert.deepEqual(headers, ['Bearer fixture', 'Bearer fixture', undefined, undefined]);
   } finally { globalThis.fetch = previous; }
 });
 
@@ -177,12 +208,9 @@ test('pending and converted bytes share one cap, and pending age counts toward t
   }
 });
 
-test('Stop times out at twenty-five seconds, preserves converted data, and ignores late completion', async (t) => {
+test('Stop times out at twenty-five seconds and hands unread data to recovery', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const previous = globalThis.MediaRecorder;
-  const warn = console.warn;
-  const warnings = [];
-  console.warn = (message) => warnings.push(message);
   globalThis.MediaRecorder = FakeRecorder;
   try {
     const h = new Harness();
@@ -193,7 +221,7 @@ test('Stop times out at twenty-five seconds, preserves converted data, and ignor
     mr.ondataavailable({ data: { size: 1024, arrayBuffer: () => new Promise((r) => { resolveRead = r; }) } });
     await delay();
     // Three stalled reads: the first two fall back at 10 s and 20 s;
-    // Stop's deadline drops only the third at 25 s.
+    // Stop's deadline hands the third to recovery at 25 s.
     for (let i = 0; i < 2; i++) mr.ondataavailable({ data: { size: 1024, arrayBuffer: () => new Promise(() => {}) } });
     const holder = [...h.pendingMedia][2];
     const stopping = h.stop();
@@ -207,16 +235,15 @@ test('Stop times out at twenty-five seconds, preserves converted data, and ignor
     assert.equal(h.releasedAt, undefined);
     t.mock.timers.tick(1);
     await stopping;
-    assert.equal(h.releasedAt, 3);
+    assert.equal(h.captured.length, 3);
     assert.equal(h.ended, true);
     assert.equal(holder.blob, null);
     assert.equal(h.pendingMedia.size, 0);
-    assert.match(warnings[0], /timed out after 25 s/);
-    assert.match(runtime.finishedNote, /1 media chunk/);
+    assert.match(h.error, /Some media could not be read/);
     resolveRead(new ArrayBuffer(1024));
     await delay();
     assert.equal(h.captured.length, 3);
-  } finally { globalThis.MediaRecorder = previous; console.warn = warn; }
+  } finally { globalThis.MediaRecorder = previous; }
 });
 
 test('a stalled conversion falls back to its original Blob after ten seconds, in order', async (t) => {
@@ -259,7 +286,7 @@ test('fallback sends the original Blob over HTTP and the legacy FileReader bridg
       response = new Response('{}');
       return response;
     };
-    h.t = { kind: 'http', baseURL: '', token: '' };
+    h.t = new HttpTransport();
     await h.send(chunk);
     assert.equal(response.bodyUsed, true);
     globalThis.FileReader = class {

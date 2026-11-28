@@ -154,6 +154,7 @@ func init() {
 		"antechamber": cmdAntechamber, "transfers": cmdTransfers,
 		"startup": cmdStartup, "daemon": cmdDaemon, "up": cmdUp, "down": cmdDown, "status": cmdStatus, "open": cmdOpen,
 		"daemon-after-exit": cmdDaemonAfterExit,
+		"agy-quota-child":   cmdAgyQuotaChild,
 		"rollback":          cmdRollback,
 		"peers":             cmdPeers, "config": cmdConfig,
 		"app": cmdApp, "ls": cmdLs, "project": cmdProject, "run": cmdRun, "send": cmdSend,

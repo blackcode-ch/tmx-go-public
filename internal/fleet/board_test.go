@@ -79,9 +79,9 @@ func TestBoardTopicsMailAndCards(t *testing.T) {
 	toolUse(hp, "mcp__tmxg__send", map[string]any{"to": "owner", "body": "Drafting it now."})
 	toolUse(hp, "mcp__tmxg__agent_launch", map[string]any{"name": "copywriter", "project": "alpha"})
 
-	// The owner interrupts the current turn. Its result remains in its original topic.
+	// The owner queues a new turn. The active result remains in its original topic.
 	m, err := f.SendOwner("head", "how are things?", "")
-	if err != nil || m.State != model.MsgQueued || hp.Interrupts() != 1 {
+	if err != nil || m.State != model.MsgQueued || hp.Interrupts() != 0 {
 		t.Fatalf("general while busy: %+v %v", m, err)
 	}
 	// So does a lead's report, filed under its project.

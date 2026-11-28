@@ -169,6 +169,90 @@ const waMsgCols = `m.chat_jid, m.id, m.sender_jid, COALESCE(NULLIF(c.name, ''), 
 	m.from_me, m.at, m.type, m.text, m.caption, m.media, m.media_ref, m.media_file, m.quoted, m.status, m.error,
 	m.edited, m.deleted, m.origin`
 
+// WaWatchPending finds unseen lines even if history arrived out of order.
+// The receipt is the durable local or peer outbox message itself.
+func (s *Store) WaWatchPending(chat, recipient string, since int64, offset int) ([]WaMessageRow, error) {
+	return s.waQuery(`m.chat_jid = ? AND m.at >= ? AND m.deleted = 0
+		AND (m.from_me = 0 OR m.status IN ('sent','delivered','read'))
+		AND m.type != 'system' AND (m.text != '' OR m.caption != '' OR m.type IN ('image','video','voice')) AND NOT EXISTS (
+			SELECT 1 FROM messages n WHERE n.from_id = ? AND n.retry_id != '' AND n.retry_id = ? || m.id
+		) ORDER BY m.at, m.id LIMIT 64 OFFSET ?`, chat, since, model.WhatsAppParty, WaWatchKey(chat, recipient, ""), offset)
+}
+
+func WaWatchKey(chat, recipient, id string) string {
+	return "wa-watch:" + chat + ":" + recipient + ":" + id
+}
+
+func (s *Store) WaWatchDigestPending(chat, recipient string, since, before int64) ([]WaMessageRow, error) {
+	return s.waQuery(`m.chat_jid = ? AND m.at >= ? AND m.at < ? AND m.deleted = 0
+		AND (m.from_me = 0 OR m.status IN ('sent','delivered','read'))
+		AND m.type != 'system' AND (m.text != '' OR m.caption != '' OR m.type IN ('image','video','voice'))
+		AND NOT EXISTS (SELECT 1 FROM wa_watch_seen n WHERE n.key = ? || m.id)
+		ORDER BY m.at, m.id LIMIT 64`, chat, since, before, WaWatchDigestKey(chat, recipient, ""))
+}
+
+func WaWatchDigestKey(chat, recipient, id string) string {
+	return "wa-digest:" + chat + ":" + recipient + ":" + id
+}
+
+func (s *Store) WaWatchMention(chat, id string) error {
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO wa_watch_mentions (chat,id) VALUES (?,?)`, chat, id)
+	return err
+}
+
+func (s *Store) WaIsWatchMention(chat, id string) bool {
+	var found bool
+	_ = s.db.QueryRow(`SELECT EXISTS (SELECT 1 FROM wa_watch_mentions WHERE chat=? AND id=?)`, chat, id).Scan(&found)
+	return found
+}
+
+func WaWatchUrgentKey(chat, recipient, id string) string {
+	return "wa-urgent:" + chat + ":" + recipient + ":" + id
+}
+
+func (s *Store) WaWatchUrgentPending(chat, recipient string, since, through int64, offset int) ([]WaMessageRow, error) {
+	return s.waQuery(`m.chat_jid = ? AND m.at >= ? AND m.at <= ? AND m.from_me = 0 AND m.deleted = 0
+		AND m.type != 'system' AND (m.text != '' OR m.caption != '' OR EXISTS (
+			SELECT 1 FROM wa_watch_mentions w WHERE w.chat=m.chat_jid AND w.id=m.id))
+		AND NOT EXISTS (SELECT 1 FROM wa_watch_seen n WHERE n.key = ? || m.id)
+		ORDER BY m.at,m.id LIMIT 64 OFFSET ?`, chat, since, through, WaWatchUrgentKey(chat, recipient, ""), offset)
+}
+
+// PutWaWatchNotice commits the digest's covered lines together with its mail.
+func (s *Store) PutWaWatchNotice(messages []model.Message, peers []PeerMessage, seen []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, peer := range peers {
+		if _, err := tx.Exec(`INSERT INTO peer_messages (`+peerCols+`) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			peer.LocalID, peer.Peer, peer.WireID, peer.Direction, peer.SHA256, peer.Attempts, peer.NextAttemptAt, peer.LastError, peer.VerifiedSender, peer.VerifiedGeneration); err != nil {
+			return err
+		}
+	}
+	for _, m := range messages {
+		if _, err := tx.Exec(upsert("messages", messageCols),
+			m.ID, m.From, m.To, m.Body, m.State, nullable(m.ReplyTo), m.CreatedAt, m.DeliveredAt, m.ThreadID, m.RetryID, m.RetryHash, m.Receipt, m.ReceiptAt, m.Urgent); err != nil {
+			return err
+		}
+	}
+	for _, key := range seen {
+		if _, err := tx.Exec(`INSERT INTO wa_watch_seen (key) VALUES (?)`, key); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// WaWatchChatID resolves an exact title only when it has a unique match.
+func (s *Store) WaWatchChatID(title string) (string, error) {
+	var id string
+	err := s.db.QueryRow(`SELECT MIN(jid) FROM wa_chats WHERE lower(trim(name))=lower(trim(?))
+		HAVING COUNT(*)=1`, title).Scan(&id)
+	return id, err
+}
+
 // waQuery runs a SELECT over messages (with the sender's name resolved) and attaches reactions.
 func (s *Store) waQuery(where string, args ...any) ([]WaMessageRow, error) {
 	rows, err := s.db.Query(`SELECT `+waMsgCols+` FROM wa_messages m LEFT JOIN wa_contacts c ON c.jid = m.sender_jid WHERE `+where, args...)
@@ -488,7 +572,7 @@ func (s *Store) WaClear() error {
 	if err != nil {
 		return err
 	}
-	for _, t := range []string{"wa_reactions", "wa_messages", "wa_chats", "wa_contacts"} {
+	for _, t := range []string{"wa_reactions", "wa_messages", "wa_chats", "wa_contacts", "wa_watch_seen", "wa_watch_mentions"} {
 		if _, err := tx.Exec(`DELETE FROM ` + t); err != nil {
 			tx.Rollback()
 			return err

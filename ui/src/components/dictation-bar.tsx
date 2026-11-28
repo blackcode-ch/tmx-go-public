@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DictationMeter } from "@/components/dictation-meter";
 import { useInlineDictation } from "@/components/dictation-inline";
 import { useClassic } from "@/hooks/use-classic";
 import { cancelDictating, dictationElapsed, stopDictating, useDictation } from "@/lib/dictation-session";
@@ -48,7 +49,7 @@ export function DictationBar() {
       role="status"
       aria-live="polite"
       data-dictation-bar
-      className="flex shrink-0 items-center gap-2.5 border-b border-state-error/30 bg-state-error/10 px-4 py-1.5 text-[0.8125rem] text-foreground md:px-6"
+      className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-state-error/30 bg-state-error/10 px-4 py-1.5 text-[0.8125rem] text-foreground md:px-6"
     >
       <span className="relative flex size-2.5 shrink-0" aria-hidden>
         {recording && <span className="absolute inline-flex size-full animate-ping rounded-full bg-state-error opacity-60" />}
@@ -60,6 +61,7 @@ export function DictationBar() {
           {clock(elapsed)}
         </span>
       )}
+      {recording && !inline && <DictationMeter />}
       <span className="min-w-0 truncate text-muted-foreground">
         into{" "}
         <button type="button" className="underline-offset-2 hover:text-foreground hover:underline" onClick={() => navigate(target.path)}>

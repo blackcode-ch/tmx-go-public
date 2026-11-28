@@ -28,6 +28,7 @@ type wireMsg struct {
 
 	// result
 	Result       string   `json:"result"`
+	Errors       []string `json:"errors"`
 	IsError      bool     `json:"is_error"`
 	NumTurns     *int     `json:"num_turns"`
 	TotalCostUSD *float64 `json:"total_cost_usd"`
@@ -76,12 +77,14 @@ type wireControlResponse struct {
 // parser turns stdout lines into runner events and tracks the agent state. It is not safe for
 // concurrent use; the process serialises access.
 type parser struct {
-	initID    string // request_id of our initialize request
-	sessionID string
-	state     model.AgentState
-	busy      bool                       // a user turn is in flight (Send .. result)
-	pending   map[string]json.RawMessage // can_use_tool request id -> original input
-	log       *slog.Logger
+	initID         string // request_id of our initialize request
+	sessionID      string
+	state          model.AgentState
+	busy           bool                       // a user turn is in flight (Send .. result)
+	interruptID    string                     // pending interrupt for this live turn
+	ownerInterrupt bool                       // the verified owner issued it
+	pending        map[string]json.RawMessage // can_use_tool request id -> original input
+	log            *slog.Logger
 }
 
 func newParser(initID string, log *slog.Logger) *parser {
@@ -180,6 +183,10 @@ func (p *parser) line(b []byte) out {
 func (p *parser) controlResponse(o *out, m wireMsg) {
 	var r wireControlResponse
 	_ = json.Unmarshal(m.Response, &r)
+	if r.RequestID == p.interruptID && r.Subtype == "error" {
+		p.interruptID = ""
+		p.ownerInterrupt = false
+	}
 	if r.RequestID != p.initID {
 		return
 	}
@@ -257,10 +264,36 @@ func (p *parser) toolResults(o *out, m wireMsg) {
 func (p *parser) result(o *out, m wireMsg) {
 	p.setSession(o, m.SessionID)
 	text := m.Result
+	subtype := m.Subtype
+	explicit := false
+	switch subtype {
+	case "superseded":
+		text, m.IsError = "", false
+	case "interrupted", "aborted":
+		explicit = p.ownerInterrupt
+		text, m.IsError = "", false
+	default:
+		userInterrupted := strings.EqualFold(strings.Trim(strings.TrimSpace(text), "[]"), "request interrupted by user")
+		if (m.IsError && userInterrupted) || (p.interruptID != "" && subtype == "error_during_execution" && text == "" && m.Error == "" && len(m.Errors) == 0) {
+			explicit = p.ownerInterrupt
+			subtype, text, m.IsError = "aborted", "", false
+		}
+	}
+	if explicit {
+		subtype, text = "interrupted", "Interrupted"
+	}
+	p.interruptID = ""
+	p.ownerInterrupt = false
+	if text == "" && m.IsError && len(m.Errors) > 0 {
+		text = strings.Join(m.Errors, "\n")
+	}
 	if text == "" && m.IsError {
 		text = m.Subtype
 	}
-	meta := map[string]any{"subtype": m.Subtype}
+	meta := map[string]any{"subtype": subtype}
+	if explicit {
+		meta["owner_interrupt"] = true
+	}
 	ev := runner.Event{Kind: runner.EvUsage}
 	if m.NumTurns != nil {
 		meta["num_turns"] = *m.NumTurns

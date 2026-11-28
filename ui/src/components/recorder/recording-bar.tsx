@@ -7,7 +7,7 @@ import { Loader2, Pause, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useNow } from "@/hooks/use-now";
-import { capture, localElapsed, useCapture } from "@/lib/recorder";
+import { capture, dismissRecordingFailure, downloadRecordingRecovery, localElapsed, useCapture } from "@/lib/recorder";
 import { nativeCapture, useNative, useNativeId } from "@/lib/native-recorder";
 import { loadActive, recApi, useRecordings } from "@/lib/recordings";
 import { captureLabel, clock, elapsedMs, isLive } from "@/lib/recording-types";
@@ -20,10 +20,11 @@ export function useLiveRecording() {
   const local = useCapture((s) => s.rec);
   const base = useCapture((s) => s.base);
   const since = useCapture((s) => s.since);
+  const failedId = useCapture((s) => s.failure?.id);
   const remote = useRecordings((s) => s.active);
   const nativeId = useNativeId();
   const mine = phase !== "idle" && phase !== "starting" && !!local;
-  const rec = mine ? local : isLive(remote) ? remote : null;
+  const rec = mine ? local : remote && isLive(remote) && remote.id !== failedId ? remote : null;
   const native = !mine && !!rec && rec.id === nativeId; // this window captures it natively (native-recorder.ts)
   const paused = mine ? phase === "paused" : rec?.state === "paused";
   return { mine, native, rec, paused, phase, elapsed: (now: number) => (mine ? localElapsed({ base, since }, now) : rec ? elapsedMs(rec, now) : 0) };
@@ -68,6 +69,8 @@ export function RecordingBar() {
   const nativePhase = useNative((s) => s.status?.phase);
   const backlog = useCapture((s) => s.backlog);
   const warning = useCapture((s) => s.warning);
+  const uploadWaiting = useCapture((s) => s.uploadWaiting);
+  const failure = useCapture((s) => s.failure);
   const [busy, setBusy] = useState(false);
   const now = useNow(1000);
 
@@ -77,7 +80,14 @@ export function RecordingBar() {
 
   const live = !!rec;
   useRecordingTitle(live, () => `● Recording${paused ? " (paused)" : ""} ${clock(elapsed(Date.now()))} — tmx`);
-  if (!rec) return null;
+  if (!rec) return failure?.message ? (
+    <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-state-error/30 bg-state-error/10 px-4 py-2 text-sm">
+      <strong>Recording stopped</strong>
+      <span>{failure.message}</span>
+      {failure.recovery && <Button size="sm" variant="outline" onClick={downloadRecordingRecovery}>Download unsent data</Button>}
+      <Button size="sm" variant="ghost" onClick={dismissRecordingFailure}>Dismiss</Button>
+    </div>
+  ) : null;
 
   const act = async (what: "pause" | "resume" | "stop") => {
     setBusy(true);
@@ -118,6 +128,7 @@ export function RecordingBar() {
       <span className="tabular shrink-0 font-mono text-[0.7812rem]" data-recording-time>
         {clock(elapsed(now))}
       </span>
+      {mine && uploadWaiting && <span className="min-w-0 text-xs">Waiting to upload</span>}
       <span className="hidden min-w-0 truncate text-muted-foreground sm:inline">
         {rec.title}
         {captureLabel(rec) && ` · ${captureLabel(rec)}`}

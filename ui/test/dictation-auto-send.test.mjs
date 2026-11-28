@@ -13,7 +13,7 @@ const result=await build({stdin:{resolveDir:fileURLToPath(new URL('../src/lib/',
  }[a.path]}));
 }}]});
 globalThis.window={addEventListener(){}};globalThis.document={activeElement:{blur(){},focus(){assert.fail('no keyboard');}}};
-globalThis.capture={elapsed:()=>1000,onEnded(){},stop:async()=>new Uint8Array(44),cancel(){}};
+globalThis.capture={elapsed:()=>1000,onEnded(){},stop:async()=>new Uint8Array(44),captureMetadata:()=>undefined,cancel(){}};
 const {startDictating,stopDictating,acceptDictation,useDictationOutbox}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
 const settle=()=>new Promise(r=>setImmediate(r));
 test('stop automatically sends transcript to original destination without touching typed draft',async()=>{

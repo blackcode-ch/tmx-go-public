@@ -145,8 +145,8 @@ func TestSwitchWaitsForTheTurnWithoutHoldingOwnerMail(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(50 * time.Millisecond)
-	if len(chat.Sent()) != n || chat.Interrupts() != 1 || e.term.Last(a.ID) != nil {
-		t.Fatal("owner mail did not interrupt the current turn")
+	if len(chat.Sent()) != n || chat.Interrupts() != 0 || e.term.Last(a.ID) != nil {
+		t.Fatal("owner mail interrupted the current turn")
 	}
 	// Cancel and ask again: nothing changes until the turn ends.
 	if res, _ := f.SetMode(OwnerCaller, "w", ModeRequest{Mode: model.ModeChat}); res.Agent.PendingMode != "" {
@@ -562,7 +562,7 @@ func TestPendingModeDoesNotHoldTerminalMailFromEitherSender(t *testing.T) {
 		t.Fatal(err)
 	}
 	sent := proc.Sent()[before:]
-	if len(sent) != 1 || !strings.Contains(sent[0], "agent during pending switch") || proc.Interrupts() != 1 {
+	if len(sent) != 1 || !strings.Contains(sent[0], "agent during pending switch") || proc.Interrupts() != 0 {
 		t.Fatal(sent)
 	}
 	f.mu.Lock()

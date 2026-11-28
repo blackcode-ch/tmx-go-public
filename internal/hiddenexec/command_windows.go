@@ -3,6 +3,8 @@ package hiddenexec
 import (
 	"os/exec"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 // Attributes hides ordinary child processes, preserving flags and raw command lines.
@@ -44,6 +46,12 @@ func InheritConsoleAttributes(attr *syscall.SysProcAttr) *syscall.SysProcAttr {
 }
 
 func configureInheritConsole(cmd *exec.Cmd) {
+	// A detached caller has no console to inherit. Without CREATE_NO_WINDOW,
+	// Windows can allocate one for the child and activate the default terminal.
+	if cp, _ := windows.GetConsoleCP(); cp == 0 {
+		cmd.SysProcAttr = Attributes(cmd.SysProcAttr)
+		return
+	}
 	cmd.SysProcAttr = InheritConsoleAttributes(cmd.SysProcAttr)
 }
 

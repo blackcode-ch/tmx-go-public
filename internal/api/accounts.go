@@ -21,6 +21,7 @@ func (s *Server) accountRoutes(mux *http.ServeMux) {
 	o := func(h http.HandlerFunc) http.HandlerFunc { return s.ownerOnly(s.withAccounts(h)) }
 	mux.HandleFunc("GET /api/accounts", o(s.getAccounts))
 	mux.HandleFunc("POST /api/accounts/refresh", o(s.refreshAccounts))
+	mux.HandleFunc("POST /api/accounts/antigravity/measure", o(s.measureAgyQuota))
 	mux.HandleFunc("POST /api/accounts/claude/reset", o(s.accountReset))
 	mux.HandleFunc("POST /api/accounts/{harness}/login", o(s.accountLogin))
 	mux.HandleFunc("DELETE /api/accounts/{harness}/login", o(s.cancelAccountLogin))
@@ -115,6 +116,15 @@ func (s *Server) refreshAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, s.accounts.Payload())
+}
+
+func (s *Server) measureAgyQuota(w http.ResponseWriter, r *http.Request) {
+	payload, err := s.accounts.MeasureAgyQuota(acctName(r))
+	if err != nil {
+		writeAccountErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 // POST /api/accounts/{harness}/login → {"session"}: starts the harness's sign-in in a terminal,

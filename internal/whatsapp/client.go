@@ -113,12 +113,13 @@ type Quote struct {
 // Incoming is a message from WhatsApp: a new one (Msg), or a change to an earlier one (Edit,
 // Revoke, React name the message changed).
 type Incoming struct {
-	Msg    model.WaMessage
-	Ref    *MediaRef
-	Edit   string // Msg.Text/Caption replace message Edit's
-	Revoke string // message Revoke was deleted for everyone
-	React  string // Msg.Text is a reaction (an emoji; "" takes it back) to message React
-	Skip   bool   // nothing tmx shows (protocol messages, key shares)
+	Msg      model.WaMessage
+	Mentions []string
+	Ref      *MediaRef
+	Edit     string // Msg.Text/Caption replace message Edit's
+	Revoke   string // message Revoke was deleted for everyone
+	React    string // Msg.Text is a reaction (an emoji; "" takes it back) to message React
+	Skip     bool   // nothing tmx shows (protocol messages, key shares)
 }
 
 // ChatUpdate changes some of a chat's fields (nil = unchanged).

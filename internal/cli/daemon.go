@@ -396,7 +396,12 @@ func cmdDaemon(e *env, args []string) (err error) {
 	// accounts and usage"). The harnesses run in a folder of their own, never a project.
 	accts = accounts.New(accounts.Options{Dir: filepath.Join(paths.Home, "accounts"), Publish: f.Publish, Logger: log,
 		ClaudeUsageChanged: f.FailoverClaudeAccount,
-		NodeHome:           paths.Home, AllowUserLogins: e.cfg.UseUserAccounts(paths.Home),
+		UsageObserved:      f.ObserveAccountUsage,
+		AgyBackgroundUsage: func() bool {
+			c, err := config.Load(paths)
+			return err == nil && (c.AgyBackgroundUsage == nil || *c.AgyBackgroundUsage)
+		},
+		NodeHome: paths.Home, AllowUserLogins: e.cfg.UseUserAccounts(paths.Home),
 		Commands: accountCommands(e.cfg),
 		// The sign-in shown and made here (`claude auth login`) is the agents' own.
 		Env:      []string{claude.EnvConfigDir + "=" + claudeDir},

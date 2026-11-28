@@ -14,7 +14,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentAvatar } from "@/components/agent-avatar";
 import { AgentConfig } from "@/components/agent-config";
@@ -35,7 +35,8 @@ import { Truncate } from "@/components/truncate";
 import { useClassic } from "@/hooks/use-classic";
 import { useMedia } from "@/hooks/use-media";
 import { useNow } from "@/hooks/use-now";
-import { usePhoneClassic } from "@/hooks/use-phone-classic";
+import { PHONE_QUERY } from "@/hooks/use-phone-classic";
+import { useAgentMessagePreference } from "@/lib/agent-message-preference";
 import { isAgentView, rememberAgentView, rememberedAgentView, resolveAgentView, visiblePaneView, showPane, SPLIT_MIN_WIDTH, splitApplies, togglePane, type AgentPane } from "@/lib/agent-view";
 import { agentPinKey } from "@/lib/agent-pins";
 import { api } from "@/lib/api";
@@ -70,11 +71,12 @@ async function run(agent: Agent, action: Action) {
   }
 }
 
-function AgentActions({ agent }: { agent: Agent }) {
+function AgentActions({ agent, compact }: { agent: Agent; compact?: boolean }) {
   const machine = useStore((s) => s.machine);
   const pinKey = agentPinKey(machine, agent.id);
   const pinned = useUI((s) => s.agentPins.includes(pinKey));
   const classic = useClassic();
+  const { show: agentMessages, setShow: setAgentMessages } = useAgentMessagePreference();
   const [confirm, setConfirm] = useState(false);
   const [rename, setRename] = useState(false);
   const [name, setName] = useState(agent.name);
@@ -93,7 +95,7 @@ function AgentActions({ agent }: { agent: Agent }) {
   return (
     <>
       {/* classic: Python offers "Hand to Companion" on a card, not on the agent */}
-      {agent.level === "head" && !classic && (
+      {agent.level === "head" && !classic && !compact && (
         <Button
           variant="outline"
           size="sm"
@@ -105,7 +107,7 @@ function AgentActions({ agent }: { agent: Agent }) {
           <span className="hidden sm:inline">Hand to Companion</span>
         </Button>
       )}
-      {!running && (
+      {!running && !compact && (
         <Button variant="outline" size="sm" onClick={() => void run(agent, "start")}>
           <Play className="fill-current" />
           Start
@@ -118,6 +120,14 @@ function AgentActions({ agent }: { agent: Agent }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
+          {compact && (
+            <>
+              <DropdownMenuCheckboxItem checked={agentMessages} onCheckedChange={setAgentMessages}>
+                Show agent messages
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem disabled={agent.level === "head" || running || agent.desired === "running"} onSelect={() => { setName(agent.name); setRename(true); }}>
             <Pencil /> Rename{running ? " (stop first)" : ""}
           </DropdownMenuItem>
@@ -140,7 +150,7 @@ function AgentActions({ agent }: { agent: Agent }) {
           <DropdownMenuItem onSelect={() => void run(agent, "restart")}>
             <RotateCw /> Restart
           </DropdownMenuItem>
-          {agent.level !== "head" && !classic && (
+          {(agent.level !== "head" || compact) && !classic && (
             <DropdownMenuItem onSelect={() => openHandOff({ agentId: agent.id })}>
               <Sparkles /> Hand to Companion…
             </DropdownMenuItem>
@@ -248,6 +258,7 @@ function showView(agentId: string, v: string) {
 
 function Details({ agent }: { agent: Agent }) {
   const classic = useClassic();
+  const machine = useStore((s) => s.machine);
   const agents = useStore((s) => s.agents);
   const projects = useStore((s) => s.projects);
   const parent = agent.parent_id ? agents[agent.parent_id] : undefined;
@@ -273,6 +284,8 @@ function Details({ agent }: { agent: Agent }) {
             {agent.desired === "stopped" && agent.state !== "stopped" ? " (stopping)" : ""}
           </Detail>
           <Detail label="Level">{LEVEL_LABEL[agent.level]}</Detail>
+          {machine && <Detail label="Machine">{machine}</Detail>}
+          {agent.role && <Detail label="Role">{agent.role}</Detail>}
           <Detail label="Harness · mode">
             {harnessLabel(agent.harness)} · {agent.mode === "terminal" ? "its own screen (read by tmx)" : "chat"}
             {agent.agy_full_access && <span className="ml-2 text-amber-600">Owner enabled permission skipping</span>}
@@ -342,7 +355,7 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
   const machine = useStore((s) => s.machine);
   const composer = useRef<ComposerHandle>(null);
   const classic = useClassic();
-  const phone = usePhoneClassic();
+  const phone = useMedia(PHONE_QUERY);
   // "asks you" when the agent put a question, "needs you" for a permission or anything else
   const asks = useStore((s) => Object.values(s.approvals).some((a) => a.agent_id === id && a.state === "pending" && !a.deferred && a.kind === "question"));
   const focusTick = useUI((s) => s.focusComposer);
@@ -396,7 +409,7 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
   const phoneLine = agentHeaderLine(agent, asks, project?.name, machine);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <PageHeader actions={<AgentActions agent={agent} />} className="border-b-0">
+      <PageHeader actions={<AgentActions agent={agent} compact={phone} />} className="border-b-0" compactPhone={phone}>
         <AgentAvatar agent={agent} />
         {project && !classic && (
           <>
@@ -406,16 +419,12 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
             <ChevronRight className="hidden size-3.5 shrink-0 text-subtle-foreground lg:block" />
           </>
         )}
-        {/* Classic on a phone: under the name, one line with the state in words, then Python's
-            "project · machine · role" (lib/phone.ts), as in the Python mobile app's chat header.
-            Everything else in this row is hidden below md already. */}
         {phone ? (
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[15px] leading-tight font-semibold tracking-tight">{agentLabel(agent, profiles)}</h1>
-            <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[12px] leading-tight text-muted-foreground" data-phone-agent-line>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="min-w-0 truncate text-[15px] leading-tight font-semibold tracking-tight">{agentLabel(agent, profiles)}</h1>
+            <p className="flex min-w-0 items-center gap-1 text-[12px] leading-tight text-muted-foreground" data-phone-agent-line>
               {!agent.shelved_at && <StateDot state={agent.state} />}
-              <span className={cn("shrink-0 font-medium", PHONE_TONE[stateTone(agent)])}>{phoneLine.state}</span>
-              {phoneLine.rest && <span className="truncate">· {phoneLine.rest}</span>}
+              <span className={cn("truncate font-medium", PHONE_TONE[stateTone(agent)])}>{phoneLine.state}</span>
             </p>
           </div>
         ) : (
@@ -423,11 +432,11 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
         )}
         {/* Classic (the owner #3/#9/#14, the calm top): Python's one row: face, name, state, then one
             line "project · machine · role" and the harness tag. No level, profile or model badges. */}
-        {!classic && <LevelBadge level={agent.level} />}
-        {!classic && isCustomProfile(agent) && profileOf(agent, profiles) && <ProfileBadge profile={profileOf(agent, profiles)!} className="hidden sm:inline-flex" />}
-        {!classic && agent.harness !== "shell" && <HarnessBadge harness={agent.harness} mode={agent.mode} className="hidden sm:inline-flex" />}
-        {!classic && <ModelBadge agent={agent} className="hidden sm:inline-flex" />}
-        <AgentStateLabel agent={agent} className="ml-1 hidden sm:inline-flex" />
+        {!classic && !phone && <LevelBadge level={agent.level} />}
+        {!phone && !classic && isCustomProfile(agent) && profileOf(agent, profiles) && <ProfileBadge profile={profileOf(agent, profiles)!} className="hidden sm:inline-flex" />}
+        {!phone && !classic && agent.harness !== "shell" && <HarnessBadge harness={agent.harness} mode={agent.mode} className="hidden sm:inline-flex" />}
+        {!phone && !classic && <ModelBadge agent={agent} className="hidden sm:inline-flex" />}
+        {!phone && <AgentStateLabel agent={agent} className="ml-1 hidden sm:inline-flex" />}
         {classic && (
           <span className="ml-1 hidden min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground md:inline-flex" data-agent-line>
             {agentLine(agent, project?.name, machine).map((part, i) => (
@@ -443,10 +452,10 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
             ))}
           </span>
         )}
-        {classic && agent.harness !== "shell" && <HarnessBadge harness={agent.harness} className="hidden sm:inline-flex" />}
+        {!phone && classic && agent.harness !== "shell" && <HarnessBadge harness={agent.harness} className="hidden sm:inline-flex" />}
       </PageHeader>
       {/* the tabs scroll sideways when a phone at a large text size can't fit them */}
-      <div className="scroll-thin flex h-9 shrink-0 items-end gap-4 overflow-x-auto overflow-y-hidden border-b px-5 md:px-6">
+      <div className="scroll-thin flex h-8 shrink-0 items-end gap-3 overflow-x-auto overflow-y-hidden border-b px-3 md:h-9 md:gap-4 md:px-6">
         {split && (
           // side by side: each button shows or hides its pane, as in Python; Details is still a view
           <div className="flex h-9 items-center gap-1" role="group" aria-label="Panes" data-agent-panes>
@@ -488,10 +497,10 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
             if (v === "terminal" && canOpenScreen(agent)) void switchMode(agent, "terminal");
           }}
         >
-          <TabsList variant="line" className="h-9 gap-4 p-0">
-            {chatCapable && <TabsTrigger value="conversation" className="h-9 flex-none px-0 text-[0.8125rem]">{classic ? "Chat" : "Conversation"}</TabsTrigger>}
-            <TabsTrigger value="terminal" className="h-9 flex-none gap-1.5 px-0 text-[0.8125rem]" title={`${harnessLabel(agent.harness)}'s own screen`}>
-              {classic ? "Terminal" : harnessLabel(agent.harness)}
+          <TabsList variant="line" className="h-8 gap-3 p-0 md:h-9 md:gap-4">
+            {chatCapable && <TabsTrigger value="conversation" className="h-8 flex-none px-0 text-[0.8125rem] md:h-9">{classic || phone ? "Chat" : "Conversation"}</TabsTrigger>}
+            <TabsTrigger value="terminal" className="h-8 flex-none gap-1.5 px-0 text-[0.8125rem] md:h-9" title={`${harnessLabel(agent.harness)}'s own screen`}>
+              {classic || phone ? "Terminal" : harnessLabel(agent.harness)}
               {!classic && chatCapable && screen && (
                 <>
                   <span className="size-1.5 rounded-full bg-state-working" aria-hidden />
@@ -499,8 +508,8 @@ export function AgentPage({ id, tab }: { id: string; tab?: string }) {
                 </>
               )}
             </TabsTrigger>
-            {!chatCapable && <TabsTrigger value="conversation" className="h-9 flex-none px-0 text-[0.8125rem]">Log</TabsTrigger>}
-            <TabsTrigger value="details" className="h-9 flex-none px-0 text-[0.8125rem]">Details</TabsTrigger>
+            {!chatCapable && <TabsTrigger value="conversation" className="h-8 flex-none px-0 text-[0.8125rem] md:h-9">Log</TabsTrigger>}
+            <TabsTrigger value="details" className="h-8 flex-none px-0 text-[0.8125rem] md:h-9">Details</TabsTrigger>
           </TabsList>
         </Tabs>}
         {classic && wide && chatCapable && agent.harness !== "shell" && (

@@ -98,6 +98,7 @@ type Service struct {
 	downloadCancels map[string]context.CancelFunc
 	opened          bool
 	mediaWake       chan struct{}
+	watchWake       chan struct{}
 	maintenanceWake chan struct{}
 	maintenanceScan func(func(os.FileInfo)) error // nil uses the filesystem walker
 	asrWake         chan struct{}
@@ -130,7 +131,7 @@ func New(o Options) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{o: o, log: o.Logger.With("part", "whatsapp"), key: key, ctx: ctx, cancel: cancel,
 		st: model.WaStatus{State: model.WaUnlinked}, queues: map[string]*chatQueue{}, notices: map[string]*notice{},
-		naming: map[string]bool{}, downloads: map[string]chan struct{}{}, mediaWake: make(chan struct{}, 1),
+		naming: map[string]bool{}, downloads: map[string]chan struct{}{}, mediaWake: make(chan struct{}, 1), watchWake: make(chan struct{}, 1),
 		downloadCancels: map[string]context.CancelFunc{},
 		maintenanceWake: make(chan struct{}, 1),
 		asrWake:         make(chan struct{}, 1), mediaWrite: make(chan struct{}, 1), activeFiles: map[string]bool{}}
@@ -147,6 +148,10 @@ func (s *Service) Start() error {
 	}
 	s.wg.Add(1)
 	go s.mediaMaintenance()
+	if _, ok := s.o.Fleet.(watchFleet); ok {
+		s.wg.Add(1)
+		go s.watchChats()
+	}
 	if s.o.AutoMedia {
 		if v, _ := s.o.Store.WaMeta("auto_media_since"); v != "" {
 			fmt.Sscan(v, &s.mediaSince)
@@ -541,6 +546,7 @@ func (s *Service) handle(ev Event) {
 		s.mu.Unlock()
 		s.publishStatus()
 		s.wakeMedia()
+		s.wakeWatch()
 	case EvDisconnected:
 		s.mu.Lock()
 		changed := s.st.State == model.WaConnected
@@ -550,6 +556,7 @@ func (s *Service) handle(ev Event) {
 		s.mu.Unlock()
 		if changed {
 			s.publishStatus()
+			s.wakeWatch()
 		}
 	case EvLoggedOut:
 		s.forget("the phone logged tmx out of WhatsApp")
@@ -645,6 +652,7 @@ func (s *Service) history(e EvHistory) {
 			touched[in.Msg.ChatJID] = true
 		}
 	}
+	s.wakeWatch()
 	var chats []model.WaChat
 	for jid := range touched {
 		if c, err := s.o.Store.WaGetChat(jid); err == nil && s.o.Store.WaChatShown(jid) {
@@ -882,9 +890,17 @@ func (s *Service) apply(in Incoming, live bool) bool {
 			row.MediaRef = old.MediaRef
 		}
 	}
+	if owner := s.selfJID(); owner != "" && slices.Contains(in.Mentions, owner) {
+		if err := s.o.Store.WaWatchMention(m.ChatJID, m.ID); err != nil {
+			s.log.Warn("store WhatsApp mention", "err", err)
+		}
+	}
 	if err := s.o.Store.WaPutMessage(row); err != nil {
 		s.log.Warn("whatsapp message", "err", err)
 		return false
+	}
+	if live {
+		s.wakeWatch()
 	}
 	s.wakeMedia()
 	c, err := s.o.Store.WaGetChat(m.ChatJID)

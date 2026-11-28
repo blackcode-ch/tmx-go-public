@@ -136,7 +136,12 @@ func (f *Fleet) DeliverPeer(in PeerInbound) (m model.Message, duplicate bool, er
 func (f *Fleet) QueuePeer(in PeerInbound) (model.Message, bool, error) {
 	return f.deliverPeer(in, false)
 }
-func (f *Fleet) DeliverQueuedPeer(m model.Message) { f.deliverQueued(m.To, priorityMail(m)) }
+func (f *Fleet) DeliverQueuedPeer(m model.Message) {
+	name, _, _ := SplitPeer(m.From)
+	// Watcher alerts reach the inbox urgently. Quoted outside text cannot
+	// interrupt a running turn, whether it is routed locally or by a peer.
+	f.deliverQueued(m.To, priorityMail(m) && name != model.WhatsAppParty)
+}
 
 func (f *Fleet) deliverPeer(in PeerInbound, deliver bool) (m model.Message, duplicate bool, err error) {
 	peer := strings.ToLower(in.Peer)
@@ -210,7 +215,7 @@ func (f *Fleet) deliverPeer(in PeerInbound, deliver bool) (m model.Message, dupl
 	f.refreshQueuedLocked(r)
 	f.mu.Unlock()
 	if deliver {
-		f.deliverQueued(m.To, priorityMail(m))
+		f.DeliverQueuedPeer(m)
 	}
 	m, err = f.message(m.ID)
 	return m, false, err
@@ -275,6 +280,9 @@ func (f *Fleet) sendPeer(id string) {
 	}
 	if m.From == model.Owner {
 		out.Sender = PeerOperator
+	} else if m.From == model.WhatsAppParty {
+		out.Sender = model.WhatsAppParty
+		out.VerifiedSender = ""
 	} else if reservedSenders[out.Sender] {
 		// Never on the wire as the owner or the system, whatever the stored mail says.
 		f.failPeerMailLocked(m, pm.Attempts, fmt.Errorf("the sender name %q is reserved on the other machines", out.Sender))

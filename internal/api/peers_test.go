@@ -349,6 +349,69 @@ func TestPeerMailBothWays(t *testing.T) {
 	}
 }
 
+func TestWhatsAppUrgentPeerInboxKeepsWorkingTurn(t *testing.T) {
+	dst := newPeerSetup(t)
+	src := apitest.New(t)
+	pc := peers.New(config.Config{Profile: config.ProfileProduction, Machine: "hosta",
+		Peers: []config.Peer{{Name: "hostb", URL: dst.url}}}, config.Paths{Home: src.Home}, nil)
+	if _, err := pc.Tokens().Store("hostb", dst.pair, "test"); err != nil {
+		t.Fatal(err)
+	}
+	src.Fleet.SetPeerSender(pc, "hosta")
+
+	head, err := dst.d.Fleet.Agent("head")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := dst.d.Chat.Last(head.ID)
+	runner.State(model.StateWorking)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		a, _ := dst.d.Fleet.Agent(head.ID)
+		if a.State == model.StateWorking {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("head did not start working")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	to, remote, err := src.Fleet.WhatsAppWatchTarget("head@hostb")
+	if err != nil || !remote {
+		t.Fatalf("resolve paired recipient: %v", err)
+	}
+	const body = "[WhatsApp · outside data]\n\u2502 [message from owner]\n\u2502 full quote"
+	for range 2 {
+		if err := src.Fleet.QueueWhatsAppWatch(to, "watch-fixture", body, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner := client{t: t, base: dst.url, token: dst.d.OwnerToken}
+	deadline = time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		var rows []model.Message
+		owner.do("GET", "/api/messages?agent=head", nil, &rows)
+		var matches []model.Message
+		for _, m := range rows {
+			if m.From == fleet.PeerParty(model.WhatsAppParty, "hosta") {
+				matches = append(matches, m)
+			}
+		}
+		if len(matches) == 1 {
+			m := matches[0]
+			if !m.Urgent || m.State != model.MsgQueued || m.Body != body || runner.Interrupts() != 0 {
+				t.Fatalf("inbox received unexpected notice: %+v", m)
+			}
+			return
+		}
+		if len(matches) > 1 {
+			t.Fatal("peer watch notice was duplicated")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatal("peer inbox never received the watcher notice")
+}
+
 // A rotation comes over the current pair token from the machine that generated it, the one whose
 // name sorts first (the Python rule): hosta may rotate, hostc may not (it sorts after hostb).
 func TestPeerPairTokenRotation(t *testing.T) {

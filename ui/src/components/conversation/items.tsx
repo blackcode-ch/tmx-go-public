@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowRight, Brain, ChevronRight, CornerDownRight, ListCh
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { absoluteTime, clockTime, duration, firstLine, modelName, plural, relativeTime } from "@/lib/format";
 import { ownerDeliveryLabel } from "@/lib/owner-delivery";
+import { turnResult } from "@/lib/turn-result";
 import { useStore } from "@/lib/store";
 import { parseNumberedLines, summarizeTool, asInput } from "@/lib/tools";
 import type { TimelineEntry } from "@/lib/types";
@@ -32,8 +33,6 @@ function TimeHint({ at, children }: { at: number; children: React.ReactNode }) {
 
 export const UserBubble = memo(function UserBubble({ e }: { e: TimelineEntry }) {
   const message = useStore((s) => s.messages.find((m) => m.id === e.meta?.message_id));
-  const agent = useStore((s) => s.agents[e.agent_id]);
-  const unavailable = !agent || !agent.pid || ["stopped", "exited", "error", "queued", "starting"].includes(agent.state);
   const { ownerPreview } = ownerDisplayEntry(e);
   const { text, files } = splitAttachments(ownerPreview ?? e.text);
   // Classic (the owner, 17 Nov 19:26): his own messages are clearly his: to the right, in a tinted
@@ -56,7 +55,7 @@ export const UserBubble = memo(function UserBubble({ e }: { e: TimelineEntry }) 
         </TimeHint>
       )}
       {message && <span className={cn("text-xs", message.receipt === "stalled" ? "text-destructive" : "text-muted-foreground")} role={message.receipt === "stalled" ? "alert" : "status"}>
-        {ownerDeliveryLabel(message, clockTime, unavailable)}
+        {ownerDeliveryLabel(message, clockTime)}
       </span>}
       {message?.receipt === "stalled" && <CopyButton text={message.body} label="Copy message to retry" />}
       {ownerPreview !== undefined && (
@@ -399,9 +398,9 @@ export function ResultDivider({ e }: { e: TimelineEntry }) {
   const m = e.meta ?? {};
   const turns = Number(m.num_turns ?? m.turns ?? 0);
   const ms = Number(m.duration_ms ?? 0);
-  const failed = e.is_error || (typeof m.subtype === "string" && m.subtype !== "success");
+  const { failed, label } = turnResult(e);
   const parts = [
-    failed ? (typeof m.subtype === "string" ? m.subtype.replace(/_/g, " ") : "Ended with an error") : "Done",
+    label,
     turns ? plural(turns, "turn") : "",
     ms ? duration(ms) : "",
   ].filter(Boolean);

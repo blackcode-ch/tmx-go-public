@@ -38,9 +38,9 @@ test("pending messages appear once in the same conversation and retain their sta
  assert.equal(withPendingOwnerMessages(entries,[{...message,to:"other"}],"head").length,1);
 });
 
-test("an available terminal shows sending while its ordered handoff is in flight", () => {
+test("a ready agent's unclaimed message remains queued", () => {
  const m = {state:"queued",receipt:"queued",created_at:1};
- assert.equal(ownerDeliveryLabel(m,String),"sending");
+ assert.equal(ownerDeliveryLabel(m,String),"queued");
  assert.equal(ownerDeliveryLabel(m,String,true),"queued");
 });
 

@@ -59,8 +59,9 @@ type Config struct {
 	// codex and agy ("codex", "antigravity"), when the one on PATH must not be used (Hostb's
 	// production start puts exit-78 stubs first so no Codex/agy agent starts); agents still
 	// start whatever is on PATH. "" or missing = PATH.
-	SignInCommands map[string]string `json:"sign_in_commands,omitempty"`
-	HeadHarness    string            `json:"head_harness,omitempty"` // "" = claude, and an existing head keeps its harness; else claude or codex
+	SignInCommands     map[string]string `json:"sign_in_commands,omitempty"`
+	AgyBackgroundUsage *bool             `json:"agy_background_usage,omitempty"` // nil enables the regular Antigravity quota probe
+	HeadHarness        string            `json:"head_harness,omitempty"`         // "" = claude, and an existing head keeps its harness; else claude or codex
 	// OnboardedAt is when the owner finished or closed the first-run setup (the UI's onboarding:
 	// WhatsApp, a phone, Companion), Unix ms; 0 = never, so the computer's window offers it.
 	OnboardedAt int64 `json:"onboarded_at,omitempty"`

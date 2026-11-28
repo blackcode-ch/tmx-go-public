@@ -117,7 +117,7 @@ function ScreenNotice({ agent }: { agent: Agent }) {
  * agent's Start; nothing about the mode the agent runs in, as in Python. bare: without that
  * line (under Terminal, where the closed screen offers Start itself).
  */
-export function MessageBox({ agent, composerRef, bare }: { agent: Agent; composerRef?: Ref<ComposerHandle>; bare?: boolean }) {
+export function MessageBox({ agent, composerRef, bare, compact }: { agent: Agent; composerRef?: Ref<ComposerHandle>; bare?: boolean; compact?: boolean }) {
   const classic = useClassic();
   const stopped = !isRunning(agent.state);
   const startLine = classic ? !bare && agent.harness !== "shell" : agent.mode === "chat";
@@ -147,6 +147,7 @@ export function MessageBox({ agent, composerRef, bare }: { agent: Agent; compose
       <Composer
         ref={composerRef}
         agent={agent}
+        compact={compact}
         placeholder={agent.harness === "shell" ? `Type into ${agent.name}'s terminal from the ${classic ? "Terminal" : "Shell"} tab` : undefined}
       />
     </div>
@@ -236,11 +237,11 @@ export function Conversation({ agent, composerRef, hideBox }: { agent: Agent; co
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 justify-end px-5 md:px-6">
+      <div className="hidden shrink-0 justify-end px-5 md:flex md:px-6">
         <AgentMessageToggle />
       </div>
       <div ref={scroller} onScroll={onScroll} className="scroll-thin min-h-0 flex-1 overflow-y-auto" data-testid="conversation-scroll">
-        <div ref={content} className={cn("mx-auto w-full px-5 pt-6 pb-6 md:px-6", classic ? CLASSIC_COLUMN : "max-w-[48.75rem]")}>
+        <div ref={content} className={cn("mx-auto w-full px-3 py-3 md:px-6 md:py-6", classic ? CLASSIC_COLUMN : "max-w-[48.75rem]")}>
           {(hiddenLocal > 0 || tl?.maybeMore) && (
             <div className="mb-4 flex justify-center">
               <Button
@@ -301,7 +302,7 @@ export function Conversation({ agent, composerRef, hideBox }: { agent: Agent; co
         </div>
       </div>
 
-      <div className={cn("relative shrink-0 bg-background", !hideBox && "px-3 pb-3 md:px-4 md:pb-4")}>
+      <div className={cn("relative shrink-0 bg-background", !hideBox && "px-2 pb-1.5 md:px-4 md:pb-4")}>
       {!atBottom && items.length > 0 && (
         <div className="shrink-0 flex justify-center py-2">
           <Button
@@ -320,7 +321,7 @@ export function Conversation({ agent, composerRef, hideBox }: { agent: Agent; co
         </div>
       )}
 
-        {!hideBox && <MessageBox agent={agent} composerRef={composerRef} />}
+        {!hideBox && <MessageBox agent={agent} composerRef={composerRef} compact />}
       </div>
     </div>
   );

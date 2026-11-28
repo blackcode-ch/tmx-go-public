@@ -651,7 +651,27 @@ func (s *Store) migrate() error {
 	if err := s.ensureMailPriority(); err != nil {
 		return err
 	}
-	return s.ensureReportTracking()
+	if err := s.ensureReportTracking(); err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+CREATE TABLE IF NOT EXISTS account_usage_notices (
+	key TEXT PRIMARY KEY, expires_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account_quota_windows (
+	key TEXT PRIMARY KEY, observed_at INTEGER NOT NULL,
+	reset_at INTEGER NOT NULL, peak_used REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS account_turn_usage (
+	harness TEXT NOT NULL, account TEXT NOT NULL, model TEXT NOT NULL,
+	agent_id TEXT NOT NULL, name TEXT NOT NULL, at INTEGER NOT NULL, turns INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS account_turn_usage_lookup ON account_turn_usage(harness, account, at);
+CREATE INDEX IF NOT EXISTS account_turn_usage_expiry ON account_turn_usage(at);
+CREATE TABLE IF NOT EXISTS wa_watch_seen (key TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS wa_watch_mentions (chat TEXT, id TEXT, PRIMARY KEY(chat,id));
+`)
+	return err
 }
 
 // The previous installer can roll back only the binary. Keep this additive

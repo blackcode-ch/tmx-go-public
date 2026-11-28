@@ -2,13 +2,37 @@ import { create } from "zustand";
 import { migrateDictationStores } from "./dictation-migration";
 import { useStore } from "./store";
 import { DictationQueue, MemoryDictations, deliverDictation, DictationSendTimeout, type DictationDelivery, type QueuedDictation } from "./dictation-queue";
+import { DictationRecovery, type SavedDictationInfo } from "./dictation-recovery";
 
-export const useDictationOutbox = create<{ clips: QueuedDictation[]; notices: Record<string, QueuedDictation>; error: string }>(() => ({ clips: [], notices: {}, error: "" }));
+export const useDictationOutbox = create<{
+  clips: QueuedDictation[];
+  notices: Record<string, QueuedDictation>;
+  saved: SavedDictationInfo[];
+  error: string;
+}>(() => ({ clips: [], notices: {}, saved: [], error: "" }));
 const storage = new MemoryDictations();
+const recovery = new DictationRecovery();
 
 let deliver: DictationDelivery = () => false;
 export function setDictationDelivery(fn: typeof deliver) { deliver = fn; }
 export function dictationScope() { return useStore.getState().transport?.baseURL ?? ""; }
+function recoveryAllowed() { return useStore.getState().status === "ready"; }
+
+async function refreshRecovery() {
+  const scope = dictationScope();
+  if (!scope || !recoveryAllowed()) {
+    useDictationOutbox.setState({ saved: [] });
+    return;
+  }
+  const saved = (await recovery.list()).filter(clip => clip.scope === scope).sort((a, b) => a.created - b.created)
+    .map(({ data: _audio, ...info }) => info);
+  if (dictationScope() === scope && recoveryAllowed()) useDictationOutbox.setState({ saved });
+}
+
+async function saveRecovery(clip: QueuedDictation) {
+  const { id, scope, target, data, language, created, capture } = clip;
+  await recovery.put({ id, scope, target, data, language, created, capture, reason: "Transcription was interrupted. Play or retry this recording." });
+}
 
 async function request<T>(scope: string, method: string, path: string, body?: unknown): Promise<T> {
   const t = useStore.getState().transport;
@@ -24,10 +48,27 @@ async function request<T>(scope: string, method: string, path: string, body?: un
 }
 
 const queue = new DictationQueue(storage, {
-  transcribe: c => request(c.scope, "POST", `/api/transcribe?request_id=${encodeURIComponent(c.requestId ?? c.id)}`, { data: c.data, ...(c.language ? { language: c.language } : {}) }),
+  transcribe: c => request(c.scope, "POST", `/api/transcribe?request_id=${encodeURIComponent(c.requestId ?? c.id)}`, {
+    data: c.data, ...(c.language ? { language: c.language } : {}), ...(c.capture ? { capture: c.capture } : {}),
+  }),
   transcript: (id, c) => request(c.scope, "GET", `/api/transcripts/${encodeURIComponent(id)}`),
 }, clip => {
   useDictationOutbox.setState(s => ({ notices: { ...s.notices, [clip.target.id]: clip } }));
+}, async clip => {
+  if (!clip.recoverable) return;
+  try {
+    if (clip.blocked || clip.held) {
+      const saved = await recovery.get(clip.id);
+      if (saved?.scope === clip.scope) {
+        const reason = (clip.error || "The transcript needs review.").replace(/\s*Recording discarded\.$/, "");
+        clip.error = reason;
+        await recovery.put({ ...saved, reason });
+      }
+    } else await recovery.remove(clip.id);
+    await refreshRecovery();
+  } catch {
+    useDictationOutbox.setState({ error: "Could not update the saved dictation on this device." });
+  }
 });
 
 export function clearDictationNotice(target: string) {
@@ -40,8 +81,7 @@ let migrationStarted = false;
 export function initializeDictationStorage() {
   if (migrationStarted) return;
   migrationStarted = true;
-  // No persistent writer exists. Cleanup may hang or fail in an old browser;
-  // neither condition may gate new captures or reset newly queued memory work.
+  // Cleanup of legacy stores stays independent from the new recovery database.
   try {
     void migrateDictationStores({
       indexedDB: globalThis.indexedDB, localStorage: globalThis.localStorage,
@@ -70,16 +110,60 @@ export async function flushDictationOutbox() {
   catch { useDictationOutbox.setState({ error: "Dictation failed. Please try again." }); }
 }
 
-export async function keepDictation(clip: QueuedDictation) {
+export async function keepDictation(clip: QueuedDictation, recover = false) {
   await initializeDictationStorage();
   clearDictationNotice(clip.target.id);
+  if (recover && clip.scope && clip.scope === dictationScope()) {
+    try {
+      await saveRecovery(clip);
+      clip.recoverable = true;
+    } catch { useDictationOutbox.setState({ error: "This device could not save the dictation for recovery." }); }
+  }
   try { await queue.enqueue(clip); }
   catch {
     useDictationOutbox.setState(s => ({ notices: { ...s.notices, [clip.target.id]: { ...clip, data: "", error: "Dictation failed. Please try again." } } }));
     return;
   }
   await refreshDictationOutbox();
+  if (clip.recoverable) void refreshRecovery().catch(() => {});
   void flushDictationOutbox().catch(() => useDictationOutbox.setState({ error: "Could not clear old dictations. Please reload." }));
+}
+
+async function readSavedDictation(clip: SavedDictationInfo) {
+  if (!recoveryAllowed() || dictationScope() !== clip.scope) throw new Error("Sign in to access this recording.");
+  const saved = await recovery.get(clip.id);
+  if (!saved || saved.scope !== dictationScope() || !recoveryAllowed()) throw new Error("This recording is unavailable.");
+  return saved;
+}
+
+export async function savedDictationAudio(clip: SavedDictationInfo): Promise<string> {
+  return "data:audio/wav;base64," + (await readSavedDictation(clip)).data;
+}
+
+const recoveryActions = new Set<string>();
+export async function retrySavedDictation(clip: SavedDictationInfo) {
+  if (recoveryActions.has(clip.id)) return;
+  recoveryActions.add(clip.id);
+  try {
+    if ((await storage.list()).some(row => row.id === clip.id)) return;
+    const saved = await readSavedDictation(clip);
+    clearDictationNotice(clip.target.id);
+    await queue.enqueue({ ...saved, requestId: crypto.randomUUID(), recoverable: true, review: true });
+    await refreshDictationOutbox();
+    void flushDictationOutbox();
+  } finally { recoveryActions.delete(clip.id); }
+}
+
+export async function deleteSavedDictation(clip: SavedDictationInfo) {
+  if (!recoveryAllowed() || dictationScope() !== clip.scope || recoveryActions.has(clip.id)) return;
+  recoveryActions.add(clip.id);
+  try {
+    if ((await storage.list()).some(row => row.id === clip.id)) return;
+    await recovery.remove(clip.id);
+    const notice = useDictationOutbox.getState().notices[clip.target.id];
+    if (notice?.id === clip.id) clearDictationNotice(clip.target.id);
+    await refreshRecovery();
+  } finally { recoveryActions.delete(clip.id); }
 }
 
 /** Explicit review sends these words once, without touching the composer draft. */
@@ -89,8 +173,13 @@ export async function acceptDictation(clip: QueuedDictation) {
     || dictationScope() !== clip.scope || !clip.held || !clip.text?.trim()) return;
   accepting.add(clip.id);
   try {
-    if (await deliverDictation(clip, deliver) && useDictationOutbox.getState().notices[clip.target.id]?.id === clip.id)
+    if (await deliverDictation(clip, deliver) && useDictationOutbox.getState().notices[clip.target.id]?.id === clip.id) {
       clearDictationNotice(clip.target.id);
+      if (clip.recoverable) {
+        await recovery.remove(clip.id);
+        await refreshRecovery();
+      }
+    }
   }
   catch (error) {
     if (error instanceof DictationSendTimeout && useDictationOutbox.getState().notices[clip.target.id]?.id === clip.id)
@@ -106,7 +195,9 @@ export function startDictationOutbox() {
   window.addEventListener("online", online);
   const unsub = useStore.subscribe((s, prev) => {
     if (s.transport !== prev.transport) useDictationOutbox.setState({ notices: {} });
+    if (s.transport !== prev.transport || s.status !== prev.status) void refreshRecovery().catch(() => {});
     if (s.transport !== prev.transport || (s.conn === "open" && prev.conn !== "open")) online();
   });
+  void refreshRecovery().catch(() => {});
   return () => { clearInterval(timer); window.removeEventListener("online", online); unsub(); };
 }

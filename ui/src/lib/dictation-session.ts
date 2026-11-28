@@ -10,6 +10,7 @@ import { DictationError, MAX_DICTATION_MS, insertAtCursor, startDictation, toBas
 import { dictationScope, flushDictationOutbox, keepDictation, setDictationDelivery } from "./dictation-outbox";
 import { navigate } from "./router";
 import { useVoice } from "./voice";
+import { useStore } from "./store";
 
 export interface DictationTarget {
   /** unique in the app: "agent:<id>[:topic]", "chat:<id>", "wa:<jid>" */
@@ -34,6 +35,7 @@ export const useDictation = create<{ phase: DictationPhase; target: { id: string
 
 interface Session {
   scope: string;
+  recover: boolean;
   target: DictationTarget;
   rec: Dictation | null; // null while the microphone is being asked for
   ended: boolean; // stopped or thrown away: no second stop, and a late microphone is released
@@ -43,12 +45,17 @@ interface Session {
 let session: Session | null = null;
 
 // Mounted destinations: message composers send; answer cards insert into their draft.
-const boxes = new Map<string, (text: string, requestId: string, signal?: AbortSignal) => void | Promise<void>>();
+const boxes = new Map<string, (text: string, requestId: string, signal?: AbortSignal, review?: boolean) => void | Promise<void>>();
 const targets = new Map<string, DictationTarget>();
 
 setDictationDelivery(async (clip, signal) => {
   const box = boxes.get(clip.target.id);
   const t = targets.get(clip.target.id);
+  if (clip.review) {
+    if (!box || !clip.text?.trim()) return false;
+    await box(clip.text.trim(), clip.requestId ?? clip.id, signal, true);
+    return true;
+  }
   if (!clip.send && !box && !t) return false; // after a reload, wait for this composer to mount
   if (clip.text?.trim()) {
     if (clip.send) await clip.send(clip.text.trim(), clip.requestId ?? clip.id, signal);
@@ -59,7 +66,7 @@ setDictationDelivery(async (clip, signal) => {
 });
 
 /** A message box on screen takes its dictation's words directly; returns the unregister. */
-export function registerDictationBox(id: string, insert: (text: string, requestId: string, signal?: AbortSignal) => void | Promise<void>): () => void {
+export function registerDictationBox(id: string, insert: (text: string, requestId: string, signal?: AbortSignal, review?: boolean) => void | Promise<void>): () => void {
   boxes.set(id, insert);
   void flushDictationOutbox();
   return () => {
@@ -69,6 +76,10 @@ export function registerDictationBox(id: string, insert: (text: string, requestI
 
 export function dictationLevel(): number {
   return session?.rec?.level() ?? 0;
+}
+
+export function dictationNoInput(): boolean {
+  return session?.rec?.noInput() ?? false;
 }
 
 export function dictationElapsed(): number {
@@ -92,7 +103,7 @@ export async function startDictating(target: DictationTarget): Promise<void> {
     return;
   }
   (document.activeElement as HTMLElement | null)?.blur?.();
-  const s: Session = { target, scope: dictationScope(), rec: null, ended: false };
+  const s: Session = { target, scope: dictationScope(), recover: useStore.getState().status === "ready", rec: null, ended: false };
   targets.set(target.id, target);
   session = s;
   useDictation.setState({ phase: "starting", target: { id: target.id, label: target.label, path: target.path } });
@@ -148,7 +159,8 @@ export async function stopDictating(): Promise<void> {
       id: crypto.randomUUID(), scope: s.scope, send: s.target.send,
       target: { id: s.target.id, label: s.target.label, path: s.target.path },
       data: toBase64(wav), language: language === "auto" ? undefined : language, created: Date.now(),
-    });
+      capture: rec.captureMetadata(),
+    }, s.recover);
   } catch (e) {
     toast.error(e instanceof DictationError ? e.message : (e as Error).message || "The dictation was not transcribed.");
   } finally {

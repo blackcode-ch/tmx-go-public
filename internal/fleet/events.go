@@ -154,6 +154,9 @@ func (f *Fleet) handleEvent(r *agentRec, proc runner.Process, ev runner.Event) (
 			r.a.CostUSD += ev.CostUSD
 		}
 		r.a.Turns += ev.Turns
+		if ev.Turns > 0 && r.a.Profile != model.FreeWorkerProfile {
+			f.recordAccountTurnsLocked(r.a, ev.Turns)
+		}
 		f.saveAgentLocked(r)
 	case runner.EvProgress:
 		r.updateActivity = time.Now()

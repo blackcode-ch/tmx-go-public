@@ -47,8 +47,9 @@ func (s *Service) workDir() string {
 // scope is one account's view of the service: its harness runs with the account's home.
 type scope struct {
 	*Service
-	resetDryRun bool     // request-local read-only reset check
-	home        []string // the account's HomeEnv (nil = the harness's usual home)
+	measureAgyQuota bool
+	resetDryRun     bool     // request-local read-only reset check
+	home            []string // the account's HomeEnv (nil = the harness's usual home)
 }
 
 // env is the account's harness environment: the service's, then the account's home.

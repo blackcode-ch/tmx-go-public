@@ -4,7 +4,7 @@
 // The capture itself lives in recorder.ts and runs only in the window that records.
 import { create } from "zustand";
 import { onBusEvent, useStore } from "./store";
-import { ApiError } from "./transport";
+import { ApiError, HttpTransport } from "./transport";
 import type { BusEvent } from "./types";
 import type { ChatMessage } from "./chat-types";
 import type { ActiveRecording, Recording, RecorderSettings, RecordingKind, RecordingTranscript } from "./recording-types";
@@ -41,13 +41,21 @@ function t() {
 }
 const enc = encodeURIComponent;
 
+function captureRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const transport = t();
+  if (transport instanceof HttpTransport) {
+    return transport.recordingRequest<T>(method, path, body === undefined ? undefined : JSON.stringify(body), body === undefined ? undefined : "application/json");
+  }
+  return transport.request<T>(method, path, body);
+}
+
 export const recApi = {
-  active: () => t().request<ActiveRecording>("GET", "/api/recordings/active"),
+  active: () => captureRequest<ActiveRecording>("GET", "/api/recordings/active"),
   list: (limit = 0) => t().request<Recording[] | null>("GET", `/api/recordings${limit ? `?limit=${limit}` : ""}`),
   get: (id: string) => t().request<Recording>("GET", `/api/recordings/${enc(id)}`),
   /** only the window that captures calls it, once capture is running */
-  begin: (b: { kind: RecordingKind; mic: boolean; system_audio?: boolean; mime: string; title?: string; sensitivity?: "clinic" | "" }) => t().request<Recording>("POST", "/api/recordings", b),
-  setState: (id: string, state: "paused" | "recording" | "stopped" | "heartbeat") => t().request<Recording>("POST", `/api/recordings/${enc(id)}/state`, { state }),
+  begin: (b: { kind: RecordingKind; mic: boolean; system_audio?: boolean; mime: string; title?: string; sensitivity?: "clinic" | "" }) => captureRequest<Recording>("POST", "/api/recordings", b),
+  setState: (id: string, state: "paused" | "recording" | "stopped" | "heartbeat") => captureRequest<Recording>("POST", `/api/recordings/${enc(id)}/state`, { state }),
   rename: (id: string, title: string) => t().request<Recording>("PATCH", `/api/recordings/${enc(id)}`, { title }),
   /** "clinic": local models only for its report; "": any model (owner only) */
   setSensitivity: (id: string, sensitivity: "clinic" | "") => t().request<Recording>("PATCH", `/api/recordings/${enc(id)}`, { sensitivity }),

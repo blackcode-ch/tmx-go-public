@@ -248,6 +248,11 @@ type Decision struct {
 }
 
 // Process is one running agent.
+// OwnerInterrupter carries verified owner provenance to a runner's turn result.
+type OwnerInterrupter interface {
+	InterruptByOwner() error
+}
+
 type Process interface {
 	// Events delivers everything the process does, in order. Closed after EvExit.
 	Events() <-chan Event

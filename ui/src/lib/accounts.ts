@@ -68,6 +68,10 @@ export const accountsApi = {
     transport()
       .request<AccountsPayload>("POST", "/api/accounts/refresh", harness ? { harness, account: account ?? "" } : {})
       .then(put),
+  measureAntigravityQuota: (account: string) =>
+    ownerAction((c) => transport().request<AccountsPayload>(
+      "POST", withConfirmation(`/api/accounts/antigravity/measure?account=${enc(account)}`, c),
+    )).then(put),
   /** Starts the account's own sign-in on the daemon; its terminal is loginTerminalPath(harness, account). */
   login: (harness: string, account?: string) =>
     ownerAction((c) =>

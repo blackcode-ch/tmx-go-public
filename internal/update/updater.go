@@ -248,6 +248,17 @@ func (u *Updater) availableVersion(v Version, s config.UpdateConfig) bool {
 	return cur.Less(v)
 }
 
+// A git-describe distance is only comparable within the same base tag.
+// A different public tag can be cut from older source than a running preview.
+func (u *Updater) automaticVersionAllowed(next Version) bool {
+	current, ok := ParseVersion(u.o.Version)
+	if !ok {
+		return false
+	}
+	return current.Ahead == 0 || (current.Major == next.Major && current.Minor == next.Minor &&
+		current.Patch == next.Patch && current.RC == next.RC && current.Ahead <= next.Ahead)
+}
+
 // A failed migration keeps the owner's desired flavour. Do not automatically
 // attempt that release again or fall back to an older one.
 func (u *Updater) migrationRetryBlocked(v Version) bool {
@@ -457,7 +468,7 @@ func (u *Updater) checkRelease(ctx context.Context, allowAutoInstall bool) Statu
 	}
 	sameMigration := u.wantsDesktop(current) && ver.String() == u.o.Version
 	auto := allowAutoInstall && checkEpoch == u.autoEpoch && (*current.Auto || sameMigration) &&
-		u.st.Available && u.st.State == StateAvailable &&
+		u.st.Available && u.st.State == StateAvailable && u.automaticVersionAllowed(ver) &&
 		(!u.wantsDesktop(current) || !u.migrationRetryBlocked(ver))
 	u.publishLocked()
 	st := u.copyLocked()
@@ -644,7 +655,7 @@ func (u *Updater) install(ctx context.Context, req installRequest) {
 	}
 	r, ver, s := u.rel, u.ver, u.staged
 	u.mu.Unlock()
-	if !u.availableVersion(ver, settings) || (req.automatic && u.wantsDesktop(settings) && u.migrationRetryBlocked(ver)) {
+	if !u.availableVersion(ver, settings) || (req.automatic && (!u.automaticVersionAllowed(ver) || u.wantsDesktop(settings) && u.migrationRetryBlocked(ver))) {
 		return
 	}
 
@@ -742,7 +753,8 @@ func (u *Updater) install(ctx context.Context, req installRequest) {
 		stillStaged := u.staged == s && u.staged.asset == currentTarget.asset(ver.String())
 		u.mu.Unlock()
 		ok := stillStaged && u.autoAllowed(req) && targetErr == nil && currentTarget == t &&
-			current.Repo == settings.Repo && current.Channel == settings.Channel && u.availableVersion(ver, current)
+			current.Repo == settings.Repo && current.Channel == settings.Channel && u.availableVersion(ver, current) &&
+			(!req.automatic || u.automaticVersionAllowed(ver))
 		return current, ok
 	}
 	u.keysMu.Lock()

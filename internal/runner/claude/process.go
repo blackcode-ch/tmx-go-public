@@ -335,7 +335,38 @@ func (p *process) Answer(requestID string, d runner.Decision) error {
 }
 
 func (p *process) Interrupt() error {
-	return p.write(controlRequest(p.nextID(), "interrupt"))
+	return p.interrupt(false)
+}
+
+func (p *process) InterruptByOwner() error {
+	return p.interrupt(true)
+}
+
+func (p *process) interrupt(owner bool) error {
+	p.wmu.Lock()
+	defer p.wmu.Unlock()
+	if !p.in {
+		return errors.New("claude: input closed")
+	}
+	id := p.nextID()
+	p.mu.Lock()
+	if !p.parser.busy || p.parser.interruptID != "" {
+		p.mu.Unlock()
+		return nil
+	}
+	p.parser.interruptID = id
+	p.parser.ownerInterrupt = owner
+	p.mu.Unlock()
+	_, err := p.c.Write(controlRequest(id, "interrupt"))
+	if err != nil {
+		p.mu.Lock()
+		if p.parser.interruptID == id {
+			p.parser.interruptID = ""
+			p.parser.ownerInterrupt = false
+		}
+		p.mu.Unlock()
+	}
+	return err
 }
 
 // Stop closes stdin (claude exits after the current turn), then on ctx expiry terminates the

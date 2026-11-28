@@ -73,7 +73,7 @@ test("the agent page lays the panes out side by side with the message box undern
   assert.ok(splitBlock.indexOf("<MessageBox agent={agent} composerRef={composer} />") > 0, "one message box, full width, under both panes");
   assert.match(page, /\{panes\.split \? "Focus view" : "Split workspace"\}/, "Python's words");
   const conv = src("components/conversation/conversation.tsx");
-  assert.match(conv, /\{!hideBox && <MessageBox agent=\{agent\} composerRef=\{composerRef\} \/>\}/);
+  assert.match(conv, /\{!hideBox && <MessageBox agent=\{agent\} composerRef=\{composerRef\} compact \/>\}/);
 });
 
 test('narrowing keeps Chat after split hid Terminal or the owner chose Chat',()=>{

@@ -126,6 +126,7 @@ export class HttpTransport implements Transport {
   readonly desktop: boolean;
   readonly platform: string;
   private readonly apiBase: string;
+  private recorderUsesCookie = false;
 
   constructor(opts: { baseURL: string; apiBase?: string; token: string; desktop?: boolean; platform?: string }) {
     this.baseURL = opts.baseURL.replace(/\/$/, "");
@@ -160,6 +161,36 @@ export class HttpTransport implements Transport {
     if (!res.ok) throw errorFromBody(res.status, text);
     this.gateSession.receive(path, text);
     return parseJSON<T>(text);
+  }
+
+  /** The browser recorder can outlive an expired bearer while the phone's session cookie is valid. */
+  async recordingRequest<T>(method: string, path: string, body?: BodyInit, contentType?: string): Promise<T> {
+    const sameOriginBrowser = !this.desktop && this.baseURL === window.location.origin;
+    const bearer = this.recorderUsesCookie ? "" : this.token;
+    const send = (token: string) => fetch(this.apiBase + path, {
+      method,
+      body,
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(contentType ? { "Content-Type": contentType } : {}),
+      },
+    });
+    try {
+      let res = await send(bearer);
+      if (res.status === 401 && bearer && sameOriginBrowser) {
+        await res.text();
+        res = await send("");
+        // A lock response also proves the cookie exists; the unlock restores its use.
+        if (res.ok || res.status === 423) this.recorderUsesCookie = true;
+      }
+      const result = await res.text();
+      if (res.status === 423) lockedHook?.();
+      if (!res.ok) throw errorFromBody(res.status, result);
+      return parseJSON<T>(result);
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      throw new ApiError(0, "The daemon is not reachable.");
+    }
   }
 
   private wsURL(path: string, q: Record<string, string | number> = {}): string {

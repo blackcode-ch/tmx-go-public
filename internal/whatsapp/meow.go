@@ -483,6 +483,8 @@ func (w *Meow) event(raw any) {
 	case *events.Connected:
 		w.emit(EvConnected{Account: w.Account()})
 		w.contacts()
+	case *events.KeepAliveRestored:
+		w.emit(EvConnected{Account: w.Account()})
 	case *events.Disconnected, *events.KeepAliveTimeout:
 		w.emit(EvDisconnected{})
 	case *events.LoggedOut:

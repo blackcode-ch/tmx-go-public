@@ -260,6 +260,64 @@ func TestDaemonRestartKeepsHostedChatAgentRunning(t *testing.T) {
 	}
 }
 
+func TestReattachedWorkingChatKeepsOwnerMailQueuedUntilResult(t *testing.T) {
+	e := newEnv(t)
+	e.hostExe, e.chatRunner = "/opt/tmx/tmx-host", newHostedRunner(e.chat)
+	f1 := e.started()
+	a, prog := talkingAgent(t, e, f1, "hosted-owner-queue")
+	prog.State(model.StateWorking)
+	waitState(t, f1, a.ID, model.StateWorking)
+	before := len(prog.Sent())
+	var queued []model.Message
+	for _, text := range []string{"first waiting owner turn", "second waiting owner turn"} {
+		m, err := f1.SendOwner(a.ID, text, "")
+		if err != nil || m.State != model.MsgQueued {
+			t.Fatalf("send while busy: %+v %v", m, err)
+		}
+		queued = append(queued, m)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := f1.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	f2 := e.started()
+	eventually(t, "same process attached before state is available", func() bool {
+		a, err := f2.Agent(a.ID)
+		return err == nil && a.PID == prog.PID()
+	})
+	f2.tryDeliver(a.ID)
+	assertQueued := func() {
+		t.Helper()
+		if len(prog.Sent()) != before || prog.Interrupts() != 0 {
+			t.Fatalf("handoff cut into live hosted turn: %q", prog.Sent()[before:])
+		}
+		for _, m := range queued {
+			got, err := e.st.GetMessage(m.ID)
+			if err != nil || got.State != model.MsgQueued {
+				t.Fatalf("claimed before idle: %+v %v", got, err)
+			}
+		}
+	}
+	assertQueued()
+	prog.State(model.StateWorking)
+	waitState(t, f2, a.ID, model.StateWorking)
+	assertQueued()
+	prog.Turn("answer from the original turn", 0, 1)
+	for i, m := range queued {
+		eventually(t, m.Body, func() bool { return len(prog.Sent()) >= before+i+1 })
+		if sent := prog.Sent()[before:]; len(sent) != i+1 || !strings.Contains(sent[i], m.Body) {
+			t.Fatalf("handoff %d: %q", i, sent)
+		}
+		prog.Turn("answer from queued turn", 0, 1)
+	}
+	waitState(t, f2, a.ID, model.StateIdle)
+	if got := mustAgent(t, f2, a.ID); got.PID != prog.PID() || got.SessionID != a.SessionID ||
+		len(prog.Sent()) != before+len(queued) || prog.Interrupts() != 0 {
+		t.Fatalf("lost continuity across attachment: %+v", got)
+	}
+}
+
 func TestHostedHarnesses(t *testing.T) {
 	f := &Fleet{opts: Options{HostExecutable: "/x"}}
 	for _, tc := range []struct {

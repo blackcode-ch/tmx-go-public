@@ -39,6 +39,7 @@ export function DictateButton({
   draft,
   disabled,
   className,
+  buttonRef,
 }: {
   /** the message box the words go into */
   target: RefObject<HTMLTextAreaElement | null>;
@@ -49,6 +50,7 @@ export function DictateButton({
   draft: DictationTarget;
   disabled?: boolean;
   className?: string;
+  buttonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const status = useVoice((s) => s.status);
   const loaded = useVoice((s) => s.loaded);
@@ -72,11 +74,11 @@ export function DictateButton({
   // This box takes its dictation's words directly while it is on screen.
   useEffect(
     () =>
-      registerDictationBox(draft.id, async (text, requestId, signal) => {
-        if (latest.current.onSend) { await latest.current.onSend(text, requestId, signal); return; }
+      registerDictationBox(draft.id, async (text, requestId, signal, review) => {
+        if (!review && latest.current.onSend) { await latest.current.onSend(text, requestId, signal); return; }
         const el = target.current;
         const { value: cur, onChange: set } = latest.current;
-        const at = el ? [el.selectionStart, el.selectionEnd] : [cur.length, cur.length];
+        const at = el && !review ? [el.selectionStart, el.selectionEnd] : [cur.length, cur.length];
         const next = insertAtCursor(cur, at[0], at[1], text);
         latest.current.value = next.value; // consecutive recovered clips before React rerenders
         set(next.value);
@@ -146,6 +148,7 @@ export function DictateButton({
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
+            ref={buttonRef}
             type="button"
             variant="ghost"
             size="icon-sm"

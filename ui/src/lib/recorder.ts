@@ -11,7 +11,7 @@ import { bytesBase64 } from "./rec-upload";
 import { create } from "zustand";
 import { toast } from "sonner";
 import { useStore } from "./store";
-import { ApiError, type Transport } from "./transport";
+import { ApiError, HttpTransport, type Transport } from "./transport";
 import { mixAudio, pcmBytes, prepareAudioContext, prepareMixContext, startPcmTap, PCM_RATE, type AudioMix, type PcmTap } from "./rec-pcm";
 import { CHANGE_EVERY_MS, CHANGE_MIN, FrameGrabber, frameEvery, KEY_GAP_MS, MAX_FRAMES, MAX_KEY_FRAMES } from "./rec-frames";
 import { startBubble, type Bubble } from "./rec-bubble";
@@ -34,6 +34,8 @@ interface LocalState {
   /** bytes waiting to reach the daemon */
   backlog: number;
   warning: string;
+  uploadWaiting?: boolean;
+  failure?: { id: string; message: string; recovery: Blob | null };
   /** the start dialog */
   dialog: boolean;
   /** the camera's picture while a camera clip records here (the floating preview) */
@@ -45,6 +47,22 @@ const setLocal = useCapture.setState;
 
 export function openRecordDialog(v = true) {
   setLocal({ dialog: v });
+}
+
+export function dismissRecordingFailure() {
+  const failure = useCapture.getState().failure;
+  if (failure) setLocal({ failure: { ...failure, message: "", recovery: null } });
+}
+
+export function downloadRecordingRecovery() {
+  const failure = useCapture.getState().failure;
+  if (!failure?.recovery) return;
+  const url = URL.createObjectURL(failure.recovery);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `recording-${failure.id}-unsent.tmx-recovery`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** The recorded time of this window's capture now. */
@@ -162,7 +180,7 @@ class Session {
   private offUpdates: () => void;
   private recorders = new Set<MediaRecorder>();
   private mediaReads: Promise<void> = Promise.resolve();
-  private pendingMedia = new Set<{ blob: Blob | null; size: number; at: number }>();
+  private pendingMedia = new Set<{ blob: Blob | null; size: number; at: number; segment: number }>();
   private mediaClosed = false;
   private lastMediaAt = Date.now();
   private stateSeq = 0; // bumped by every pause or resume made here
@@ -202,13 +220,6 @@ class Session {
     this.segSince = now;
     this.mr = this.newRecorder(this.seg);
     this.mr.start(1000);
-    if (this.cap.sound) {
-      try {
-        this.pcm = await startPcmTap(ctx, new MediaStream([this.cap.sound]), (s) => this.onPCM(s));
-      } catch (e) {
-        setLocal({ warning: "The 16 kHz sound track is not being recorded: " + (e as Error).message });
-      }
-    } else void ctx?.close().catch(() => {});
     // "Stop sharing", or the camera went away
     this.cap.video?.addEventListener("ended", () => void this.stop());
     this.cap.mic?.addEventListener("ended", () => {
@@ -220,6 +231,15 @@ class Session {
     setLocal({ phase: "recording", rec: this.rec, base: 0, since: now, backlog: 0, warning: useCapture.getState().warning });
     this.nextFrameAt = this.frameEvery;
     void this.frame(0);
+    if (this.cap.sound) {
+      try {
+        const pcm = await startPcmTap(ctx, new MediaStream([this.cap.sound]), (s) => this.onPCM(s));
+        if (this.ended) pcm.stop();
+        else this.pcm = pcm;
+      } catch (e) {
+        if (!this.ended) setLocal({ warning: "The 16 kHz sound track is not being recorded: " + (e as Error).message });
+      }
+    } else void ctx?.close().catch(() => {});
   }
 
   private newRecorder(n: number): MediaRecorder {
@@ -241,7 +261,7 @@ class Session {
       this.lastMediaAt = Date.now();
       if (n === this.seg) this.segBytes += e.data.size;
       this.maxChunk = Math.max(this.maxChunk, e.data.size);
-      const pending = { blob: e.data as Blob | null, size: e.data.size, at: Date.now() };
+      const pending = { blob: e.data as Blob | null, size: e.data.size, at: Date.now(), segment: n };
       this.pendingMedia.add(pending);
       this.updateBacklog(); // include unread Blobs in the same cap as converted bytes
       if (this.ended) return;
@@ -322,11 +342,7 @@ class Session {
     ]);
     clearTimeout(timer);
     if (complete) return 0;
-    const lost = this.pendingMedia.size;
-    this.discardPendingMedia();
-    this.updateBacklog();
-    console.warn(`recorder: timed out after 25 s reading media; keeping converted chunks, dropping ${lost} unread chunk(s).`);
-    return lost;
+    return this.pendingMedia.size;
   }
 
   private async pump() {
@@ -337,32 +353,31 @@ class Session {
         const c = this.queue[0];
         try {
           await this.send(c);
+          if (this.ended) return;
           this.queue.shift();
           this.retryMs = 500;
+          setLocal({ uploadWaiting: false });
         } catch (e) {
           if (e instanceof Fatal) {
             void this.abort(e.message);
             return;
           }
+          if (this.ended) return;
           const err = e as ApiError;
           const size = typeof err.data?.size === "number" ? (err.data.size as number) : -1;
           if (err.status === 409 && size >= 0) {
-            // A gap: the daemon has less than this chunk assumes. Drop what can no longer line up.
+            // The server has a different byte boundary. Keep what can no longer line up.
             if (size < c.offset + c.size) {
-              this.queue = this.queue.filter((x) => !(x.n === c.n && x.track === c.track));
-              setLocal({ warning: `Part of segment ${c.n} did not reach the daemon.` });
+              void this.abort(`Part of segment ${c.n} did not reach the daemon.`);
+              return;
             } else this.queue.shift();
             continue;
           }
-          if (err.status === 400 || err.status === 413) {
-            this.queue.shift();
-            setLocal({ warning: err.message });
-            continue;
-          }
-          if (err.status === 401 || err.status === 403 || err.status === 404 || err.status === 409) {
+          if (err.status === 400 || err.status === 403 || err.status === 404 || err.status === 409 || err.status === 413) {
             void this.abort(err.message);
             return;
           }
+          if (err.status === 401 || err.status === 423) setLocal({ uploadWaiting: true });
           // the daemon is restarting or unreachable: retry, in order
           await new Promise((r) => setTimeout(r, this.retryMs));
           this.retryMs = Math.min(5000, this.retryMs * 2);
@@ -377,8 +392,8 @@ class Session {
 
   private async send(c: Chunk) {
     const path = `/api/recordings/${encodeURIComponent(this.rec.id)}`;
-    if (this.t.kind === "http") {
-      await putRaw(this.t, `${path}/segments/${c.n}?track=${c.track}&offset=${c.offset}&dur=${Math.round(c.dur)}`, c.data, "application/octet-stream");
+    if (this.t instanceof HttpTransport) {
+      await this.t.recordingRequest("PUT", `${path}/segments/${c.n}?track=${c.track}&offset=${c.offset}&dur=${Math.round(c.dur)}`, c.data as BodyInit, "application/octet-stream");
       return;
     }
     const data = c.data instanceof Blob ? await blobBase64(c.data) : bytesBase64(c.data);
@@ -457,7 +472,7 @@ class Session {
 
   private async sendFrame(f: { ms: number; data: Uint8Array; key: boolean }) {
     const path = `/api/recordings/${encodeURIComponent(this.rec.id)}/frames/${f.ms}`;
-    if (this.t.kind === "http") await putRaw(this.t, f.key ? path + "?key=1" : path, f.data, "image/jpeg");
+    if (this.t instanceof HttpTransport) await this.t.recordingRequest("PUT", f.key ? path + "?key=1" : path, f.data as BodyInit, "image/jpeg");
     else await this.t.request("PUT", path, { data: bytesBase64(f.data), key: f.key });
   }
 
@@ -528,11 +543,15 @@ class Session {
     const seq = this.stateSeq;
     try {
       const r = await recApi.setState(this.rec.id, "heartbeat");
+      if (this.ended) return;
+      if (this.queue.length === 0) setLocal({ uploadWaiting: false });
       // A pause or resume made here after the heartbeat left wins over the state it answers.
       if (seq === this.stateSeq || !isLive(r)) this.follow(r);
     } catch (e) {
+      if (this.ended) return;
       const err = e as ApiError;
-      if (err.status === 404 || err.status === 409) void this.abort(err.message);
+      if (err.status === 401 || err.status === 423) setLocal({ uploadWaiting: true });
+      if (err.status === 403 || err.status === 404 || err.status === 409) void this.abort(err.message);
       // otherwise the daemon is away for a moment; the chunks retry
     }
   }
@@ -632,6 +651,7 @@ class Session {
     );
     const unread = await this.drainMedia(); // includes the final asynchronous Blob read
     if (this.ended) return;
+    if (unread) return this.abort("Some media could not be read before the recording stopped.");
     this.flushPCM();
     await this.frame(useCapture.getState().base); // the last picture, while the tracks still run
     this.release();
@@ -642,15 +662,15 @@ class Session {
     }
     await this.drainFrames(Math.min(deadline, Date.now() + 10_000));
     if (this.ended) return;
-    const lost = this.queue.length;
-    this.ended = true;
+    if (this.queue.length) return this.abort("Some media could not be uploaded before the recording stopped.");
     this.offUpdates();
     try {
       const r = await recApi.setState(this.rec.id, "stopped");
+      this.ended = true;
       upsertRecording(r);
-      finish(r, [lost ? `${lost} last chunk${lost === 1 ? "" : "s"} did not reach the daemon.` : "", unread ? `${unread} media chunk(s) could not be read before stopping.` : ""].filter(Boolean).join(" "));
+      finish(r, "");
     } catch (e) {
-      finish(this.rec, (e as Error).message);
+      await this.abort((e as Error).message);
     }
   }
 
@@ -660,6 +680,7 @@ class Session {
     this.ended = true;
     this.offUpdates();
     this.clearTimers();
+    const recovery = this.recoverUnsent();
     for (const mr of this.recorders) {
       try {
         mr.stop();
@@ -668,11 +689,35 @@ class Session {
       }
     }
     this.release();
-    setLocal({ phase: "idle", rec: null, base: 0, since: 0, backlog: 0, warning: "", preview: null });
+    setLocal({ phase: "idle", rec: null, base: 0, since: 0, backlog: 0, warning: "", preview: null, uploadWaiting: false,
+      ...(!quiet || recovery ? { failure: { id: this.rec.id, message, recovery } } : {}) });
     session = null;
+    if (!quiet) void recApi.setState(this.rec.id, "stopped").then(upsertRecording).catch(() => {});
     void loadActive();
     if (quiet) toast(message);
     else toast.error("Recording ended", { description: message, duration: 15000 });
+  }
+
+  private recoverUnsent(): Blob | null {
+    const chunks = this.queue.map(({ n, track, offset, data, size }) => ({ n, track, offset, data, size }));
+    const offsets = new Map(this.offsets);
+    for (const { segment: n, blob, size } of this.pendingMedia) {
+      if (!blob) continue;
+      const key = n + "media";
+      const offset = offsets.get(key) ?? 0;
+      chunks.push({ n, track: "media", offset, data: blob, size });
+      offsets.set(key, offset + size);
+    }
+    if (this.pcmLen) {
+      const data = pcmBytes(this.pcmChunks, this.pcmLen);
+      chunks.push({ n: this.seg, track: "pcm", offset: offsets.get(this.seg + "pcm") ?? 0, data, size: data.length });
+    }
+    if (!chunks.length) return null;
+    const manifest = JSON.stringify({
+      version: 1, recording: this.rec.id, mime: this.rec.mime,
+      chunks: chunks.map(({ n, track, offset, size }) => ({ n, track, offset, size })),
+    });
+    return new Blob([manifest + "\n", ...chunks.map((c) => c.data as BlobPart)], { type: "application/octet-stream" });
   }
 
   private clearTimers() {
@@ -695,7 +740,7 @@ let session: Session | null = null;
 
 function finish(r: Recording, note: string) {
   session = null;
-  setLocal({ phase: "idle", rec: null, base: 0, since: 0, backlog: 0, warning: "", preview: null });
+  setLocal({ phase: "idle", rec: null, base: 0, since: 0, backlog: 0, warning: "", preview: null, uploadWaiting: false });
   void loadActive();
   const title = r.state === "failed" ? "Nothing was recorded" : "Recording saved";
   const description = [r.title, note].filter(Boolean).join(" · ");
@@ -795,7 +840,7 @@ export async function startRecording(o: StartOptions): Promise<void> {
   // Both audio contexts are made during the click (WebKit only runs a context a user gesture made).
   const ctx = wantMic || wantDevice ? prepareAudioContext() : null; // the 16 kHz tap
   const mixCtx = wantMic && wantDevice ? prepareMixContext() : null; // the microphone + device audio
-  setLocal({ phase: "starting", warning: "" });
+  setLocal({ phase: "starting", warning: "", uploadWaiting: false });
   const opened: MediaStream[] = [];
   let mix: AudioMix | null = null;
   let bubble: Bubble | null = null;
@@ -886,8 +931,7 @@ export async function startRecording(o: StartOptions): Promise<void> {
     try {
       await s.start(ctx);
     } catch (e) {
-      session = null;
-      void recApi.setState(rec.id, "stopped").catch(() => {});
+      await s.abort((e as Error).message);
       throw e;
     }
   } catch (e) {
@@ -930,32 +974,6 @@ window.addEventListener("beforeunload", (e) => {
 
 // ---------------------------------------------------------------------------------------------
 // helpers
-
-/** PUTs raw bytes to the daemon (the http transport); a refusal is an ApiError with its JSON. */
-async function putRaw(t: Transport, path: string, body: Uint8Array | Blob, type: string): Promise<void> {
-  let res: Response;
-  try {
-    res = await fetch(`${t.baseURL}${path}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${t.token}`, "Content-Type": type },
-      body: body as BodyInit,
-    });
-  } catch {
-    throw new ApiError(0, "The daemon is not reachable.");
-  }
-  if (!res.ok) {
-    const text = await res.text();
-    let data: Record<string, unknown> | undefined;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      /* plain text */
-    }
-    throw new ApiError(res.status, (data?.error as string) || `HTTP ${res.status}`, data);
-  }
-  // Release each upload acknowledgement before sending the next chunk.
-  await res.text();
-}
 
 /** Only the timed-out conversion fallback uses the original Blob bridge path. */
 function blobBase64(blob: Blob): Promise<string> {

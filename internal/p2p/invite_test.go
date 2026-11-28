@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"fmt"
 	"net"
@@ -142,6 +143,21 @@ func TestInviteLinkLength(t *testing.T) {
 	got, err := parseLink(link)
 	if err != nil || len(got.Addrs) != maxInviteAddrs {
 		t.Fatalf("addresses are capped at %d: got %d (%v)", maxInviteAddrs, len(got.Addrs), err)
+	}
+}
+
+func TestJoinRejectsExpiredLinkBeforeDialing(t *testing.T) {
+	_, sender := testKey(t)
+	link, err := (payload{
+		Kind: InviteDM, PeerID: sender, Secret: make([]byte, secretLen),
+		ExpiresAt: time.Now().Add(-time.Minute).UnixMilli(),
+	}).encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = (&Host{}).Join(context.Background(), link)
+	if err == nil || !strings.Contains(err.Error(), "this invite has expired") {
+		t.Fatalf("expected expired invite error, got %v", err)
 	}
 }
 

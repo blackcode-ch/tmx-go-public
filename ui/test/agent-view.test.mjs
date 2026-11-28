@@ -121,8 +121,8 @@ test("classic: the agent page's tab click only changes the view", () => {
   assert.ok(click.indexOf("if (classic) return showView(agent.id, v);") >= 0, "classic takes showView");
   assert.ok(click.indexOf("if (classic) return showView(agent.id, v);") < click.indexOf("switchMode"), "and returns before switchMode");
   assert.match(page, /resolveAgentView\(tab, rememberedAgentView\(id\), chatCapable\)/);
-  assert.match(page, /\{classic \? "Chat" : "Conversation"\}/);
-  assert.match(page, /\{classic \? "Terminal" : harnessLabel\(agent\.harness\)\}/);
+  assert.match(page, /\{classic \|\| phone \? "Chat" : "Conversation"\}/);
+  assert.match(page, /\{classic \|\| phone \? "Terminal" : harnessLabel\(agent\.harness\)\}/);
 });
 
 test("classic: no card, bar or notice; the message box is under Terminal; the mode change is a button", () => {

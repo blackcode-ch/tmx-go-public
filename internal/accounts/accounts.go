@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -74,16 +75,17 @@ type Account struct {
 	Connected     bool     `json:"connected"`
 	Account       Identity `json:"account"`
 	// Limits are the plan's limits, as the harness reports them; empty with LimitsNote saying why.
-	Limits        []Limit      `json:"limits"`
-	LimitsNote    string       `json:"limits_note"`
-	FreeResets    *FreeResets  `json:"free_resets,omitempty"`
-	Reset         *ResetStatus `json:"reset,omitempty"`
-	CheckedAt     int64        `json:"checked_at"` // Unix ms of the last check; 0 = never
-	Refreshing    bool         `json:"refreshing"`
-	Error         string       `json:"error"` // the last check failed (what is shown is from before)
-	Login         Login        `json:"login"`
-	Install       string       `json:"install"`                   // how to install the harness
-	SignOutReason string       `json:"sign_out_reason,omitempty"` // why this node cannot sign out
+	Limits               []Limit      `json:"limits"`
+	QuotaMeasureOnDemand bool         `json:"quota_measure_on_demand,omitempty"`
+	LimitsNote           string       `json:"limits_note"`
+	FreeResets           *FreeResets  `json:"free_resets,omitempty"`
+	Reset                *ResetStatus `json:"reset,omitempty"`
+	CheckedAt            int64        `json:"checked_at"` // Unix ms of the last check; 0 = never
+	Refreshing           bool         `json:"refreshing"`
+	Error                string       `json:"error"` // the last check failed (what is shown is from before)
+	Login                Login        `json:"login"`
+	Install              string       `json:"install"`                   // how to install the harness
+	SignOutReason        string       `json:"sign_out_reason,omitempty"` // why this node cannot sign out
 }
 
 // Identity is who is signed in. Every field may be empty.
@@ -118,6 +120,7 @@ var (
 
 // Options configures the service.
 type Options struct {
+	AgyBackgroundUsage func() bool // optional live node setting; nil enables regular checks
 	// NodeHome bounds account storage. User logins require explicit authorization.
 	NodeHome        string
 	AllowUserLogins bool
@@ -138,6 +141,8 @@ type Options struct {
 	ResetDryRun bool
 	// ClaudeUsageChanged observes successful refreshes outside the service lock.
 	ClaudeUsageChanged func(account string)
+	// UsageObserved observes completed usage checks outside the service lock.
+	UsageObserved func([]model.AccountUsageReading)
 
 	Every        time.Duration // the periodic refresh (default 5 min; <0 = none)
 	CheckTimeout time.Duration // each status command (default 20 s)
@@ -514,6 +519,38 @@ func (s *Service) Refresh(h, name string) error {
 	return nil
 }
 
+func (s *Service) agyQuotaOnDemand() bool {
+	return runtime.GOOS == "windows" && s.o.AgyBackgroundUsage != nil && !s.o.AgyBackgroundUsage()
+}
+
+// MeasureAgyQuota runs a single owner-requested quota measurement while the
+// Windows automatic probe is disabled. Automatic refresh never calls it.
+func (s *Service) MeasureAgyQuota(name string) (Payload, error) {
+	e := s.entry(string(Antigravity), name)
+	if e == nil {
+		return Payload{}, ErrUnknown
+	}
+	if !s.agyQuotaOnDemand() {
+		return Payload{}, ErrNoProfiles
+	}
+	if !s.owns(e) {
+		return Payload{}, ErrNotOwned
+	}
+	e.loginMu.Lock()
+	defer e.loginMu.Unlock()
+	start := s.o.Now()
+	a := s.checkWithIntent(e, false, true)
+	s.mu.Lock()
+	if !start.Before(e.applied) {
+		e.applied, e.acct = start, a
+		s.changedLocked()
+	}
+	s.mu.Unlock()
+	s.publish()
+	s.observeUsage()
+	return s.Payload(), nil
+}
+
 func (s *Service) refreshAll() {
 	for _, e := range s.snapshot() {
 		s.refresh(e)
@@ -557,6 +594,7 @@ func (s *Service) refresh(e *entry) {
 			s.changedLocked()
 			s.mu.Unlock()
 			s.publish()
+			s.observeUsage()
 			return
 		}
 	}()
@@ -603,6 +641,10 @@ func (s *Service) checkAndApplyMode(e *entry, automatic bool) {
 func (s *Service) check(e *entry) Account { return s.checkMode(e, false) }
 
 func (s *Service) checkMode(e *entry, dryRun bool) Account {
+	return s.checkWithIntent(e, dryRun, false)
+}
+
+func (s *Service) checkWithIntent(e *entry, dryRun, measureAgyQuota bool) Account {
 	s.mu.Lock()
 	prev := e.acct
 	s.mu.Unlock()
@@ -613,7 +655,7 @@ func (s *Service) checkMode(e *entry, dryRun bool) Account {
 		return prev
 	}
 	a := Account{Harness: string(e.def.h), Name: e.name, Label: e.def.label, Install: e.def.install,
-		Account: Identity{Method: MethodUnknown}, Limits: []Limit{}}
+		Account: Identity{Method: MethodUnknown}, Limits: []Limit{}, QuotaMeasureOnDemand: e.def.h == Antigravity && s.agyQuotaOnDemand()}
 	if !s.owns(e) {
 		a.SignOutReason = ErrNotOwned.Error()
 		a.Error = ErrNotOwned.Error()
@@ -634,6 +676,7 @@ func (s *Service) checkMode(e *entry, dryRun bool) Account {
 	}
 	scope := s.scope(e)
 	scope.resetDryRun = dryRun
+	scope.measureAgyQuota = measureAgyQuota
 	r := e.def.check(s.ctx, scope, path)
 	a.CheckedAt = s.now()
 	if !r.known {

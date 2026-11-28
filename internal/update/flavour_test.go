@@ -157,7 +157,7 @@ func runScheduledMigration(t *testing.T, u *Updater) {
 }
 
 func TestAutoOffDesktopMigrationSelectsSameVersionOnly(t *testing.T) {
-	const current, newer = "fleet-v1.0.3-456-g1f4b78ae", "fleet-v1.0.4"
+	const current, newer = "fleet-v1.0.3-456-g1f4b78ae", "fleet-v1.0.3-457-gabcdef0"
 	g := newFakeGitHub(t)
 	key, pin := newKey(t)
 	future := signedWindowsRelease(t, g, newer, key)

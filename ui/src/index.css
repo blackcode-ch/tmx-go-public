@@ -5,6 +5,48 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.phone-chat-composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "attachments attachments attachments attachments" "add message mic send";
+  align-items: end;
+  column-gap: 2px;
+  padding: 3px;
+}
+
+.phone-chat-composer > div:has(> ul[aria-label="Attached files"]) {
+  grid-area: attachments;
+}
+
+.phone-chat-composer > textarea {
+  grid-area: message;
+  padding: 6px 4px;
+}
+
+.phone-chat-composer > [data-composer-actions] {
+  display: contents;
+}
+
+.phone-chat-composer > [data-composer-actions] > span {
+  display: none;
+}
+
+.phone-chat-composer [data-phone-add] {
+  grid-area: add;
+}
+
+.phone-chat-composer [data-composer-send] {
+  grid-area: send;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.phone-chat-mic { grid-area: mic; }
+
+@media (max-width: 359px) {
+  .phone-chat-mic:has([data-dictation="idle"]) { display: none; }
+}
+
 /* Phone Settings: keep prose and controls on usable rows, even with large text
    and a desktop sidebar width saved on this device. */
 @media (max-width: 767px) {

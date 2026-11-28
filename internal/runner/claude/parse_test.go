@@ -17,6 +17,40 @@ import (
 
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 
+func TestCancellationResultsAndExecutionErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name, record     string
+		explicit, failed bool
+		want             string
+	}{
+		{"explicit", `{"type":"result","subtype":"error_during_execution","is_error":true}`, true, false, "interrupted"},
+		{"real failure", `{"type":"result","subtype":"error_during_execution","is_error":true}`, false, true, "error_during_execution"},
+		{"unattributed cancellation text", `{"type":"result","subtype":"error_during_execution","is_error":true,"result":"[Request interrupted by user]"}`, false, false, "aborted"},
+		{"failure after interrupt request", `{"type":"result","subtype":"error_during_execution","is_error":true,"errors":["provider failed"]}`, true, true, "error_during_execution"},
+		{"superseded", `{"type":"result","subtype":"superseded","is_error":true}`, false, false, "superseded"},
+		{"aborted", `{"type":"result","subtype":"aborted","is_error":true}`, false, false, "aborted"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newParser("init", quiet)
+			if tc.explicit {
+				p.interruptID = "interrupt"
+				p.ownerInterrupt = true
+			}
+			events := p.line([]byte(tc.record)).events
+			for _, event := range events {
+				if e := event.Entry; e != nil && e.Kind == model.EntryResult {
+					if e.IsError != tc.failed || e.Meta["subtype"] != tc.want || p.interruptID != "" ||
+						(e.Meta["owner_interrupt"] == true) != (tc.want == "interrupted") {
+						t.Fatalf("result: %+v, pending interrupt: %q", e, p.interruptID)
+					}
+					return
+				}
+			}
+			t.Fatal("no result")
+		})
+	}
+}
+
 // feed runs every line of a fixture through p and returns the events and replies.
 func feed(t *testing.T, p *parser, fixture string) ([]runner.Event, [][]byte) {
 	t.Helper()

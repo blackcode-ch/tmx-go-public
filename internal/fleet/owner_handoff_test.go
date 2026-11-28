@@ -16,6 +16,41 @@ type heldMailProcess struct {
 	once    sync.Once
 }
 
+func TestOwnerBurstWaitsForLiveTurnAndUnblocksInFIFO(t *testing.T) {
+	e := newEnv(t)
+	f := e.started()
+	a, proc := talkingAgent(t, e, f, "owner-burst")
+	proc.State(model.StateWorking)
+	waitState(t, f, a.ID, model.StateWorking)
+	before := len(proc.Sent())
+	inputs := []string{"first follow-up", "second follow-up", "third follow-up", "fourth follow-up", "fifth follow-up"}
+	for _, body := range inputs {
+		m, err := f.SendOwner(a.ID, body, "")
+		if err != nil || m.State != model.MsgQueued || m.Receipt != "queued" {
+			t.Fatalf("queued %q: %+v %v", body, m, err)
+		}
+	}
+	if proc.Interrupts() != 0 || len(proc.Sent()) != before {
+		t.Fatal("owner sends cut the active turn short")
+	}
+	proc.Turn("completed the active answer", 0, 1)
+	for i, body := range inputs {
+		eventually(t, body, func() bool { return len(proc.Sent()) > before+i })
+		if sent := proc.Sent()[before:]; len(sent) != i+1 || sent[i] != body {
+			t.Fatalf("handoff %d: %q", i, sent)
+		}
+		if i == 0 {
+			if _, err := f.InterruptAgent(OwnerCaller, a.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		proc.State(model.StateIdle)
+	}
+	if proc.Interrupts() != 1 {
+		t.Fatalf("expected only the explicit interrupt, got %d", proc.Interrupts())
+	}
+}
+
 func (p *heldMailProcess) SendMail(text string, ids []string) error {
 	p.once.Do(func() { close(p.entered); <-p.release })
 	return p.Process.Send(text)
@@ -45,8 +80,8 @@ func TestOwnerFIFOAcrossConcurrentHandoff(t *testing.T) {
 	}
 	close(p.release)
 	<-done
-	if original.Interrupts() != 1 || len(original.Sent()) != 1 {
-		t.Fatal("second owner message did not interrupt the first turn")
+	if original.Interrupts() != 0 || len(original.Sent()) != 1 {
+		t.Fatal("second owner message interrupted the first turn")
 	}
 	f.handleEvent(f.agents[a.ID], p, runner.Event{Kind: runner.EvState, State: model.StateIdle})
 	f.tryDeliver(a.ID)
@@ -85,8 +120,8 @@ func TestMixedSenderFIFOAcrossConcurrentHandoff(t *testing.T) {
 	if e1 != nil || e2 != nil {
 		t.Fatalf("%v %v", e1, e2)
 	}
-	if original.Interrupts() != 1 || len(original.Sent()) != before+1 {
-		t.Fatal("owner turn did not interrupt after the first handoff")
+	if original.Interrupts() != 0 || len(original.Sent()) != before+1 {
+		t.Fatal("owner turn interrupted after the first handoff")
 	}
 	f.handleEvent(f.agents[a.ID], p, runner.Event{Kind: runner.EvState, State: model.StateIdle})
 	f.tryDeliver(a.ID)

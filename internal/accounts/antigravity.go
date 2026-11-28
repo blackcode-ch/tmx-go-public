@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -188,22 +189,42 @@ func agyState(ctx context.Context, s *scope, path string) result {
 	if authKnown && !res.connected {
 		return res
 	}
-	if s.agyProbe(path, nil).usageBroken {
+	if s.agyQuotaOnDemand() && !s.measureAgyQuota {
+		if !authKnown {
+			res = agyByFile(s)
+		}
+		if res.connected {
+			res.note, res.keepLimits = "Quota not measured automatically.", true
+		}
+		s.log.Info("Antigravity quota probe skipped", "background_usage", false)
+		return res
+	}
+	if !s.measureAgyQuota && s.agyProbe(path, nil).usageBroken {
 		if !authKnown {
 			return agyByFile(s)
 		}
 		res.note = agyNoQuota
 		return res
 	}
-	u := s.run(ctx, s.o.CheckTimeout, path, "-p", "/usage", "--output-format", "json")
+	u := s.runHeadlessAgyQuota(ctx, path)
 	if u.err != nil {
-		if !authKnown {
-			return result{err: "Couldn't run agy: " + u.err.Error()}
+		if runtime.GOOS == "windows" {
+			s.log.Info("Antigravity quota probe", "updater_opt_out", true, "result", "execution_failed")
 		}
-		res.note, res.keepLimits = "Couldn't read usage: "+u.err.Error(), true
+		if !authKnown {
+			res = agyByFile(s)
+			if !res.connected {
+				return result{err: "Couldn't read usage: " + u.err.Error()}
+			}
+			res.id.Email = agyActiveEmail(s)
+		}
+		res.note, res.keepLimits = "Quota unavailable: "+u.err.Error(), authKnown || res.id.Email != ""
 		return res
 	}
 	limits, signedOut, ok := parseAgyUsage(append(append([]byte{}, u.out...), u.errText...), s.o.Now())
+	if runtime.GOOS == "windows" {
+		s.log.Info("Antigravity quota probe", "updater_opt_out", true, "valid_quota", ok, "signed_out", signedOut, "quota_rows", len(limits))
+	}
 	switch {
 	case ok:
 		if !authKnown {
@@ -220,6 +241,15 @@ func agyState(ctx context.Context, s *scope, path string) result {
 		res.note = agyNoQuota
 	}
 	return res
+}
+
+// agyUsageEnv disables the CLI's documented auto-update in the Windows quota
+// probe. Its updater can start a new console for agy --version.
+func agyUsageEnv() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"AGY_CLI_DISABLE_AUTO_UPDATE=true"}
+	}
+	return nil
 }
 
 var (

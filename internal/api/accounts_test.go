@@ -52,7 +52,7 @@ func TestAccountsOwnerOnly(t *testing.T) {
 	}
 	companion := client{t: t, base: d.URL, token: tok}
 	routes := []struct{ method, path string }{
-		{"GET", "/api/accounts"}, {"POST", "/api/accounts/refresh"}, {"POST", "/api/accounts/claude/login"},
+		{"GET", "/api/accounts"}, {"POST", "/api/accounts/refresh"}, {"POST", "/api/accounts/antigravity/measure"}, {"POST", "/api/accounts/claude/login"},
 		{"DELETE", "/api/accounts/claude/login"}, {"GET", "/api/accounts/claude/login/terminal"}, {"POST", "/api/accounts/claude/logout"},
 		{"POST", "/api/accounts/claude/reset"},
 	}

@@ -88,6 +88,34 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 const samples = seconds => new Float32Array(seconds * 16000).fill(0.1);
 const duration = wav => (wav.length - 44) / 32000;
 
+test('composer reports actual WAV samples for normal and silent captures before teardown', async () => {
+  for (const signal of [0.1, 0]) {
+    const env = environment();
+    const rec = await startDictation();
+    const track = env.streams[0].getAudioTracks()[0];
+    Object.assign(track, { muted: false, readyState: 'live' });
+    document.hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    document.hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    env.worklets[0].port.onmessage({ data: new Float32Array(16000).fill(signal) });
+    if (!signal) {
+      track.muted = true;
+      track.dispatchEvent(new Event('mute'));
+    }
+    const wav = await rec.stop();
+    assert.equal(duration(wav), 1);
+    assert.equal(wav.subarray(44).some(value => value !== 0), signal !== 0);
+    assert.deepEqual(JSON.parse(JSON.stringify(rec.captureMetadata())), {
+      path: 'unknown', processor: 'worklet', track_muted: signal === 0, track_ended: false,
+      ...(signal === 0 ? { interruption: 'mute' } : {}),
+      hidden_at_start: false, hidden_events: 1, visible_events: 1,
+      context_state: 'running', context_interruptions: 0, samples: 16000, duration_ms: 1000,
+    });
+    env.clean();
+  }
+});
+
 test('recorder releases resources on every failure and next captures start fresh', async t => {
   for (const kind of ['denied', 'contextError', 'resumeError', 'connectError']) {
     await t.test(kind, async () => {

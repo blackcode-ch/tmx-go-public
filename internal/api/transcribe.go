@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"mime"
 	"net/http"
@@ -147,8 +148,9 @@ func (s *Server) transcribeNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Data     string `json:"data"`
-		Language string `json:"language"`
+		Data     string          `json:"data"`
+		Language string          `json:"language"`
+		Capture  json.RawMessage `json:"capture"`
 	}
 	if !decodeMax(w, r, &req, maxDictationBody) {
 		return
@@ -162,7 +164,8 @@ func (s *Server) transcribeNow(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get(transcriptionLocalOnly) == "" && s.f != nil {
 		hosts = &configuredVoiceHosts{paths: s.f.Paths(), ownPort: s.port, requestID: r.Header.Get("Idempotency-Key")}
 	}
-	res, err := s.voice.DictateWithHosts(r.Context(), wav, req.Language, hosts)
+	ctx := transcribe.WithDictationCapture(r.Context(), req.Capture)
+	res, err := s.voice.DictateWithHosts(ctx, wav, req.Language, hosts)
 	if err != nil {
 		writeVoiceErr(w, err)
 		return

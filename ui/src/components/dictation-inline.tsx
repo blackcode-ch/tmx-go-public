@@ -7,9 +7,11 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { Loader2, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DictationMeter } from "@/components/dictation-meter";
 import { cancelDictating, dictationElapsed, stopDictating, useDictation } from "@/lib/dictation-session";
 import { useVoice } from "@/lib/voice";
-import { acceptDictation, clearDictationNotice, useDictationOutbox } from "@/lib/dictation-outbox";
+import { acceptDictation, clearDictationNotice, deleteSavedDictation, retrySavedDictation, savedDictationAudio, useDictationOutbox } from "@/lib/dictation-outbox";
+import type { SavedDictationInfo } from "@/lib/dictation-recovery";
 
 /** Which dictation boxes show their own state right now (by box id: "agent:<id>"), counted. */
 export const useInlineDictation = create<{ boxes: Record<string, number> }>(() => ({ boxes: {} }));
@@ -29,10 +31,29 @@ export function dictationClock(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+function SavedClip({ clip, busy, act }: { clip: SavedDictationInfo; busy: boolean; act: (p: Promise<void>) => void }) {
+  const [audio, setAudio] = useState("");
+  return (
+    <div className="mb-2 rounded-lg border p-2 text-xs" data-saved-dictation>
+      <p className="font-medium">Dictation saved on this device</p>
+      <p>{busy ? "Transcribing…" : clip.reason}</p>
+      {audio && <audio className="mt-1 max-w-full" controls autoPlay src={audio} aria-label="Saved dictation audio" />}
+      <div className="mt-1 flex flex-wrap gap-2">
+        <Button size="xs" variant="outline" onClick={() => act(savedDictationAudio(clip).then(setAudio))}>Play</Button>
+        <Button size="xs" variant="outline" disabled={busy} onClick={() => act(retrySavedDictation(clip))}>Retry transcription</Button>
+        <Button size="xs" variant="ghost" disabled={busy} onClick={() => act(deleteSavedDictation(clip))}>Delete</Button>
+      </div>
+    </div>
+  );
+}
+
 /** boxId: the dictation target this message box registers as (the composer's "agent:<id>"). */
 export function DictationInline({ boxId }: { boxId: string }) {
   const kept = useDictationOutbox(s => s.notices[boxId] ?? s.clips.find(c => c.target.id === boxId && c.text === undefined));
   const cleanupError = useDictationOutbox(s => s.error);
+  const saved = useDictationOutbox(s => s.saved);
+  const queued = useDictationOutbox(s => s.clips);
+  const here = saved.filter(clip => clip.target.id === boxId);
   const pending = useVoice((s) => s.pending);
   const phase = useDictation((s) => s.phase);
   const mine = useDictation((s) => s.target?.id === boxId);
@@ -54,7 +75,9 @@ export function DictationInline({ boxId }: { boxId: string }) {
     return () => clearInterval(id);
   }, [mine, phase]);
 
-  if (!mine || phase === "idle") return kept ? (
+  if (!mine || phase === "idle") return <>
+    {here.map(clip => <SavedClip key={clip.id} clip={clip} busy={queued.some(row => row.id === clip.id)} act={act} />)}
+    {kept && (kept.held || !here.some(clip => clip.id === kept.id)) ? (
     <div role="status" data-dictation-inline className="mb-2 min-w-0 text-xs [overflow-wrap:anywhere]">
       {kept.held ? <>
         <p className="font-medium">{kept.heldReason === "send_uncertain" ? "Send uncertain" : kept.heldReason === "send_failed" ? "Message not sent" : "Text unsure: review before sending."}</p>
@@ -67,12 +90,18 @@ export function DictationInline({ boxId }: { boxId: string }) {
         <p className="text-muted-foreground">{kept.note}</p>
       ) : <p>{kept.error || "Transcribing..."}</p>}
       {(kept.held || (kept.delivered && kept.note)) && <div className="mt-1 flex flex-wrap gap-2">
-        {kept.held && !!kept.text?.trim() && <Button size="xs" onClick={() => act(acceptDictation(kept))}>Use text anyway</Button>}
-        <Button size="xs" variant="ghost" onClick={() => clearDictationNotice(boxId)}>{kept.held ? "Discard" : "Dismiss"}</Button>
+        {kept.held && !!kept.text?.trim() && <Button size="xs" onClick={() => act(acceptDictation(kept))}>{kept.review ? "Put in draft" : "Use text anyway"}</Button>}
+        <Button size="xs" variant="ghost" onClick={() => {
+          const savedClip = here.find(clip => clip.id === kept.id);
+          if (savedClip) act(deleteSavedDictation(savedClip));
+          else clearDictationNotice(boxId);
+        }}>{kept.held ? "Discard" : "Dismiss"}</Button>
       </div>}
       {actionError && <p role="alert">{actionError}</p>}
     </div>
-  ) : cleanupError ? <div role="alert" data-dictation-inline className="mb-2 min-w-0 text-xs [overflow-wrap:anywhere]">{cleanupError}</div> : null;
+    ) : null}
+    {(cleanupError || (here.length > 0 && actionError)) && <div role="alert" data-dictation-inline className="mb-2 min-w-0 text-xs [overflow-wrap:anywhere]">{actionError || cleanupError}</div>}
+  </>;
   // a transcription that waits to be retried gets no indicator (as for the bar)
   if (phase === "working" && pending) return null;
   const recording = phase === "recording";
@@ -85,6 +114,7 @@ export function DictationInline({ boxId }: { boxId: string }) {
       </span>
       <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{recording ? "Dictating" : phase === "starting" ? "Waiting for the microphone…" : "Transcribing…"}</span>
       {recording && <span className="tabular shrink-0 font-mono">{dictationClock(elapsed)}</span>}
+      {recording && <DictationMeter />}
       <div className="ml-auto flex shrink-0 items-center gap-1">
         {phase === "working" ? (
           <Loader2 className="size-3.5 animate-spin text-muted-foreground" />

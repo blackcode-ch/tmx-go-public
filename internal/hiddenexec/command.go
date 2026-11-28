@@ -20,8 +20,8 @@ func CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd 
 }
 
 // CommandInheritConsole is for a child meant to share the invoking console: interactive
-// programs, and anything the caller forwards Ctrl-C to. Unlike Command, it must not force
-// the child onto its own hidden console, which would break signal delivery and CONIN$/CONOUT$.
+// programs, and anything the caller forwards Ctrl-C to. A detached caller uses
+// a no-window child on Windows because there is no console to share.
 func CommandInheritConsole(name string, args ...string) *exec.Cmd {
 	cmd := exec.Command(name, args...)
 	configureInheritConsole(cmd)

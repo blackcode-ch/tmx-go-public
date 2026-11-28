@@ -1,6 +1,6 @@
 // The classic UI profile on a phone (config.json "ui": {"profile": "classic"}): the Python
 // dashboard's mobile app, one to one (the owner, 17 Nov 2026). At 390x844: nothing fixed above a
-// page, a 76 px bottom bar with Home, Projects, Agents and Your turn, sub-pages with one 66 px row
+// page, a 76 px bottom bar with Home, Projects, Agents and Your turn, a compact agent header
 // and a back arrow, Home's plain rows instead of the menu, no notifications banner.
 // Linux CI only, like the other browser tests.
 import { test } from "node:test";
@@ -62,8 +62,11 @@ test("classic profile at phone size: Python's mobile app", { timeout: 5 * 60_000
       const titleRow = page.locator("[data-phone-title-row]");
       await titleRow.waitFor();
       const box = await titleRow.boundingBox();
-      assert.ok(box.y <= 1 && box.height >= 66 && box.height <= 90, `one row above the chat: ${JSON.stringify(box)}`);
-      assert.ok(await page.locator("[data-phone-agent-line]").isVisible(), "the state in words under the name");
+      assert.ok(box.y <= 1 && box.height >= 48 && box.height <= 64, `one compact row above the chat: ${JSON.stringify(box)}`);
+      const name = await titleRow.getByRole("heading", { level: 1 }).boundingBox();
+      const state = await titleRow.locator("[data-phone-agent-line]").boundingBox();
+      assert.ok(name && state && Math.abs((name.y + name.height / 2) - (state.y + state.height / 2)) <= 2,
+        "the agent name and state share one line");
       assert.equal(await bar.getByRole("link", { name: "Agents", exact: true }).getAttribute("aria-current"), "page", "an agent stays under Agents");
       await page.screenshot({ path: "screenshots/classic-phone-agent-390x844.png", scale: "css" });
       const back = titleRow.getByRole("link", { name: "Back", exact: true });

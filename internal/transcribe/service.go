@@ -1393,12 +1393,23 @@ func (s *Service) Dictate(ctx context.Context, wav []byte, language string) (Res
 // Nil disables that fallback. LocalOnly prevents all onward forwarding.
 func (s *Service) DictateWithHosts(ctx context.Context, wav []byte, language string, hosts ConfiguredHosts) (result Result, err error) {
 	defer func() {
-		if err != nil || result.Held {
-			w, _ := parseWAV(bytes.NewReader(wav), int64(len(wav)))
-			reason := result.HeldReason
-			if err != nil {
-				reason = dictationRejectReason(err)
-			}
+		capture, uploaded := ctx.Value(dictationCaptureKey{}).(DictationCapture)
+		if !uploaded && err == nil && !result.Held {
+			return
+		}
+		reason := "transcribed"
+		if err != nil {
+			reason = dictationRejectReason(err)
+		} else if result.Held {
+			reason = result.HeldReason
+		}
+		w, wavErr := parseWAV(bytes.NewReader(wav), int64(len(wav)))
+		if wavErr != nil {
+			w = wavInfo{}
+		}
+		if uploaded {
+			s.logDictationCapture(wav, w, reason, capture)
+		} else {
 			s.logDictationRejected(wav, w, reason, result.Language, len([]rune(result.Text)))
 		}
 	}()

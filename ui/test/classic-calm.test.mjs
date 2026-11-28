@@ -94,14 +94,14 @@ test("classic on a computer opens on the Architect's conversation; a phone keeps
 
 test("the classic agent page: one header line, no badges, no mail badge, no usage numbers, no hand-off", () => {
   const page = src("pages/agent.tsx");
-  assert.match(page, /\{!classic && <LevelBadge level=\{agent\.level\} \/>\}/);
-  assert.match(page, /\{!classic && <ModelBadge agent=\{agent\}/);
-  assert.match(page, /\{!classic && isCustomProfile\(agent\)/);
+  assert.match(page, /\{!classic && !phone && <LevelBadge level=\{agent\.level\} \/>\}/);
+  assert.match(page, /\{!phone && !classic && <ModelBadge agent=\{agent\}/);
+  assert.match(page, /\{!phone && !classic && isCustomProfile\(agent\)/);
   assert.match(page, /agentLine\(agent, project\?\.name, machine\)/);
   assert.match(page, /\{!classic && <MailReceipts agentId=\{agent\.id\} \/>\}/);
   assert.match(page, /\{!classic && <AgentUsageInline agent=\{agent\} \/>\}/);
-  assert.match(page, /agent\.level === "head" && !classic && \(/, "no Hand to Companion button in the header");
-  assert.match(page, /agent\.level !== "head" && !classic && \(\s*<DropdownMenuItem onSelect=\{\(\) => openHandOff/, "nor in the menu");
+  assert.match(page, /agent\.level === "head" && !classic && !compact && \(/, "no Hand to Companion button in the header");
+  assert.match(page, /\(agent\.level !== "head" \|\| compact\) && !classic && \(\s*<DropdownMenuItem onSelect=\{\(\) => openHandOff/, "nor in the menu");
   // honest wording in both profiles: it deletes the agent with its conversation, so Python's
   // "Remove from list" waits for a real shelve on the fleet line (tmx-lead, 17 Nov)
   assert.match(page, /<Trash2 \/> Delete agent…/);
@@ -116,7 +116,7 @@ test("classic keeps the dictation state in the message box; the top bar is only 
   assert.ok(pending > 0 && aside > pending && aside < bar.indexOf("data-dictation-bar"), "steps aside after the hooks, before the markup");
   assert.match(bar, /useInlineDictation\(\(s\) => \(target \? \(s\.boxes\[target\.id\] \?\? 0\) > 0 : false\)\)/, "only while that very box shows the state");
   const inline = src("components/dictation-inline.tsx");
-  assert.match(inline, /if \(!mine \|\| phase === "idle"\) return kept \?/, "transient dictation status stays in its message box");
+  assert.match(inline, /if \(!mine \|\| phase === "idle"\) return <>/, "dictation and recovery status stay in the message box");
   assert.match(inline, /c\.target\.id === boxId && c\.text === undefined/, "only this composer's pending clips show inline");
   assert.match(inline, /if \(phase === "working" && pending\) return null;/, "no indicator for a transcription waiting to be retried");
   assert.match(inline, /stopDictating\(\)/);

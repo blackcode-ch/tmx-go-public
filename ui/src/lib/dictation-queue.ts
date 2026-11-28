@@ -1,3 +1,5 @@
+import type { DictationCapture } from "./dictation-capture";
+
 // In-flight dictations preserve ordering. Failed audio is deleted immediately; held text is transient.
 export interface QueuedDictation {
   id: string;
@@ -8,6 +10,7 @@ export interface QueuedDictation {
   target: { id: string; label: string; path: string };
   data: string;
   language?: string;
+  capture?: DictationCapture;
   created: number;
   transcriptId?: string;
   pendingUntil?: number;
@@ -19,6 +22,9 @@ export interface QueuedDictation {
   heldReason?: string;
   /** Shown once, alongside the delivered (unaltered) text, e.g. "Fae unreachable, used local". */
   note?: string;
+  /** Explicit recovery can show fresh text for review, but never sends it. */
+  review?: boolean;
+  recoverable?: boolean;
 }
 
 export interface DictationStorage {
@@ -82,10 +88,13 @@ export class DictationQueue {
   readonly storage: DictationStorage;
   private readonly requests: DictationRequests;
   private readonly notify: (clip: QueuedDictation) => void;
-  constructor(storage: DictationStorage, requests: DictationRequests, notify: (clip: QueuedDictation) => void = () => {}) {
+  private readonly transcriptionFinished: (clip: QueuedDictation) => Promise<void>;
+  constructor(storage: DictationStorage, requests: DictationRequests, notify: (clip: QueuedDictation) => void = () => {},
+    transcriptionFinished: (clip: QueuedDictation) => Promise<void> = async () => {}) {
     this.storage = storage;
     this.requests = requests;
     this.notify = notify;
+    this.transcriptionFinished = transcriptionFinished;
   }
 
   private async drop(clip: QueuedDictation) {
@@ -145,12 +154,16 @@ export class DictationQueue {
             if (!clip.blocked) clip.error = undefined;
           } catch (e) {
             clip.blocked = true;
-            clip.error = (e as { status?: number })?.status === 422
-              ? "No clear speech was detected. Recording discarded."
+            const status = (e as { status?: number })?.status;
+            clip.error = status === 422 ? "No clear speech was detected. Recording discarded."
+              : status === 401 || status === 403 || status === 423 ? "Dictation failed because the session needs to be unlocked or signed in again."
+              : status === 0 || status === 502 || status === 503 || status === 504 ? "Dictation failed because transcription was unavailable."
+              : (e as Error)?.message === "Transcription timed out" ? "Transcription timed out."
               : "Dictation failed. Please try again.";
           }
           if (generation !== this.generation) return;
-          clip.data = ""; // response/pending receipt needs no recoverable audio copy
+          if (clip.blocked || clip.held) await this.transcriptionFinished(clip);
+          clip.data = ""; // recovery copies, if allowed, are kept separately from the queue
           if (clip.blocked || clip.held) { await this.drop(clip); continue; }
           await this.save(clip);
         }
@@ -158,6 +171,7 @@ export class DictationQueue {
           try {
             if (await deliverDictation(clip, deliver)) {
               await this.storage.remove(clip.id);
+              await this.transcriptionFinished(clip);
               // The text itself is unchanged and already delivered; the note is informational
               // only, shown once alongside it (never gates or re-reviews the delivered words).
               if (clip.note) this.notify({ ...clip, data: "", delivered: true });
@@ -166,6 +180,7 @@ export class DictationQueue {
             clip.held = true;
             clip.heldReason = error instanceof DictationSendTimeout ? "send_uncertain" : "send_failed";
             clip.error = "The voice message was not confirmed. Check the conversation before sending again.";
+            await this.transcriptionFinished(clip);
             await this.drop(clip);
           }
         }

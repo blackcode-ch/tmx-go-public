@@ -2,11 +2,85 @@ package fleet
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
+	"github.com/blackcode-ch/tmx-go/internal/store"
 )
+
+// WhatsAppWatchTarget resolves a route without giving a remote recipient local
+// WhatsApp tools or changing the existing read and send rules.
+func (f *Fleet) WhatsAppWatchTarget(address string) (target string, remote bool, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	to, err := f.peerTargetLocked(address)
+	if err != nil || IsPeer(to) {
+		return to, IsPeer(to), err
+	}
+	r, err := f.resolveLocked(to)
+	if err != nil {
+		return "", false, err
+	}
+	return r.a.ID, false, nil
+}
+
+// QueueWhatsAppWatch makes the inbox or peer outbox entry the receipt. A crash
+// after commit cannot turn the same WhatsApp line into another fleet message.
+func (f *Fleet) QueueWhatsAppWatch(to, key, body string, urgent bool, seen ...string) error {
+	return f.QueueWhatsAppWatchParts(to, key, []string{body}, urgent, seen...)
+}
+
+func (f *Fleet) QueueWhatsAppWatchParts(to, key string, bodies []string, urgent bool, seen ...string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, err := f.st.MessageByRetry(model.WhatsAppParty, key); !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	_, host, remote := SplitPeer(to)
+	r := f.agents[to]
+	if !remote && r == nil {
+		return errf(KindNotFound, "no agent %q", to)
+	}
+	var notices []model.Message
+	var peers []store.PeerMessage
+	for _, body := range bodies {
+		m := model.Message{ID: model.NewID(), From: model.WhatsAppParty, To: to,
+			Body: body, Urgent: urgent, State: model.MsgQueued, CreatedAt: model.Now()}
+		if len(notices) == 0 {
+			m.RetryID = key
+		}
+		if err := f.diskFloorLocked(m); err != nil {
+			return err
+		}
+		if remote {
+			if len(body) > MaxPeerBodyBytes {
+				return errf(KindInvalid, "WhatsApp notice exceeds the fleet mail size")
+			}
+			m.Receipt, m.ReceiptAt = "queued", m.CreatedAt
+			peers = append(peers, store.PeerMessage{LocalID: m.ID, Peer: host, WireID: newWireID(),
+				Direction: store.PeerOut, SHA256: bodySHA(body), NextAttemptAt: m.CreatedAt})
+		}
+		notices = append(notices, m)
+	}
+	if err := f.st.PutWaWatchNotice(notices, peers, seen); err != nil {
+		return err
+	}
+	if remote {
+		select {
+		case f.peer.wake <- struct{}{}:
+		default:
+		}
+	} else {
+		f.refreshQueuedLocked(r)
+		f.goTracked(func() { f.tryDeliver(to) })
+	}
+	for _, m := range notices {
+		f.bus.Publish(model.BusEvent{Type: model.EvMessageCreated, AgentID: agentParty(m), Data: m})
+	}
+	return nil
+}
 
 // WhatsApp (DESIGN.md "WhatsApp", internal/whatsapp) touches the fleet in two ways: approvals of
 // kind whatsapp (an agent's message waiting for the owner's Allow) and mail from the WhatsApp

@@ -142,6 +142,11 @@ func fill(in *Incoming, m *waE2E.Message, norm jidNorm) {
 	default:
 		msg.Type, msg.Text = model.WaUnsupported, "This kind of message isn't shown in tmx; open it on your phone."
 	}
+	for _, raw := range ctx.GetMentionedJID() {
+		if jid, err := types.ParseJID(raw); err == nil {
+			in.Mentions = append(in.Mentions, norm(jid))
+		}
+	}
 	if q := ctx.GetQuotedMessage(); q != nil && ctx.GetStanzaID() != "" {
 		var tmp Incoming
 		fill(&tmp, q, norm)

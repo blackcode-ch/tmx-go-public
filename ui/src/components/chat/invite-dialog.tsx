@@ -17,6 +17,12 @@ import { cn } from "@/lib/utils";
 import { QRCode } from "./qr-code";
 
 const NEW_GROUP = "__new";
+const SCAN_PAGE = "https://blackcode-ch.github.io/tmx-go-public/join/";
+
+function inviteScanUrl(link: string): string | null {
+  const match = /^tmx:\/\/join\/([A-Za-z0-9_-]{1,2037})$/.exec(link);
+  return match ? SCAN_PAGE + "#" + match[1] : null;
+}
 
 function KindSwitch({ kind, onChange }: { kind: InviteKind; onChange: (k: InviteKind) => void }) {
   const opt = (k: InviteKind, Icon: typeof User, label: string) => (
@@ -129,6 +135,7 @@ export function InviteDialog() {
 
   const group = groups.find((g) => g.id === groupId);
   const live = invite && !invite.revoked;
+  const scanUrl = live ? inviteScanUrl(invite.link) : null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && chatUI.closeInvite()}>
@@ -182,7 +189,8 @@ export function InviteDialog() {
         <div className="flex flex-col items-center gap-3 pt-1">
           <div className="relative flex size-[15.75rem] items-center justify-center">
             {live ? (
-              <QRCode value={invite.link} size={232} label={kind === "group" ? `Invite to ${group?.name ?? "the group"}` : "Invite QR code"} />
+              scanUrl ? <QRCode value={scanUrl} size={232} label={kind === "group" ? `Invite to ${group?.name ?? "the group"}` : "Invite QR code"} /> :
+                <p className="px-4 text-center text-sm text-muted-foreground">Use Copy link to share this invite.</p>
             ) : (
               <div className="flex size-[15.75rem] flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center text-xs text-muted-foreground">
                 {busy ? (

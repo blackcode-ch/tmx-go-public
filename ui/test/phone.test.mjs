@@ -278,15 +278,16 @@ test("agent header on a phone: the state in words, then Python's project · mach
   assert.deepEqual(agentHeaderLine({ state: "idle", role: "", level: "head" }, false, undefined, "studio"), { state: "idle", rest: "studio · Architect" });
 });
 
-test("agent header: the line is the classic phone's; otherwise the name is laid out as before", () => {
+test("agent header: phone widths use one line for the name and state, with metadata in Details", () => {
   const page = read("../src/pages/agent.tsx");
-  const from = page.indexOf("<PageHeader actions={<AgentActions agent={agent} />}");
+  const from = page.indexOf("<PageHeader actions={<AgentActions agent={agent} compact={phone} />}");
   const header = page.slice(from, page.indexOf("</PageHeader>", from));
-  assert.ok(header.includes("{phone ? ("), "only on a phone in the classic profile");
+  assert.ok(header.includes("{phone ? ("));
   assert.ok(/<p className="[^"]*" data-phone-agent-line>/.test(header));
-  assert.ok(header.includes("{phoneLine.state}") && header.includes("{phoneLine.rest}"));
+  assert.ok(header.includes("{phoneLine.state}"));
+  assert.ok(page.includes('<Detail label="Machine">') && page.includes('<Detail label="Role">'));
   assert.ok(header.includes('<h1 className="min-w-[4rem] truncate text-[0.875rem] font-semibold tracking-tight">{agentLabel(agent, profiles)}</h1>'), "the old name, unchanged");
-  assert.ok(page.includes("const phone = usePhoneClassic();"));
+  assert.ok(page.includes("const phone = useMedia(PHONE_QUERY);"));
   // the computer's classic line stays hidden below md: nothing is said twice
   assert.ok(header.includes("md:inline-flex\" data-agent-line"));
 });

@@ -47,11 +47,13 @@ export function AccountCard({
   const [askRemove, setAskRemove] = useState(false);
   const [weekly, setWeekly] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
   const id = a.account ?? {};
   const method = methodLabel(id.method);
   const limits = a.limits ?? [];
   const login = a.login.state;
   const title = accountTitle(a);
+  const canMeasure = a.harness === "antigravity" && a.connected && a.quota_measure_on_demand;
 
   const makeDefaultForNew = () =>
     accountsApi
@@ -73,6 +75,17 @@ export function AccountCard({
       toast.error(`Could not sign out of ${title}`, { description: (e as Error).message });
     } finally {
       setSigningOut(false);
+    }
+  };
+
+  const measure = async () => {
+    setMeasuring(true);
+    try {
+      await accountsApi.measureAntigravityQuota(a.name);
+    } catch (e) {
+      toast.error(`Could not measure quota for ${title}`, { description: (e as Error).message });
+    } finally {
+      setMeasuring(false);
     }
   };
 
@@ -163,6 +176,11 @@ export function AccountCard({
                 <LimitRow key={l.id} limit={l} now={now} />
               ))}
             </div>
+          ) : canMeasure ? (
+            <div className="space-y-1 pt-1 text-xs text-muted-foreground">
+              <p>Quota not measured</p>
+              {a.limits_note && <p>{sentence(a.limits_note)}</p>}
+            </div>
           ) : a.refreshing && !a.checked_at ? (
             <div className="space-y-3 pt-1" aria-busy="true">
               <Skeleton className="h-3 w-2/3" />
@@ -206,10 +224,16 @@ export function AccountCard({
       </div>
 
       {a.connected && (
-        <footer className="flex items-center gap-1 border-t px-4 py-1.5">
+        <footer className={cn("flex items-center gap-1 border-t px-4 py-1.5", canMeasure && "flex-wrap")}>
           <span className="tabular min-w-0 flex-1 truncate text-2xs text-subtle-foreground">
             {a.refreshing ? "Checking…" : a.checked_at ? `Checked ${relativeTime(a.checked_at, now)}` : "Not checked yet"}
           </span>
+          {canMeasure && (
+            <Button variant="outline" size="xs" disabled={measuring} onClick={() => void measure()}>
+              {measuring && <Loader2 className="animate-spin" />}
+              {measuring ? "Measuring…" : "Measure"}
+            </Button>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon-xs" className="text-muted-foreground" aria-label={`Check ${title} again`} disabled={a.refreshing} onClick={() => refresh(a)}>

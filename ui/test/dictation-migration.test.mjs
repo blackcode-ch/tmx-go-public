@@ -42,13 +42,13 @@ test('first-load migration empties every named voice store and every chat, befor
  assert.deepEqual(DICTATION_DATABASES,['tmx-dictations','tmx-voice']);
 });
 
-test('settings and chats have no saved recording management entry or persistent writer',()=>{
+test('local recovery stays in the composer without reviving legacy archives',()=>{
  const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
  const settings=read('../src/pages/settings.tsx');assert.doesNotMatch(settings,/DictationOutbox|saved dictation/i);
  assert.equal(existsSync(new URL('../src/components/dictation-outbox.tsx',import.meta.url)),false);
  const outbox=read('../src/lib/dictation-outbox.ts');assert.doesNotMatch(outbox,/IndexedDictations|retryDictation|restoreDictation|dismissDictation|captureSentDictations|navigator.locks/);
  const queue=read('../src/lib/dictation-queue.ts');assert.doesNotMatch(queue,/indexedDB|localStorage|sessionStorage/);
- const inline=read('../src/components/dictation-inline.tsx');assert.doesNotMatch(inline,/Save audio|Retry transcription|Restore to draft|saved copy/);
+ const inline=read('../src/components/dictation-inline.tsx');assert.match(inline,/Retry transcription/);assert.doesNotMatch(inline,/Save audio|Restore to draft/);
  const sw=read('../public/push-sw.js');assert.ok(sw.includes("tmx-shell-v2-no-saved-dictation"));assert.match(sw,/caches.delete\(name\)/);
 });
 

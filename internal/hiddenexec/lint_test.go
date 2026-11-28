@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"io/fs"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -88,12 +89,11 @@ func bypasses(f *ast.File) []token.Pos {
 	return bad
 }
 
-// restrictedConstructors confines the narrow-purpose hiddenexec constructors to the one
-// call site each was added for, so a future caller cannot reach for the exception instead
-// of asking whether their child really needs a visible console or window.
-var restrictedConstructors = map[string]string{
-	"CommandInheritConsole": "internal/cli/slot.go",
-	"CommandGUI":            "internal/desktop/app.go",
+// restrictedConstructors confines console inheritance to the interactive slot
+// and the quota launcher that has already attached to its headless console.
+var restrictedConstructors = map[string][]string{
+	"CommandInheritConsole": {"internal/cli/slot.go", "internal/accounts/agy_headless_windows.go", "internal/accounts/agy_headless_windows_test.go"},
+	"CommandGUI":            {"internal/desktop/app.go"},
 }
 
 func TestRestrictedConstructorsStayAtTheirCallSite(t *testing.T) {
@@ -141,8 +141,8 @@ func TestRestrictedConstructorsStayAtTheirCallSite(t *testing.T) {
 			if imports[id.Name] != "github.com/blackcode-ch/tmx-go/internal/hiddenexec" {
 				return true
 			}
-			if site, restricted := restrictedConstructors[s.Sel.Name]; restricted && rel != site {
-				t.Errorf("%s: hiddenexec.%s is reserved for %s", fset.Position(s.Pos()), s.Sel.Name, site)
+			if sites, restricted := restrictedConstructors[s.Sel.Name]; restricted && !slices.Contains(sites, rel) {
+				t.Errorf("%s: hiddenexec.%s is reserved for %s", fset.Position(s.Pos()), s.Sel.Name, strings.Join(sites, ", "))
 			}
 			return true
 		})

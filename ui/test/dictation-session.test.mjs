@@ -8,7 +8,7 @@ const result = await build({
   entryPoints: [fileURLToPath(new URL('../src/lib/dictation-session.ts', import.meta.url))],
   bundle: true, write: false, format: 'esm', platform: 'node', logLevel: 'silent',
   plugins: [{ name: 'session-dependencies', setup(b) {
-    b.onResolve({ filter: /^(sonner|\.\/(dictation|dictation-outbox|router|voice))$/ }, a => ({ path: a.path, namespace: 'fake' }));
+    b.onResolve({ filter: /^(sonner|\.\/(dictation|dictation-outbox|router|store|voice))$/ }, a => ({ path: a.path, namespace: 'fake' }));
     b.onLoad({ filter: /.*/, namespace: 'fake' }, a => ({ contents: {
       'sonner': 'export const toast = Object.assign(() => {}, {error: () => {}});',
       './dictation': `export class DictationError extends Error {};
@@ -21,6 +21,7 @@ const result = await build({
         export const keepDictation=async clip=>globalThis.keepCapture(clip);
         export const setDictationDelivery=()=>{};`,
       './router': 'export const navigate=()=>{};',
+      './store': 'export const useStore={getState:()=>({status:"ready"})};',
       './voice': 'export const useVoice={getState:()=>({status:{settings:{language:"auto"}}})};',
     }[a.path] }));
   } }],
@@ -59,7 +60,7 @@ test('short taps are logged and discarded, mic start blurs input, failed stop cl
 
 test('an already interrupted microphone does not leave the session recording or arm its limit', async () => {
  let cancellations=0;
- globalThis.fakeCapture={elapsed:()=>1000,onEnded:fn=>fn(),stop:async()=>new Uint8Array(44),cancel:()=>cancellations++};
+ globalThis.fakeCapture={elapsed:()=>1000,onEnded:fn=>fn(),stop:async()=>new Uint8Array(44),captureMetadata:()=>undefined,cancel:()=>cancellations++};
  globalThis.keepCapture=async()=>{};
  await startDictating(target);
  await new Promise(resolve=>setImmediate(resolve));

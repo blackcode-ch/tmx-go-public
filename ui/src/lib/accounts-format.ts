@@ -37,6 +37,7 @@ export interface AccountStatus {
   limits?: AccountLimit[] | null;
   /** why limits is empty */
   limits_note?: string;
+  quota_measure_on_demand?: boolean;
   checked_at: number;
   refreshing: boolean;
   error?: string;

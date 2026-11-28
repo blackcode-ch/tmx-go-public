@@ -164,10 +164,10 @@ func TestProcessInterrupt(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.until("state:working")
-	if err := w.proc.Interrupt(); err != nil {
+	if err := w.proc.(runner.OwnerInterrupter).InterruptByOwner(); err != nil {
 		t.Fatal(err)
 	}
-	if ev := w.until("timeline:result:"); !ev.Entry.IsError {
+	if ev := w.until("timeline:result:"); ev.Entry.IsError || ev.Entry.Meta["owner_interrupt"] != true {
 		t.Fatalf("result %+v", ev.Entry)
 	}
 	w.until("state:idle")

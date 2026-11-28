@@ -633,11 +633,11 @@ func TestOwnerMailImmediateAndQueuedWhenStopped(t *testing.T) {
 	hp.State(model.StateWorking)
 	waitState(t, f, "head", model.StateWorking)
 	m, err := f.SendOwner("head", "hello", "")
-	if err != nil || m.State != model.MsgQueued || hp.Interrupts() != 1 {
+	if err != nil || m.State != model.MsgQueued || hp.Interrupts() != 0 {
 		t.Fatalf("%+v %v", m, err)
 	}
 	hp.State(model.StateIdle)
-	eventually(t, "owner turn after interrupt", func() bool { return lastSent(hp) == "hello" })
+	eventually(t, "owner turn after idle", func() bool { return lastSent(hp) == "hello" })
 	f.StopAgent(OwnerCaller, "head")
 	m2, _ := f.SendOwner("head", "while stopped", "")
 	if m2.State != model.MsgQueued {

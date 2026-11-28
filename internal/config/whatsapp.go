@@ -14,10 +14,17 @@ type WhatsAppConfig struct {
 	// account is linked the service makes no connection at all.
 	Enabled *bool `json:"enabled,omitempty"`
 
-	ReadReceipts    bool     `json:"read_receipts,omitempty"`
-	AgentsSend      string   `json:"agents_send,omitempty"` // "ask" (default) or "allowed"
-	AllowedChats    []string `json:"allowed_chats,omitempty"`
-	NotifyHeadChats []string `json:"notify_head_chats,omitempty"`
+	ReadReceipts      bool                 `json:"read_receipts,omitempty"`
+	AgentsSend        string               `json:"agents_send,omitempty"` // "ask" (default) or "allowed"
+	AllowedChats      []string             `json:"allowed_chats,omitempty"`
+	NotifyHeadChats   []string             `json:"notify_head_chats,omitempty"`
+	WatchRoutes       []WhatsAppWatchRoute `json:"watch_routes,omitempty"`
+	WatchAgentAuthors []string             `json:"watch_agent_authors,omitempty"`
+	WatchConfig       string               `json:"watch_config,omitempty"`
+	WatchSince        *time.Time           `json:"watch_since,omitempty"`
+	WatchChatIDs      map[string]string    `json:"watch_chat_ids,omitempty"`
+	WatchLocalAlias   string               `json:"watch_local_alias,omitempty"`
+
 	// AgentProfiles may read WhatsApp and ask to send; nil = only the head ("head").
 	AgentProfiles []string `json:"agent_profiles,omitempty"`
 	// ChatAccess: per profile slug or "agent:<name>", the chats its agents may read and ask to
@@ -32,6 +39,15 @@ type WhatsAppConfig struct {
 	MediaRetentionDays int `json:"media_retention_days,omitempty"`
 	// MediaQuotaMB caps the entire media cache; <=0 = 2048 MB.
 	MediaQuotaMB int `json:"media_quota_mb,omitempty"`
+}
+
+// WhatsAppWatchRoute forwards inbound text from one exact chat. Since sets the
+// first eligible source timestamp, including messages synced after an outage.
+type WhatsAppWatchRoute struct {
+	Chat       string    `json:"chat"`
+	Recipients []string  `json:"recipients"`
+	Since      time.Time `json:"since"`
+	Urgent     bool      `json:"urgent"`
 }
 
 // On reports whether the WhatsApp service runs (default false).

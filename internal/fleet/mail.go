@@ -206,7 +206,7 @@ func (f *Fleet) SendMessage(c Caller, req SendRequest) (model.Message, error) {
 	switch {
 	case toID == model.Owner:
 	default:
-		f.deliverQueued(toID, priorityMail(m))
+		f.deliverQueued(toID, m.From != model.Owner && priorityMail(m))
 	}
 	return f.message(m.ID)
 }
@@ -303,12 +303,7 @@ func (f *Fleet) deliverOwner(m model.Message) {
 		f.mu.Unlock()
 		return
 	}
-	if r.a.State == model.StateWorking {
-		f.mu.Unlock()
-		f.deliverQueued(m.To, true)
-		return
-	}
-	if r.a.State != model.StateIdle && (r.a.State != model.StateStarting || typedTerminal(r.a)) {
+	if !ownerTurnReady(r) {
 		f.mu.Unlock()
 		return
 	}
@@ -359,6 +354,14 @@ func (f *Fleet) deliverOwner(m model.Message) {
 	}
 }
 
+// A newly launched chat can accept its first turn while starting. Starting is
+// also the temporary state during host attachment, where a turn may be live.
+// An attached process has no local start timestamp and must first report idle.
+func ownerTurnReady(r *agentRec) bool {
+	return r.a.State == model.StateIdle ||
+		(r.a.State == model.StateStarting && r.procStarted != 0 && r.a.Mode == model.ModeChat)
+}
+
 // tryDeliver sends one queued owner message (or a batch of agent mail) when it can take it:
 // a chat agent when idle (runners report idle once ready and after each result); a
 // terminal harness immediately in FIFO order; agent mail never runs as shell commands.
@@ -388,10 +391,6 @@ func (f *Fleet) deliverQueued(id string, nudge bool) {
 		return
 	}
 	terminal := typedTerminal(r.a)
-	if !terminal && r.a.Mode == model.ModeTerminal {
-		f.mu.Unlock()
-		return
-	}
 	limit := maxBatchedMail
 	if terminal {
 		limit = 1
@@ -401,9 +400,13 @@ func (f *Fleet) deliverQueued(id string, nudge bool) {
 		f.mu.Unlock()
 		return
 	}
+	if !terminal && r.a.Mode == model.ModeTerminal && msgs[0].From != model.Owner {
+		f.mu.Unlock()
+		return
+	}
 	if priorityMail(msgs[0]) && r.a.State == model.StateWorking {
 		proc := r.proc
-		if !nudge || r.mailInterrupt {
+		if msgs[0].From == model.Owner || !nudge || r.mailInterrupt {
 			f.mu.Unlock()
 			return
 		}
@@ -418,7 +421,7 @@ func (f *Fleet) deliverQueued(id string, nudge bool) {
 		}
 		return
 	}
-	if msgs[0].From == model.Owner && (r.a.State == model.StateIdle || !terminal && r.a.State == model.StateStarting) {
+	if msgs[0].From == model.Owner && ownerTurnReady(r) {
 		f.mu.Unlock()
 		release()
 		f.deliverOwner(msgs[0])

@@ -7,16 +7,16 @@ import { href, useRoute } from "@/lib/router";
 import { cn } from "@/lib/utils";
 
 /** Top bar of a page. Doubles as the window's drag region in the desktop app. */
-export function PageHeader({ children, actions, className }: { children: ReactNode; actions?: ReactNode; className?: string }) {
+export function PageHeader({ children, actions, className, compactPhone }: { children: ReactNode; actions?: ReactNode; className?: string; compactPhone?: boolean }) {
   const phone = usePhoneClassic();
   const route = useRoute();
-  if (phone) {
+  if (phone || compactPhone) {
     // The classic profile on a phone (the Python mobile app): nothing is fixed above the pages
     // of the bottom bar, which open on their headline; every other page has ONE row, 66 px, with
     // a back arrow and its title. The children stay mounted either way (some only do work).
     if (isTabRoot(route.name)) return <header className="hidden">{children}</header>;
     return (
-      <header className={cn("flex min-h-[66px] shrink-0 items-center gap-[9px] border-b px-[10px] py-[10px]", className)} data-phone-title-row>
+      <header className={cn("flex shrink-0 items-center border-b", compactPhone ? "min-h-12 gap-1 px-1.5" : "min-h-[66px] gap-[9px] px-[10px] py-[10px]", className)} data-phone-title-row>
         <a
           href={href(phoneBackPath(route))}
           aria-label="Back"

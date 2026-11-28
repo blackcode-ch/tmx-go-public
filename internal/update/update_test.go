@@ -237,6 +237,33 @@ func TestTargets(t *testing.T) {
 	}
 }
 
+func TestPrivateBuildNeverAutomaticallyInstallsOlderPublicRelease(t *testing.T) {
+	const current, public = "fleet-v1.0.3-518-g37b89584", "fleet-v1.0.4"
+	g := newFakeGitHub(t)
+	key, pub := newKey(t)
+	g.publish("stable", public, key, map[string][]byte{
+		"tmxg_" + public + "_linux_amd64": []byte("binary " + public),
+	})
+	exe := filepath.Join(t.TempDir(), "bin", "tmx")
+	writeExe(t, exe, current)
+	h := newHarness(t, g, pub, current, exe, "linux", false)
+	if st := h.u.checkRelease(context.Background(), true); st.Latest != public || !st.Auto {
+		t.Fatalf("public release should be visible with auto enabled: %+v", st)
+	}
+	if len(h.u.installs) != 0 {
+		t.Fatal("public release was queued for automatic downgrade")
+	}
+	h.u.runInstall(context.Background(), installRequest{automatic: true, now: true})
+	if b, err := os.ReadFile(exe); err != nil || string(b) != "binary "+current {
+		t.Fatalf("private binary changed: %q, %v", b, err)
+	}
+	select {
+	case <-h.restarts:
+		t.Fatal("automatic downgrade restarted the node")
+	default:
+	}
+}
+
 func TestInstallsWhenIdle(t *testing.T) {
 	g := newFakeGitHub(t)
 	key, pub := newKey(t)

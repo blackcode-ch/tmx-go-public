@@ -12,7 +12,8 @@ import (
 
 // ConfigView is the small subset of config.json the UI may read and edit.
 type ConfigView struct {
-	HeadHarness string `json:"head_harness"`
+	HeadHarness        string `json:"head_harness"`
+	AgyBackgroundUsage *bool  `json:"agy_background_usage,omitempty"`
 	// OnboardedAt: when the owner finished or closed the first-run setup (Unix ms; 0 = never, and
 	// the computer's window shows it). In a PUT any other number means "now" (the daemon's clock),
 	// 0 offers the setup again; nil = unchanged.
@@ -30,7 +31,7 @@ func (s *Server) configView(c config.Config) ConfigView {
 			hosts = append(hosts, config.NormalizeTrustedHost(h))
 		}
 	}
-	return ConfigView{HeadHarness: c.HeadHarness, OnboardedAt: &c.OnboardedAt, TrustedHosts: hosts}
+	return ConfigView{HeadHarness: c.HeadHarness, AgyBackgroundUsage: c.AgyBackgroundUsage, OnboardedAt: &c.OnboardedAt, TrustedHosts: hosts}
 }
 
 // MarkOnboardedIfInUse keeps the first-run setup from opening on a machine that is already in
@@ -115,6 +116,13 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, err)
 				return
 			}
+		}
+	}
+	if v.AgyBackgroundUsage != nil && (c.AgyBackgroundUsage == nil || *c.AgyBackgroundUsage != *v.AgyBackgroundUsage) {
+		c.AgyBackgroundUsage = v.AgyBackgroundUsage
+		if err := config.Save(s.f.Paths(), c); err != nil {
+			writeErr(w, err)
+			return
 		}
 	}
 	if v.OnboardedAt != nil && (*v.OnboardedAt == 0) != (c.OnboardedAt == 0) {

@@ -6,6 +6,7 @@
 // time, surviving page switches) is dictation-session.ts.
 import { voiceApi, type TranscribeResult } from "./voice";
 import { audioCaptureLease } from "./audio-capture-lease";
+import { dictationCapturePath, type DictationCapture } from "./dictation-capture";
 
 /** Longest dictation the daemon takes (POST /api/transcribe). */
 export const MAX_DICTATION_MS = 120_000;
@@ -18,10 +19,14 @@ export class DictationError extends Error {}
 export interface Dictation {
   /** Stops and returns the WAV (16 kHz, mono, 16-bit). */
   stop(): Promise<Uint8Array>;
+  /** Metadata for the completed WAV, sampled before stopping the track/context. */
+  captureMetadata(): DictationCapture | undefined;
   /** Stops and throws the audio away. */
   cancel(): void;
   /** The input level now, 0..1 (for a meter). */
   level(): number;
+  /** True once two seconds of capture have passed without usable input. */
+  noInput(): boolean;
   /** Milliseconds recorded so far. */
   elapsed(): number;
   /** Calls fn once if the microphone goes away before stop or cancel (unplugged, revoked). */
@@ -68,6 +73,7 @@ export async function startDictation(): Promise<Dictation> {
   let samples = 0;
   let level = 0;
   const started = performance.now();
+  let lastInput = started;
   const take = (b: Float32Array) => {
     if (done || !b.length) return;
     chunks.push(b);
@@ -75,11 +81,27 @@ export async function startDictation(): Promise<Dictation> {
     let sum = 0;
     for (let i = 0; i < b.length; i++) sum += b[i] * b[i];
     level = Math.min(1, Math.sqrt(sum / b.length) * 4);
+    if (level >= 0.02) lastInput = performance.now();
   };
 
   let flush: () => Promise<void> = async () => {};
   const nodes: AudioNode[] = [];
   const detach: (() => void)[] = [];
+  const path = dictationCapturePath();
+  const hiddenAtStart = document.hidden;
+  let processor: DictationCapture["processor"] = "script_processor";
+  let permission: PermissionStatus | undefined;
+  // A query reads the existing state. Unsupported microphone descriptors may reject.
+  void (async () => {
+    try { permission = await navigator.permissions?.query({ name: "microphone" as PermissionName }); }
+    catch { /* unavailable on this browser */ }
+  })();
+  let contextInterruptions = 0;
+  const onContextState = () => {
+    if (["suspended", "interrupted"].includes(ctx.state)) contextInterruptions = Math.min(255, contextInterruptions + 1);
+  };
+  ctx.addEventListener?.("statechange", onContextState);
+  detach.push(() => ctx.removeEventListener?.("statechange", onContextState));
   const closeContext = async () => {
     try { await ctx.close(); } catch { /* already closed or interrupted by the browser */ }
   };
@@ -108,6 +130,7 @@ export async function startDictation(): Promise<Dictation> {
       }
     }
     if (worklet) {
+      processor = "worklet";
       const w = worklet;
       let flushed: (() => void) | null = null;
       w.port.onmessage = (e: MessageEvent) => {
@@ -150,15 +173,21 @@ export async function startDictation(): Promise<Dictation> {
 
   let ended: (() => void) | null = null;
   let interrupted = false;
+  let interruption: DictationCapture["interruption"];
   const track = stream.getAudioTracks()[0];
-  const onTrackEnded = () => {
+  const onTrackEnded = (event: Event) => {
+    if (!done) interruption ??= event.type === "mute" ? "mute" : "ended";
     if (!done && !interrupted) { interrupted = true; ended?.(); }
   };
   track?.addEventListener("ended", onTrackEnded);
   track?.addEventListener("mute", onTrackEnded);
   // A hidden window keeps capturing; where the browser suspended the audio anyway (WebKit may,
   // when the window is minimized), coming back resumes it.
+  let hiddenEvents = 0;
+  let visibleEvents = 0;
   const onVisible = () => {
+    if (document.hidden) hiddenEvents = Math.min(255, hiddenEvents + 1);
+    else visibleEvents = Math.min(255, visibleEvents + 1);
     if (!done && !document.hidden && ctx.state !== "running") void ctx.resume();
   };
   document.addEventListener("visibilitychange", onVisible);
@@ -177,11 +206,21 @@ export async function startDictation(): Promise<Dictation> {
     return closing;
   };
 
+  let metadata: DictationCapture | undefined;
   return {
     async stop() {
       if (done) throw new DictationError("The dictation has ended.");
       try {
         await flush();
+        const state: string = ctx.state;
+        const count = Math.floor(samples / (ctx.sampleRate / RATE));
+        metadata = {
+          path, processor, permission: permission?.state,
+          track_muted: track?.muted, track_ended: track ? track.readyState === "ended" : undefined,
+          interruption, hidden_at_start: hiddenAtStart, hidden_events: hiddenEvents, visible_events: visibleEvents,
+          context_state: state === "running" || state === "suspended" || state === "interrupted" || state === "closed" ? state : "unknown",
+          context_interruptions: contextInterruptions, samples: count, duration_ms: Math.round(count * 1000 / RATE),
+        };
       } finally {
         await release(); // flush/postMessage errors must never leave the microphone live
       }
@@ -194,14 +233,20 @@ export async function startDictation(): Promise<Dictation> {
       }
       return encodeWAV(resample(all, rate, RATE), RATE);
     },
+    captureMetadata: () => metadata,
     cancel() {
       if (!done) void release();
     },
-    level: () => level,
+    level: () => performance.now() - lastInput < 350 ? level : 0,
+    noInput: () => performance.now() - lastInput >= 2000,
     elapsed: () => performance.now() - started,
     onEnded(fn) {
       ended = fn;
-      if (interrupted || track?.readyState === "ended" || track?.muted) { interrupted = true; fn(); }
+      if (interrupted || track?.readyState === "ended" || track?.muted) {
+        interruption ??= track?.readyState === "ended" ? "ended" : "mute";
+        interrupted = true;
+        fn();
+      }
     },
   };
 }

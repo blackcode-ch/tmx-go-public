@@ -1,11 +1,58 @@
 package fleet
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
+
+func TestTerminalLaunchPromptPrecedesQueuedOwnerInput(t *testing.T) {
+	for _, h := range []model.Harness{model.HarnessClaude, model.HarnessCodex, model.HarnessOpenCode, model.HarnessGemini, model.HarnessPi, model.HarnessShell} {
+		t.Run(string(h), func(t *testing.T) {
+			e := newUnguardedEnv(t)
+			e.ext = fakeClaudeExt(t)
+			f := e.started()
+			initial := "first launch line\nsecond launch line"
+			if h == model.HarnessShell {
+				initial = "echo launch-first"
+			}
+			a, err := f.LaunchAgent(OwnerCaller, LaunchRequest{
+				ProjectID: workerProject(t, f), Name: "terminal-start", Harness: h,
+				Mode: model.ModeTerminal, Prompt: initial,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := e.term.Last(a.ID)
+			if p == nil {
+				t.Fatal("terminal process did not start")
+			}
+			if got := p.Sent(); len(got) != 1 || !strings.Contains(got[0], initial) {
+				t.Fatal("initial launch input was not sent exactly once before idle")
+			}
+			f.mu.Lock()
+			ready := ownerTurnReady(f.agents[a.ID])
+			f.mu.Unlock()
+			if ready {
+				t.Fatal("starting terminal was ready for the queued owner turn")
+			}
+			if _, err := f.SendMessage(OwnerCaller, SendRequest{To: a.ID, Body: "owner follow-up"}); err != nil {
+				t.Fatal(err)
+			}
+			if h == model.HarnessShell && len(p.Sent()) != 1 {
+				t.Fatal("shell submitted queued input before idle")
+			}
+			p.State(model.StateIdle)
+			eventually(t, "owner follow-up", func() bool { return len(p.Sent()) >= 2 })
+			got := p.Sent()
+			if len(got) != 2 || !strings.Contains(got[1], "owner follow-up") {
+				t.Fatal("owner follow-up did not follow the initial launch input exactly once")
+			}
+		})
+	}
+}
 
 // The inbox is available mid-turn; inspecting it as owner must not consume mail.
 // A reply obeys the same busy/typing/unknown-state holds as a new send.
